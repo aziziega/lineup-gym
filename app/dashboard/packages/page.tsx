@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import NativeSelect from '@/components/dashboard/NativeSelect'
 import { Plus, Edit, ToggleLeft, ToggleRight } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Membership } from '@/lib/types'
@@ -21,14 +22,18 @@ export default function PackagesPage() {
   const [editing, setEditing] = useState<Membership | null>(null)
 
   const [formName, setFormName] = useState('')
+  const [formCategory, setFormCategory] = useState<'gym' | 'pt'>('gym')
   const [formDuration, setFormDuration] = useState('')
+  const [formTotalSessions, setFormTotalSessions] = useState('')
   const [formPrice, setFormPrice] = useState('')
   const [formDesc, setFormDesc] = useState('')
 
   const openEdit = (m: Membership) => {
     setEditing(m)
     setFormName(m.name)
+    setFormCategory(m.category as 'gym' | 'pt')
     setFormDuration(String(m.duration_days))
+    setFormTotalSessions(m.total_sessions ? String(m.total_sessions) : '')
     setFormPrice(String(m.price))
     setFormDesc(m.description ?? '')
     setDialogOpen(true)
@@ -37,7 +42,9 @@ export default function PackagesPage() {
   const openCreate = () => {
     setEditing(null)
     setFormName('')
+    setFormCategory('gym')
     setFormDuration('')
+    setFormTotalSessions('')
     setFormPrice('')
     setFormDesc('')
     setDialogOpen(true)
@@ -55,7 +62,9 @@ export default function PackagesPage() {
           id: editing.id,
           data: {
             name: formName,
+            category: formCategory,
             duration_days: parseInt(formDuration),
+            total_sessions: formCategory === 'pt' && formTotalSessions ? parseInt(formTotalSessions) : null,
             price: parseFloat(formPrice),
             description: formDesc || null,
           },
@@ -65,7 +74,9 @@ export default function PackagesPage() {
         await createMembership.mutateAsync({
           gym_id: '',
           name: formName,
+          category: formCategory,
           duration_days: parseInt(formDuration),
+          total_sessions: formCategory === 'pt' && formTotalSessions ? parseInt(formTotalSessions) : null,
           price: parseFloat(formPrice),
           description: formDesc || null,
           is_active: true,
@@ -124,7 +135,13 @@ export default function PackagesPage() {
                     )}
                   </div>
                   <p className="mt-0.5 font-heading text-2xl text-[#D4FF00]">{formatRupiah(pkg.price)}</p>
-                  <p className="mt-0.5 text-xs text-[#888]">{pkg.duration_days} hari</p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${pkg.category === 'pt' ? 'bg-blue-500/20 text-blue-400' : 'bg-[#D4FF00]/10 text-[#D4FF00]'}`}>
+                      {pkg.category === 'pt' ? 'PT' : 'GYM'}
+                    </span>
+                    <span className="text-xs text-[#888]">{pkg.duration_days} hari</span>
+                    {pkg.total_sessions && <span className="text-xs text-[#888]">· {pkg.total_sessions} sesi</span>}
+                  </div>
                   {pkg.description && (
                     <p className="mt-1 text-xs text-[#555]">{pkg.description}</p>
                   )}
@@ -167,8 +184,27 @@ export default function PackagesPage() {
               <Input value={formName} onChange={(e) => setFormName(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="Contoh: Weekly" />
             </div>
             <div>
-              <Label className="text-xs text-[#888]">Durasi (hari) *</Label>
-              <Input type="number" value={formDuration} onChange={(e) => setFormDuration(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="30" />
+              <Label className="text-xs text-[#888]">Kategori *</Label>
+              <NativeSelect
+                value={formCategory}
+                onChange={(e) => setFormCategory(e.target.value as 'gym' | 'pt')}
+                options={[
+                  { value: 'gym', label: 'Gym (Membership Biasa)' },
+                  { value: 'pt', label: 'PT (Personal Trainer)' },
+                ]}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs text-[#888]">Durasi (hari) *</Label>
+                <Input type="number" value={formDuration} onChange={(e) => setFormDuration(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="30" />
+              </div>
+              {formCategory === 'pt' && (
+                <div>
+                  <Label className="text-xs text-[#888]">Total Sesi *</Label>
+                  <Input type="number" value={formTotalSessions} onChange={(e) => setFormTotalSessions(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="8" />
+                </div>
+              )}
             </div>
             <div>
               <Label className="text-xs text-[#888]">Harga (Rp) *</Label>

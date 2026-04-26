@@ -80,7 +80,7 @@ export default function LoginPage() {
             ))}
           </div>
           <span className="text-white/80">{GYM_INFO.RATING}</span>
-          <span>· 57 ulasan Google</span>
+          <span>· Ulasan Google</span>
         </div>
 
         {/* Tagline */}

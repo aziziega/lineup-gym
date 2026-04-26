@@ -88,6 +88,8 @@ export function useRenewSubscription() {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
       queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
       queryClient.invalidateQueries({ queryKey: ['payments'] })
+      queryClient.invalidateQueries({ queryKey: ['revenue-monthly'] })
+      queryClient.invalidateQueries({ queryKey: ['revenue-current-month'] })
       queryClient.invalidateQueries({ queryKey: ['critical-count'] })
       queryClient.invalidateQueries({ queryKey: ['overview'] })
       queryClient.invalidateQueries({ queryKey: ['expiry'] })

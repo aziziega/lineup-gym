@@ -24,7 +24,11 @@ export default function RevenueChart() {
     )
   }
 
-  const chartData = (data || []).slice(-monthCount).map((d) => ({
+  const slicedData = monthCount === 1 
+    ? (data || []).slice(-1) 
+    : (data || []).slice(0, -1).slice(-monthCount)
+
+  const chartData = slicedData.map((d) => ({
     name: d.month_label,
     revenue: Number(d.total),
   }))

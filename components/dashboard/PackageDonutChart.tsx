@@ -20,7 +20,12 @@ export default function PackageDonutChart() {
 
   // Hitung distribusi per paket
   const dist = (data || []).reduce<Record<string, number>>((acc, m) => {
-    acc[m.membership_name] = (acc[m.membership_name] || 0) + 1
+    if (m.membership_name) {
+      acc[m.membership_name] = (acc[m.membership_name] || 0) + 1
+    }
+    if (m.pt_membership_name) {
+      acc[m.pt_membership_name] = (acc[m.pt_membership_name] || 0) + 1
+    }
     return acc
   }, {})
 

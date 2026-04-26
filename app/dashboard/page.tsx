@@ -158,7 +158,7 @@ export default function OverviewPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <TodaySchedule />
 
-        {/* 5 Member Terbaru */}
+        {/* 5 Member Terbaru — tanpa scroll */}
         <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
           <h3 className="mb-3 text-sm font-semibold text-white">Member Terbaru</h3>
           {(!recentMembers || recentMembers.length === 0) ? (

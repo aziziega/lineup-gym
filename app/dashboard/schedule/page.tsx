@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import NativeSelect from '@/components/dashboard/NativeSelect'
+import MemberCombobox from '@/components/dashboard/MemberCombobox'
 import { Plus, Clock, Users, ToggleRight, ToggleLeft, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Class } from '@/lib/types'
@@ -202,18 +203,11 @@ export default function SchedulePage() {
               </div>
               <div>
                 <Label className="text-xs text-[#888]">Hari</Label>
-                <Select value={fDay} onValueChange={(v) => v && setFDay(v)}>
-                  <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                    <SelectValue>
-                      {(val: any) => val ? val.charAt(0).toUpperCase() + val.slice(1) : "Pilih hari"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                    {daysOfWeek.map((d) => (
-                      <SelectItem key={d} value={d}>{dayMap[d]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <NativeSelect
+                  value={fDay}
+                  onChange={(e) => setFDay(e.target.value)}
+                  options={daysOfWeek.map((d) => ({ value: d, label: dayMap[d] }))}
+                />
               </div>
             </div>
             <Button onClick={handleAddClass} disabled={createClass.isPending} className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
@@ -259,18 +253,14 @@ export default function SchedulePage() {
               <div>
                 <Label className="text-xs text-[#888]">Tambah Booking</Label>
                 <div className="flex gap-2">
-                  <Select value={bookingMemberId} onValueChange={(v) => v && setBookingMemberId(v)}>
-                    <SelectTrigger className="flex-1 border-[#2A2A2A] bg-[#1A1A1A] text-sm text-white">
-                      <SelectValue placeholder="Pilih member">
-                        {(val: any) => val && members ? members.find((m) => m.id === val)?.full_name : "Pilih member"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                      {members?.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex-1">
+                    <MemberCombobox
+                      members={members || []}
+                      value={bookingMemberId}
+                      onValueChange={setBookingMemberId}
+                      placeholder="Cari member..."
+                    />
+                  </div>
                   <Button onClick={handleAddBooking} disabled={!bookingMemberId} className="bg-[#D4FF00] text-sm font-bold text-black">
                     Booking
                   </Button>

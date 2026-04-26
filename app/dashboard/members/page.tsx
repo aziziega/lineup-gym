@@ -28,16 +28,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import NativeSelect from '@/components/dashboard/NativeSelect'
+import PackageCombobox from '@/components/dashboard/PackageCombobox'
 import { Search, Plus, UserCheck, RotateCcw, Trash2, Download } from 'lucide-react'
 import { toast } from 'sonner'
-import type { ActiveSubscriptionView } from '@/lib/types'
+import type { ActiveSubscriptionView, Membership } from '@/lib/types'
 
 export default function MembersPage() {
   const { data: members, isLoading } = useMembersWithSubscription()
@@ -62,7 +57,8 @@ export default function MembersPage() {
   const [formPhone, setFormPhone] = useState('')
   const [formEmail, setFormEmail] = useState('')
   const [formEmergency, setFormEmergency] = useState('')
-  const [formMembership, setFormMembership] = useState('')
+  const [formMembership, setFormMembership] = useState('') // Gym package
+  const [formPtMembership, setFormPtMembership] = useState('') // PT package
   const [formPayMethod, setFormPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
   const [formStartDate, setFormStartDate] = useState(new Date().toISOString().split('T')[0])
   const [formNotes, setFormNotes] = useState('')
@@ -70,6 +66,9 @@ export default function MembersPage() {
   // Renew form
   const [renewMembershipId, setRenewMembershipId] = useState('')
   const [renewPayMethod, setRenewPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
+
+  const gymPackages = useMemo(() => memberships?.filter(m => m.category === 'gym') || [], [memberships])
+  const ptPackages = useMemo(() => memberships?.filter(m => m.category === 'pt') || [], [memberships])
 
   // Filter & search
   const filtered = useMemo(() => {
@@ -96,6 +95,8 @@ export default function MembersPage() {
     const selectedPkg = memberships?.find((m) => m.id === formMembership)
     if (!selectedPkg) return
 
+    const selectedPtPkg = memberships?.find((m) => m.id === formPtMembership)
+
     try {
       await createMember.mutateAsync({
         member: {
@@ -112,11 +113,23 @@ export default function MembersPage() {
           start_date: formStartDate,
           end_date: hitungEndDate(formStartDate, selectedPkg?.duration_days ?? 0).toISOString().split('T')[0],
         } : undefined,
+        ptSubscription: formPtMembership && selectedPtPkg ? {
+          membership_id: formPtMembership,
+          start_date: formStartDate,
+          end_date: hitungEndDate(formStartDate, selectedPtPkg.duration_days).toISOString().split('T')[0],
+          remaining_sessions: selectedPtPkg.total_sessions,
+        } : undefined,
         payment: formMembership && selectedPkg ? {
           paymentMethod: formPayMethod,
           amount: selectedPkg.price,
           membershipType: selectedPkg.name,
-          notes: 'Pembayaran Member Baru'
+          notes: 'Pembayaran Member Baru (Gym)'
+        } : undefined,
+        ptPayment: formPtMembership && selectedPtPkg ? {
+          paymentMethod: formPayMethod,
+          amount: selectedPtPkg.price,
+          membershipType: selectedPtPkg.name,
+          notes: 'Pembayaran Member Baru (PT)'
         } : undefined,
       })
       toast.success(`${formName} berhasil ditambahkan!`)
@@ -200,6 +213,7 @@ export default function MembersPage() {
     setFormEmail('')
     setFormEmergency('')
     setFormMembership('')
+    setFormPtMembership('')
     setFormStartDate(new Date().toISOString().split('T')[0])
     setFormNotes('')
   }
@@ -220,24 +234,18 @@ export default function MembersPage() {
           />
         </div>
         <div className="flex gap-2">
-          <Select value={statusFilter} onValueChange={(v) => { if (v) { setStatusFilter(v); setPage(1); } }}>
-            <SelectTrigger className="w-28 border-[#2A2A2A] bg-[#1A1A1A] text-xs text-white">
-              <SelectValue placeholder="Status">
-                {(val: any) => {
-                  if (!val || val === 'all') return 'Semua'
-                  const labels: any = { active: 'Aktif', expiring_soon: 'Segera', critical: 'Kritis', expired: 'Expired' }
-                  return labels[val] || val
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent className="border-[#2A2A2A] bg-[#1A1A1A]">
-              <SelectItem value="all">Semua</SelectItem>
-              <SelectItem value="active">Aktif</SelectItem>
-              <SelectItem value="expiring_soon">Segera</SelectItem>
-              <SelectItem value="critical">Kritis</SelectItem>
-              <SelectItem value="expired">Expired</SelectItem>
-            </SelectContent>
-          </Select>
+          <NativeSelect
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+            options={[
+              { value: 'all', label: 'Semua' },
+              { value: 'active', label: 'Aktif' },
+              { value: 'expiring_soon', label: 'Segera' },
+              { value: 'critical', label: 'Kritis' },
+              { value: 'expired', label: 'Expired' },
+            ]}
+            triggerClassName="w-28 text-xs"
+          />
 
           <Button size="sm" variant="outline" onClick={exportCSV} className="border-[#2A2A2A] text-xs text-[#888]">
             <Download className="mr-1 h-3.5 w-3.5" /> CSV
@@ -268,45 +276,62 @@ export default function MembersPage() {
                   <Label className="text-xs text-[#888]">Kontak Darurat</Label>
                   <Input value={formEmergency} onChange={(e) => setFormEmergency(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
                 </div>
-                <div>
-                  <Label className="text-xs text-[#888]">Paket Membership *</Label>
-                  <Select value={formMembership || null} onValueChange={(v) => v && setFormMembership(v)}>
-                    <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                      <SelectValue placeholder="Pilih paket">
-                        {(val: any) => val && memberships ? memberships.find((p) => p.id === val)?.name : "Pilih paket"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                      {memberships?.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name} — {formatRupiah(p.price)} ({p.duration_days} hari)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedPkg && (
-                    <div className="mt-2 space-y-3">
-                      <p className="text-xs text-[#D4FF00]">
-                        Berlaku sampai: {formatTanggal(hitungEndDate(formStartDate, selectedPkg.duration_days).toISOString())}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-[#888]">Paket Gym (Wajib)</Label>
+                    <PackageCombobox
+                      packages={gymPackages}
+                      value={formMembership}
+                      onValueChange={setFormMembership}
+                      placeholder="Pilih paket gym"
+                    />
+                    {selectedPkg && (
+                      <p className="mt-1 text-[10px] text-[#D4FF00]">
+                        Aktif sampai: {formatTanggal(hitungEndDate(formStartDate, selectedPkg.duration_days).toISOString())}
                       </p>
-                      <div>
-                        <Label className="text-xs text-[#888]">Metode Bayar (Wajib)</Label>
-                        <Select value={formPayMethod} onValueChange={(v) => v && setFormPayMethod(v as 'cash' | 'transfer' | 'qris')}>
-                          <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                            <SelectValue>
-                              {(val: any) => val ? val.charAt(0).toUpperCase() + val.slice(1) : "Pilih metode"}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                            <SelectItem value="cash">Cash</SelectItem>
-                            <SelectItem value="transfer">Transfer</SelectItem>
-                            <SelectItem value="qris">QRIS</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-[#888]">Paket PT (Opsional)</Label>
+                    <PackageCombobox
+                      packages={ptPackages}
+                      value={formPtMembership}
+                      onValueChange={setFormPtMembership}
+                      placeholder="Pilih paket PT"
+                    />
+                    {formPtMembership && ptPackages.find(p => p.id === formPtMembership) && (
+                      <p className="mt-1 text-[10px] text-[#D4FF00]">
+                        Sesi: {ptPackages.find(p => p.id === formPtMembership)?.total_sessions} Sesi
+                      </p>
+                    )}
+                  </div>
                 </div>
+
+                {(formMembership || formPtMembership) && (
+                  <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3">
+                    <div className="mb-3 flex items-center justify-between border-b border-[#2A2A2A] pb-2 text-sm">
+                      <span className="text-[#888]">Total Tagihan:</span>
+                      <span className="font-heading text-lg text-[#D4FF00]">
+                        {formatRupiah(
+                          (selectedPkg?.price || 0) +
+                          (ptPackages.find(p => p.id === formPtMembership)?.price || 0)
+                        )}
+                      </span>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-[#888]">Metode Bayar</Label>
+                      <NativeSelect
+                        value={formPayMethod}
+                        onChange={(e) => setFormPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
+                        options={[
+                          { value: 'cash', label: 'Cash' },
+                          { value: 'transfer', label: 'Transfer' },
+                          { value: 'qris', label: 'QRIS' },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                )}
                 <div>
                   <Label className="text-xs text-[#888]">Tanggal Mulai</Label>
                   <Input type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
@@ -454,35 +479,24 @@ export default function MembersPage() {
               <p className="text-sm text-[#888]">Member: <span className="text-white">{renewMember.full_name}</span></p>
               <div>
                 <Label className="text-xs text-[#888]">Pilih Paket</Label>
-                <Select value={renewMembershipId || null} onValueChange={(v) => v && setRenewMembershipId(v)}>
-                  <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                    <SelectValue placeholder="Pilih paket">
-                      {(val: any) => val && memberships ? memberships.find((p) => p.id === val)?.name : "Pilih paket"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                    {memberships?.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name} — {formatRupiah(p.price)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PackageCombobox
+                  packages={memberships || []}
+                  value={renewMembershipId}
+                  onValueChange={setRenewMembershipId}
+                  placeholder="Cari paket..."
+                />
               </div>
               <div>
                 <Label className="text-xs text-[#888]">Metode Bayar</Label>
-                <Select value={renewPayMethod} onValueChange={(v) => v && setRenewPayMethod(v as 'cash' | 'transfer' | 'qris')}>
-                  <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                    <SelectValue>
-                      {(val: any) => val ? val.charAt(0).toUpperCase() + val.slice(1) : "Metode bayar"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="transfer">Transfer</SelectItem>
-                    <SelectItem value="qris">QRIS</SelectItem>
-                  </SelectContent>
-                </Select>
+                <NativeSelect
+                  value={renewPayMethod}
+                  onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
+                  options={[
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'transfer', label: 'Transfer' },
+                    { value: 'qris', label: 'QRIS' },
+                  ]}
+                />
               </div>
               <Button
                 onClick={handleRenew}

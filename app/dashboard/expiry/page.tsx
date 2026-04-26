@@ -9,7 +9,8 @@ import StatusBadge from '@/components/members/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import NativeSelect from '@/components/dashboard/NativeSelect'
+import PackageCombobox from '@/components/dashboard/PackageCombobox'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -71,13 +72,29 @@ export default function ExpiryPage() {
 
   const handleSendAllReminders = () => {
     if (!expiryList) return
-    const critical = expiryList.filter((m) => m.days_remaining <= 7 && m.days_remaining >= 0)
+    const critical = expiryList.filter((m) => m.days_remaining !== null && m.days_remaining <= 7 && m.days_remaining >= 0)
     critical.forEach((m, i) => {
       setTimeout(() => {
-        window.open(generateWALink(m.phone, m.full_name, m.end_date, m.days_remaining), '_blank')
+        window.open(generateWALink(m.phone, m.full_name, m.end_date!, m.days_remaining!), '_blank')
       }, i * 500)
     })
     toast.success(`Membuka ${critical.length} link WhatsApp`)
+  }
+
+  const handleFonnteSimulation = () => {
+    if (!expiryList) return
+    const targetMembers = expiryList.filter((m) => m.days_remaining !== null && m.days_remaining <= 3)
+    if (targetMembers.length === 0) {
+      toast.info('Tidak ada member yang perlu di-remind hari ini')
+      return
+    }
+    console.log('=== FONNTE REMINDER SIMULATION ===')
+    targetMembers.forEach(m => {
+      console.log(`Mengirim WA ke ${m.phone} (${m.full_name})...`)
+      console.log(`Pesan: Halo kak ${m.full_name}, paket membership Gym Lineup kakak ${m.days_remaining! <= 0 ? 'telah berakhir' : 'akan segera berakhir dalam ' + m.days_remaining + ' hari'}. Yuk perpanjang untuk lanjut nge-gym!`)
+    })
+    console.log('====================================')
+    toast.success(`Berhasil mengirim reminder ke ${targetMembers.length} member (Simulasi Fonnte)`)
   }
 
   return (
@@ -90,25 +107,31 @@ export default function ExpiryPage() {
       </div>
 
       {/* Kirim semua reminder */}
-      <AlertDialog>
-        <AlertDialogTrigger render={<Button size="sm" variant="outline" className="border-[#2A2A2A] text-xs text-[#888]" />}>
-          <Send className="mr-1 h-3.5 w-3.5" /> Kirim Reminder Semua (≤ 7 hari)
-        </AlertDialogTrigger>
-        <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Kirim Reminder WhatsApp?</AlertDialogTitle>
-            <AlertDialogDescription className="text-[#888]">
-              Ini akan membuka link WhatsApp satu per satu untuk semua member yang akan expired dalam 7 hari.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSendAllReminders} className="bg-[#D4FF00] text-black">
-              Kirim Semua
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <div className="flex gap-2">
+        <AlertDialog>
+          <AlertDialogTrigger render={<Button size="sm" variant="outline" className="border-[#2A2A2A] text-xs text-[#888]" />}>
+            <Send className="mr-1 h-3.5 w-3.5" /> WA Manual (≤ 7 hari)
+          </AlertDialogTrigger>
+          <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Kirim Reminder WhatsApp?</AlertDialogTitle>
+              <AlertDialogDescription className="text-[#888]">
+                Ini akan membuka link WhatsApp satu per satu untuk semua member yang akan expired dalam 7 hari.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
+              <AlertDialogAction onClick={handleSendAllReminders} className="bg-[#D4FF00] text-black">
+                Kirim Semua
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Button size="sm" variant="outline" onClick={handleFonnteSimulation} className="border-[#2A2A2A] text-xs text-[#128C7E] hover:bg-[#128C7E]/10 hover:text-[#128C7E]">
+          <Send className="mr-1 h-3.5 w-3.5" /> Fonnte Simulasi (≤ 3 hari)
+        </Button>
+      </div>
 
       {/* Expiry cards */}
       {isLoading ? (
@@ -125,7 +148,7 @@ export default function ExpiryPage() {
         <div className="space-y-2">
           {expiryList.map((m) => {
             const initials = m.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
-            const priority = getPriorityLabel(m.days_remaining)
+            const priority = getPriorityLabel(m.days_remaining ?? 99)
 
             return (
               <div
@@ -135,8 +158,8 @@ export default function ExpiryPage() {
               >
                 <div className="flex items-start gap-3">
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-heading text-lg ${priority === 'critical'
-                      ? 'animate-pulse-critical bg-red-500/10 text-red-400'
-                      : 'bg-[#D4FF00]/10 text-[#D4FF00]'
+                    ? 'animate-pulse-critical bg-red-500/10 text-red-400'
+                    : 'bg-[#D4FF00]/10 text-[#D4FF00]'
                     }`}>
                     {initials}
                   </div>
@@ -146,12 +169,12 @@ export default function ExpiryPage() {
                       <StatusBadge status={m.status} />
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-[#888]">
-                      <span>{m.membership_name} · {formatRupiah(m.price)}</span>
+                      <span>{m.membership_name} · {formatRupiah(m.price ?? 0)}</span>
                       <span>Exp: {formatTanggal(m.end_date)}</span>
                     </div>
-                    <p className={`mt-0.5 text-xs font-semibold ${m.days_remaining <= 3 ? 'text-red-400' : m.days_remaining <= 7 ? 'text-[#FF6B35]' : 'text-[#888]'
+                    <p className={`mt-0.5 text-xs font-semibold ${(m.days_remaining ?? 99) <= 3 ? 'text-red-400' : (m.days_remaining ?? 99) <= 7 ? 'text-[#FF6B35]' : 'text-[#888]'
                       }`}>
-                      {m.days_remaining <= 0 ? 'SUDAH EXPIRED' : `Sisa ${m.days_remaining} hari`}
+                      {(m.days_remaining ?? 99) <= 0 ? 'SUDAH EXPIRED' : `Sisa ${m.days_remaining} hari`}
                     </p>
                   </div>
                 </div>
@@ -192,35 +215,24 @@ export default function ExpiryPage() {
               <p className="text-sm text-[#888]">Member: <span className="text-white">{renewMember.full_name}</span></p>
               <div>
                 <Label className="text-xs text-[#888]">Pilih Paket</Label>
-                <Select value={renewMembershipId} onValueChange={(v) => v && setRenewMembershipId(v)}>
-                  <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                    <SelectValue placeholder="Pilih paket">
-                      {(val: any) => val && memberships ? memberships.find((p) => p.id === val)?.name : "Pilih paket"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                    {memberships?.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name} — {formatRupiah(p.price)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PackageCombobox
+                  packages={memberships || []}
+                  value={renewMembershipId}
+                  onValueChange={setRenewMembershipId}
+                  placeholder="Cari paket..."
+                />
               </div>
               <div>
                 <Label className="text-xs text-[#888]">Metode Bayar</Label>
-                <Select value={renewPayMethod} onValueChange={(v) => v && setRenewPayMethod(v as 'cash' | 'transfer' | 'qris')}>
-                  <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                    <SelectValue>
-                      {(val: any) => val ? val.charAt(0).toUpperCase() + val.slice(1) : "Pilih metode"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="transfer">Transfer</SelectItem>
-                    <SelectItem value="qris">QRIS</SelectItem>
-                  </SelectContent>
-                </Select>
+                <NativeSelect
+                  value={renewPayMethod}
+                  onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
+                  options={[
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'transfer', label: 'Transfer' },
+                    { value: 'qris', label: 'QRIS' },
+                  ]}
+                />
               </div>
               <Button onClick={handleRenew} disabled={renewSub.isPending || !renewMembershipId} className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
                 {renewSub.isPending ? 'Memproses...' : 'Perpanjang & Bayar'}

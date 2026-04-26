@@ -1,104 +1,70 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { usePayments, useCurrentMonthRevenue, useCreatePayment, useUpdatePayment, useDeletePayment } from '@/hooks/usePayments'
+import { usePayments, useCurrentMonthRevenue, useUpdatePayment, useDeletePayment } from '@/hooks/usePayments'
 import { useMonthlyRevenue } from '@/hooks/usePayments'
 import { useMembers, useMembersWithSubscription } from '@/hooks/useMembers'
 import { useActiveMemberships } from '@/hooks/useMemberships'
-import { useRenewSubscription } from '@/hooks/useSubscriptions'
-import { formatRupiah, formatTanggal, hitungEndDate } from '@/lib/utils'
+import { formatRupiah, formatTanggal } from '@/lib/utils'
 import MetricCard from '@/components/dashboard/MetricCard'
-import MemberCombobox from '@/components/dashboard/MemberCombobox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Wallet, TrendingUp, Hash, Calculator, Plus, Download, Search, MoreVertical, Edit2, Trash2 } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import NativeSelect from '@/components/dashboard/NativeSelect'
+import { Wallet, TrendingUp, Calculator, Plus, Download, Search, Edit2, Trash2, Receipt, CalendarDays } from 'lucide-react'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import { useExpenses, useCurrentMonthExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense } from '@/hooks/useExpenses'
 import { toast } from 'sonner'
 
 export default function FinancePage() {
   const { data: payments, isLoading } = usePayments()
   const { data: currentMonth } = useCurrentMonthRevenue()
   const { data: monthlyRevenue } = useMonthlyRevenue()
-  const { data: members } = useMembers()
-  const { data: membersWithSub } = useMembersWithSubscription()
-  const { data: memberships } = useActiveMemberships()
-  const renewSub = useRenewSubscription()
   const updatePayment = useUpdatePayment()
   const deletePayment = useDeletePayment()
 
-  const [addOpen, setAddOpen] = useState(false)
+  // Expenses hooks
+  const { data: expenses, isLoading: expLoading } = useExpenses()
+  const { data: currentMonthExp } = useCurrentMonthExpenses()
+  const createExpense = useCreateExpense()
+  const updateExpense = useUpdateExpense()
+  const deleteExpense = useDeleteExpense()
+
   const [search, setSearch] = useState('')
   const [filterMethod, setFilterMethod] = useState<string>('all')
-  // Form
-  const [fMember, setFMember] = useState('')
-  const [fMembership, setFMembership] = useState('')
-  const [fMethod, setFMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
-  const [fNotes, setFNotes] = useState('')
+  const [activeTab, setActiveTab] = useState<'income' | 'expenses'>('income')
+  const [chartType, setChartType] = useState<'bar' | 'line'>('bar')
+  const [monthCount, setMonthCount] = useState<number>(6)
+  const [customModalOpen, setCustomModalOpen] = useState(false)
+  const [customMonth, setCustomMonth] = useState('12')
 
-  // Edit Form
+  // Date filter (default: today)
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
+
+  // Edit Form (Payment)
   const [editOpen, setEditOpen] = useState(false)
   const [editData, setEditData] = useState<any>(null)
   
-  // Delete Dialog
+  // Delete Dialog (Payment)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string>('')
 
-  useEffect(() => {
-    if (fMember && membersWithSub && memberships) {
-      const activeData = membersWithSub.find((m) => m.member_id === fMember)
-      if (activeData && activeData.membership_name) {
-        const pkg = memberships.find((p) => p.name === activeData.membership_name)
-        if (pkg) {
-          setFMembership(pkg.id)
-        }
-      } else {
-        setFMembership('')
-      }
-    }
-  }, [fMember, membersWithSub, memberships])
+  // Expenses Form
+  const [expOpen, setExpOpen] = useState(false)
+  const [expCategory, setExpCategory] = useState('operasional')
+  const [expAmount, setExpAmount] = useState('')
+  const [expDesc, setExpDesc] = useState('')
 
-  // Filter: hanya tampilkan member yang belum bayar (expired / belum pernah langganan)
-  const payableMembers = useMemo(() => {
-    if (!members) return []
-    if (!membersWithSub) return members // Kalau data subscription belum load, tampilkan semua
+  // Edit Form (Expense)
+  const [editExpOpen, setEditExpOpen] = useState(false)
+  const [editExpData, setEditExpData] = useState<any>(null)
 
-    // Set ID member yang masih aktif (active, expiring_soon, critical)
-    const activeMemberIds = new Set(
-      membersWithSub
-        .filter((m) => m.status === 'active' || m.status === 'expiring_soon' || m.status === 'critical')
-        .map((m) => m.member_id)
-    )
-
-    // Kembalikan member yang TIDAK ada di set aktif
-    return members.filter((m) => !activeMemberIds.has(m.id))
-  }, [members, membersWithSub])
-
-  // Buat map status untuk ditampilkan di combobox
-  const memberStatusMap = useMemo(() => {
-    const map = new Map<string, string>()
-    if (!membersWithSub) return map
-    for (const m of membersWithSub) {
-      if (m.status === 'expired') {
-        map.set(m.member_id, `Expired ${m.days_remaining ? Math.abs(m.days_remaining) + ' hari lalu' : ''}`)
-      }
-    }
-    // Member yang tidak ada di membersWithSub = belum pernah berlangganan
-    if (members) {
-      for (const m of members) {
-        if (!membersWithSub.find((s) => s.member_id === m.id)) {
-          map.set(m.id, 'Belum pernah daftar')
-        }
-      }
-    }
-    return map
-  }, [members, membersWithSub])
-
-
+  // Delete Dialog (Expense)
+  const [deleteExpOpen, setDeleteExpOpen] = useState(false)
+  const [deleteExpId, setDeleteExpId] = useState<string>('')
 
   // YTD
   const ytdRevenue = useMemo(() => {
@@ -112,9 +78,16 @@ export default function FinancePage() {
     ? currentMonth.total / currentMonth.count
     : 0
 
-  // Filter payments
+  const netProfit = (currentMonth?.total || 0) - (currentMonthExp?.total || 0)
+
+  // Filter payments by selectedDate + search + method
   const filtered = useMemo(() => {
     let list = payments || []
+    // Filter by selected date
+    list = list.filter((p: any) => {
+      const paidDate = p.paid_at?.split('T')[0]
+      return paidDate === selectedDate
+    })
     if (search) {
       const s = search.toLowerCase()
       list = list.filter((p: any) => p.members?.full_name?.toLowerCase().includes(s))
@@ -123,44 +96,37 @@ export default function FinancePage() {
       list = list.filter((p: any) => p.payment_method === filterMethod)
     }
     return list
-  }, [payments, search, filterMethod])
+  }, [payments, search, filterMethod, selectedDate])
 
-  // Chart data
-  const chartData = (monthlyRevenue || []).map((d) => ({
-    name: d.month_label,
-    revenue: Number(d.total),
-  }))
+  // Filter expenses by selectedDate
+  const filteredExpenses = useMemo(() => {
+    return (expenses || []).filter((e: any) => {
+      const expDate = e.expense_date?.split('T')[0]
+      return expDate === selectedDate
+    })
+  }, [expenses, selectedDate])
 
-  const handleAddPayment = async () => {
-    if (!fMember || !fMembership) {
-      toast.error('Pilih member dan paket')
-      return
+  // Chart data (income + expenses aggregated by month)
+  const chartData = useMemo(() => {
+    // Build expense map by month (YYYY-MM)
+    const expMap: Record<string, number> = {}
+    for (const e of expenses || []) {
+      const m = e.expense_date?.substring(0, 7) // YYYY-MM
+      if (m) expMap[m] = (expMap[m] || 0) + Number(e.amount)
     }
-    const pkg = memberships?.find((m) => m.id === fMembership)
-    if (!pkg) return
 
-    const startDate = new Date().toISOString().split('T')[0]
-    const endDate = hitungEndDate(startDate, pkg.duration_days).toISOString().split('T')[0]
+    const all = (monthlyRevenue || []).map((d) => ({
+      name: d.month_label,
+      pemasukan: Number(d.total),
+      pengeluaran: expMap[d.month?.substring(0, 7)] || 0,
+    }))
+    return all.slice(-monthCount)
+  }, [monthlyRevenue, expenses, monthCount])
 
-    try {
-      await renewSub.mutateAsync({
-        memberId: fMember,
-        membershipId: fMembership,
-        startDate,
-        endDate,
-        amount: pkg.price,
-        paymentMethod: fMethod,
-        membershipType: pkg.name,
-      })
-      toast.success('Pembayaran berhasil dicatat!')
-      setAddOpen(false)
-      setFMember('')
-      setFMembership('')
-      setFNotes('')
-    } catch {
-      toast.error('Gagal mencatat pembayaran')
-    }
-  }
+  // Selected date formatted for display
+  const selectedDateFormatted = new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  }).format(new Date(selectedDate + 'T00:00:00'))
 
   const handleEditSave = async () => {
     if (!editData) return
@@ -192,6 +158,54 @@ export default function FinancePage() {
     }
   }
 
+  const handleAddExpense = async () => {
+    if (!expAmount || isNaN(Number(expAmount))) return
+    try {
+      await createExpense.mutateAsync({
+        category: expCategory,
+        amount: Number(expAmount),
+        expense_date: new Date().toISOString().split('T')[0],
+        description: expDesc
+      })
+      toast.success('Pengeluaran berhasil dicatat!')
+      setExpOpen(false)
+      setExpAmount('')
+      setExpDesc('')
+    } catch {
+      toast.error('Gagal mencatat pengeluaran')
+    }
+  }
+
+  const handleEditExpenseSave = async () => {
+    if (!editExpData) return
+    try {
+      await updateExpense.mutateAsync({
+        id: editExpData.id,
+        data: {
+          category: editExpData.category,
+          amount: editExpData.amount,
+          description: editExpData.description,
+        }
+      })
+      toast.success('Pengeluaran berhasil di-update!')
+      setEditExpOpen(false)
+    } catch {
+      toast.error('Gagal meng-update pengeluaran')
+    }
+  }
+
+  const handleDeleteExpenseConfirm = async () => {
+    if (!deleteExpId) return
+    try {
+      await deleteExpense.mutateAsync(deleteExpId)
+      toast.success('Pengeluaran berhasil dihapus')
+      setDeleteExpOpen(false)
+      setDeleteExpId('')
+    } catch {
+      toast.error('Gagal menghapus pengeluaran')
+    }
+  }
+
   const exportCSV = () => {
     const rows = [
       ['Nama', 'Paket', 'Metode', 'Jumlah', 'Tanggal'],
@@ -213,143 +227,168 @@ export default function FinancePage() {
     URL.revokeObjectURL(url)
   }
 
-  const selectedPkg = memberships?.find((m) => m.id === fMembership)
-
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
     return (
       <div className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-xs">
-        <p className="text-[#888]">{label}</p>
-        <p className="font-heading text-base text-[#D4FF00]">{formatRupiah(payload[0].value)}</p>
+        <p className="mb-1 text-[#888]">{label}</p>
+        {payload.map((entry: any, i: number) => (
+          <p key={i} style={{ color: entry.color }} className="font-heading text-sm">
+            {entry.name === 'pemasukan' ? 'Pemasukan' : 'Pengeluaran'}: {formatRupiah(entry.value)}
+          </p>
+        ))}
       </div>
     )
   }
 
+  const categoryLabels: Record<string, string> = {
+    operasional: 'Operasional',
+    maintenance: 'Maintenance',
+    gaji: 'Gaji Staff / PT',
+    marketing: 'Marketing',
+    lainnya: 'Lainnya',
+  }
+
   return (
     <div className="space-y-5">
+      {/* Date Header + Date Picker */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="font-heading text-lg text-white">Laporan Keuangan</h2>
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-[#888]" />
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-1.5 text-sm text-white [color-scheme:dark]"
+          />
+        </div>
+      </div>
+      <p className="-mt-3 text-xs text-[#888]">{selectedDateFormatted}</p>
+
       {/* Metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Revenue Bulan Ini" value={formatRupiah(currentMonth?.total ?? 0)} icon={Wallet} accent="neon" />
-        <MetricCard label="Revenue YTD" value={formatRupiah(ytdRevenue)} icon={TrendingUp} accent="neon" />
-        <MetricCard label="Transaksi Bulan Ini" value={currentMonth?.count ?? 0} icon={Hash} accent="muted" />
+        <MetricCard label="Pengeluaran Bulan Ini" value={formatRupiah(currentMonthExp?.total ?? 0)} icon={Receipt} accent="red" />
+        <MetricCard label="Profit Bersih (Net)" value={formatRupiah(netProfit)} icon={TrendingUp} accent="neon" />
         <MetricCard label="Rata-rata / Transaksi" value={formatRupiah(avgPerTx)} icon={Calculator} accent="muted" />
       </div>
 
       {/* Chart */}
-      {chartData.length > 0 && (
-        <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
-          <h3 className="mb-4 text-sm font-semibold text-white">Revenue Bulanan</h3>
+      <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-white">Revenue {monthCount} Bulan</h3>
+              <div className="ml-2 flex gap-1 rounded-lg bg-[#111] p-0.5">
+                <button onClick={() => setMonthCount(1)} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${monthCount === 1 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'}`}>1B</button>
+                <button onClick={() => setMonthCount(6)} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${monthCount === 6 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'}`}>6B</button>
+                <button onClick={() => setCustomModalOpen(true)} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${monthCount !== 1 && monthCount !== 6 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'}`}>Custom</button>
+              </div>
+            </div>
+            <div className="flex gap-1 rounded-lg bg-[#111] p-0.5 self-start sm:self-auto">
+              <button onClick={() => setChartType('bar')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'}`}>Bar</button>
+              <button onClick={() => setChartType('line')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'}`}>Line</button>
+            </div>
+          </div>
+          {chartData.length > 0 ? (
           <div className="h-48 lg:h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
-                <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}jt`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="revenue" stroke="#D4FF00" strokeWidth={2} dot={{ fill: '#D4FF00', r: 4 }} />
-              </LineChart>
+              {chartType === 'bar' ? (
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+                  <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
+                  <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}jt`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="pemasukan" fill="#D4FF00" radius={[4, 4, 0, 0]} animationBegin={200} />
+                  <Bar dataKey="pengeluaran" fill="#EF4444" radius={[4, 4, 0, 0]} animationBegin={200} />
+                </BarChart>
+              ) : (
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+                  <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
+                  <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}jt`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line type="monotone" dataKey="pemasukan" stroke="#D4FF00" strokeWidth={2} dot={{ fill: '#D4FF00', r: 4 }} animationBegin={200} />
+                  <Line type="monotone" dataKey="pengeluaran" stroke="#EF4444" strokeWidth={2} dot={{ fill: '#EF4444', r: 4 }} animationBegin={200} />
+                </LineChart>
+              )}
             </ResponsiveContainer>
           </div>
+          ) : (
+            <div className="flex h-48 items-center justify-center">
+              <p className="text-sm text-[#555]">Belum ada data revenue</p>
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Transaction list */}
-      <div className="space-y-3">
+      {/* Custom Month Dialog */}
+      <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
+        <DialogContent className="sm:max-w-md border-[#2A2A2A] bg-[#1A1A1A] text-white">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Kustomisasi Rentang Waktu</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); const val = parseInt(customMonth, 10); if (!isNaN(val) && val > 0) { setMonthCount(val); setCustomModalOpen(false); } }} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-sm text-[#888]">Jumlah Bulan</Label>
+              <Input type="number" min="1" max="120" value={customMonth} onChange={(e) => setCustomMonth(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" autoFocus />
+              <p className="text-[11px] text-[#555]">Masukkan berapa bulan ke belakang yang ingin ditampilkan.</p>
+            </div>
+            <DialogFooter className="border-t border-[#2A2A2A] bg-transparent pt-4 sm:justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCustomModalOpen(false)} className="border-[#2A2A2A] text-white hover:bg-[#2A2A2A]">Batal</Button>
+              <Button type="submit" className="bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90">Terapkan</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tabs Custom */}
+      <div className="flex gap-2 rounded-xl bg-[#1A1A1A] p-1 border border-[#2A2A2A]">
+        <button
+          onClick={() => setActiveTab('income')}
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+            activeTab === 'income' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
+          }`}
+        >
+          Pemasukan
+        </button>
+        <button
+          onClick={() => setActiveTab('expenses')}
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+            activeTab === 'expenses' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
+          }`}
+        >
+          Pengeluaran
+        </button>
+      </div>
+
+      {activeTab === 'income' && (
+        <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
-            <Input
-              placeholder="Cari nama member..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="border-[#2A2A2A] bg-[#1A1A1A] pl-9 text-sm text-white placeholder:text-[#555]"
-            />
-          </div>
+          <h3 className="text-sm font-semibold text-white">Pemasukan <span className="text-[10px] font-normal text-[#555]">(otomatis dari pendaftaran member)</span></h3>
           <div className="flex gap-2">
-            <Select value={filterMethod} onValueChange={(v) => v && setFilterMethod(v)}>
-              <SelectTrigger className="w-28 border-[#2A2A2A] bg-[#1A1A1A] text-xs text-white">
-                <SelectValue placeholder="Metode">
-                  {(val: any) => {
-                    if (!val || val === 'all') return 'Semua'
-                    return val.charAt(0).toUpperCase() + val.slice(1)
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="border-[#2A2A2A] bg-[#1A1A1A]">
-                <SelectItem value="all">Semua</SelectItem>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="transfer">Transfer</SelectItem>
-                <SelectItem value="qris">QRIS</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="relative flex-1 sm:w-48 sm:flex-none">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
+              <Input
+                placeholder="Cari nama..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="border-[#2A2A2A] bg-[#1A1A1A] pl-9 text-sm text-white placeholder:text-[#555]"
+              />
+            </div>
+            <NativeSelect
+              value={filterMethod}
+              onChange={(e) => setFilterMethod(e.target.value)}
+              options={[
+                { value: 'all', label: 'Semua' },
+                { value: 'cash', label: 'Cash' },
+                { value: 'transfer', label: 'Transfer' },
+                { value: 'qris', label: 'QRIS' },
+              ]}
+              triggerClassName="w-28 text-xs"
+            />
             <Button size="sm" variant="outline" onClick={exportCSV} className="border-[#2A2A2A] text-xs text-[#888]">
               <Download className="mr-1 h-3.5 w-3.5" /> CSV
             </Button>
-            <Dialog open={addOpen} onOpenChange={setAddOpen}>
-              <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]" />}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Bayar
-              </DialogTrigger>
-              <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="font-heading text-xl">Tambah Pembayaran</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-xs text-[#888]">Pilih Member *</Label>
-                    <MemberCombobox
-                      members={payableMembers}
-                      value={fMember}
-                      onValueChange={setFMember}
-                      placeholder="Cari & pilih member..."
-                      statusMap={memberStatusMap}
-                      emptyMessage={payableMembers.length === 0 ? 'Semua member sudah aktif 🎉' : undefined}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-[#888]">Paket *</Label>
-                    <Select value={fMembership} onValueChange={(v) => v && setFMembership(v)}>
-                      <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                        <SelectValue placeholder="Pilih paket">
-                          {(val: any) => val && memberships ? memberships.find((p) => p.id === val)?.name : "Pilih paket"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                        {memberships?.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name} — {formatRupiah(p.price)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedPkg && (
-                      <p className="mt-1 text-xs text-[#D4FF00]">Jumlah: {formatRupiah(selectedPkg.price)}</p>
-                    )}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-[#888]">Metode Bayar</Label>
-                    <Select value={fMethod} onValueChange={(v) => v && setFMethod(v as 'cash' | 'transfer' | 'qris')}>
-                      <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                        <SelectValue>
-                          {(val: any) => val ? val.charAt(0).toUpperCase() + val.slice(1) : "Pilih metode"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="transfer">Transfer</SelectItem>
-                        <SelectItem value="qris">QRIS</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-[#888]">Catatan</Label>
-                    <Input value={fNotes} onChange={(e) => setFNotes(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-                  </div>
-                  <Button onClick={handleAddPayment} disabled={renewSub.isPending} className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
-                    {renewSub.isPending ? 'Memproses...' : 'Simpan Pembayaran'}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
         </div>
 
@@ -362,7 +401,7 @@ export default function FinancePage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-            <p className="text-sm text-[#555]">Belum ada transaksi</p>
+            <p className="text-sm text-[#555]">Tidak ada transaksi pada tanggal ini</p>
           </div>
         ) : (
           <div className="space-y-1.5">
@@ -380,39 +419,105 @@ export default function FinancePage() {
                     <p className="font-heading text-lg text-[#D4FF00]">{formatRupiah(Number(p.amount))}</p>
                     <p className="text-[10px] text-[#555]">{formatTanggal(p.paid_at)}</p>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36 border-[#2A2A2A] bg-[#1A1A1A]">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setEditData(p)
-                          setEditOpen(true)
-                        }}
-                        className="flex cursor-pointer items-center text-sm text-white hover:bg-[#2A2A2A]"
-                      >
-                        <Edit2 className="mr-2 h-3.5 w-3.5" /> Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setDeleteId(p.id)
-                          setDeleteOpen(true)
-                        }}
-                        className="flex cursor-pointer items-center text-sm text-red-500 hover:bg-[#2A2A2A] hover:text-red-400"
-                      >
-                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Hapus
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => { setEditData(p); setEditOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => { setDeleteId(p.id); setDeleteOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-red-400">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+      )}
+
+      {activeTab === 'expenses' && (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Pengeluaran</h3>
+          </div>
+          <Dialog open={expOpen} onOpenChange={setExpOpen}>
+            <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]" />}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pengeluaran
+            </DialogTrigger>
+            <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-heading text-xl">Catat Pengeluaran</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-[#888]">Kategori</Label>
+                  <NativeSelect
+                    value={expCategory}
+                    onChange={(e) => setExpCategory(e.target.value)}
+                    options={[
+                      { value: 'operasional', label: 'Operasional (Listrik, Air)' },
+                      { value: 'maintenance', label: 'Maintenance Alat' },
+                      { value: 'gaji', label: 'Gaji Staff / PT' },
+                      { value: 'marketing', label: 'Marketing & Iklan' },
+                      { value: 'lainnya', label: 'Lainnya' },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-[#888]">Nominal (Rp)</Label>
+                  <Input type="number" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                </div>
+                <div>
+                  <Label className="text-xs text-[#888]">Keterangan</Label>
+                  <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                </div>
+                <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
+                  {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {expLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
+            ))}
+          </div>
+        ) : filteredExpenses.length === 0 ? (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
+            <p className="text-sm text-[#555]">Tidak ada pengeluaran pada tanggal ini</p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {filteredExpenses.map((e: any) => (
+              <div key={e.id} className="flex items-center justify-between rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-white">{categoryLabels[e.category] || e.category}</p>
+                  <p className="text-[11px] text-[#888]">{e.description || '-'}</p>
+                </div>
+                <div className="flex items-center gap-4 text-right">
+                  <div>
+                    <p className="font-heading text-lg text-red-400">{formatRupiah(Number(e.amount))}</p>
+                    <p className="text-[10px] text-[#555]">{formatTanggal(e.expense_date)}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => { setEditExpData(e); setEditExpOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => { setDeleteExpId(e.id); setDeleteExpOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-red-400">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -432,16 +537,15 @@ export default function FinancePage() {
               </div>
               <div>
                 <Label className="text-xs text-[#888]">Metode Bayar</Label>
-                <Select value={editData.payment_method} onValueChange={(v) => v && setEditData({ ...editData, payment_method: v })}>
-                  <SelectTrigger className="border-[#2A2A2A] bg-[#111] text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-[#2A2A2A] bg-[#111]">
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="transfer">Transfer</SelectItem>
-                    <SelectItem value="qris">QRIS</SelectItem>
-                  </SelectContent>
-                </Select>
+                <NativeSelect
+                  value={editData.payment_method}
+                  onChange={(e) => setEditData({ ...editData, payment_method: e.target.value })}
+                  options={[
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'transfer', label: 'Transfer' },
+                    { value: 'qris', label: 'QRIS' },
+                  ]}
+                />
               </div>
               <div>
                 <Label className="text-xs text-[#888]">Catatan</Label>
@@ -458,13 +562,13 @@ export default function FinancePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
+      {/* Delete Payment Dialog */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus Data Pembayaran?</AlertDialogTitle>
             <AlertDialogDescription className="text-[#888]">
-              Perhatian: Menghapus data pembayaran akan mengurangi total pendapatan pelaporan keuangan. Ini tidak otomatis mengubah masa aktif member.
+              Perhatian: Menghapus data pembayaran akan mengurangi total pendapatan pelaporan keuangan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -475,6 +579,65 @@ export default function FinancePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete Expense Dialog */}
+      <AlertDialog open={deleteExpOpen} onOpenChange={setDeleteExpOpen}>
+        <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus Pengeluaran?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[#888]">
+              Data pengeluaran ini akan dihapus dari sistem.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteExpense.isPending} onClick={() => setDeleteExpOpen(false)} className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
+            <AlertDialogAction disabled={deleteExpense.isPending} onClick={handleDeleteExpenseConfirm} className="bg-red-500 text-white hover:bg-red-600">
+              {deleteExpense.isPending ? 'Menghapus...' : 'Ya, Hapus'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Dialog Expense */}
+      <Dialog open={editExpOpen} onOpenChange={setEditExpOpen}>
+        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Edit Pengeluaran</DialogTitle>
+          </DialogHeader>
+          {editExpData && (
+            <div className="space-y-3 pt-4">
+              <div>
+                <Label className="text-xs text-[#888]">Kategori</Label>
+                <NativeSelect
+                  value={editExpData.category}
+                  onChange={(e) => setEditExpData({ ...editExpData, category: e.target.value })}
+                  options={[
+                    { value: 'operasional', label: 'Operasional' },
+                    { value: 'maintenance', label: 'Maintenance' },
+                    { value: 'gaji', label: 'Gaji Staff / PT' },
+                    { value: 'marketing', label: 'Marketing' },
+                    { value: 'lainnya', label: 'Lainnya' },
+                  ]}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-[#888]">Nominal Pengeluaran</Label>
+                <Input type="number" value={editExpData.amount} onChange={(e) => setEditExpData({ ...editExpData, amount: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
+              </div>
+              <div>
+                <Label className="text-xs text-[#888]">Keterangan</Label>
+                <Input value={editExpData.description || ''} onChange={(e) => setEditExpData({ ...editExpData, description: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
+              </div>
+              <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={() => setEditExpOpen(false)} className="border-[#2A2A2A] text-[#888] hover:bg-[#2A2A2A] hover:text-white">Batal</Button>
+                <Button onClick={handleEditExpenseSave} disabled={updateExpense.isPending} className="bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
+                  {updateExpense.isPending ? 'Menyimpan...' : 'Simpan Edit'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

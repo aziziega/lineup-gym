@@ -25,8 +25,16 @@ const statusConfig = {
   },
 }
 
-export default function StatusBadge({ status }: StatusBadgeProps) {
-  const config = statusConfig[status]
+export default function StatusBadge({ status }: { status?: string }) {
+  const config = statusConfig[status as keyof typeof statusConfig]
+
+  if (!config) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-[#2A2A2A] bg-[#2A2A2A]/50 px-2.5 py-0.5 text-[11px] font-semibold text-[#888]">
+        {status ? status : 'Tidak Aktif'}
+      </span>
+    )
+  }
 
   return (
     <span

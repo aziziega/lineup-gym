@@ -7,7 +7,7 @@ export const GYM_INFO = {
   INSTAGRAM: process.env.NEXT_PUBLIC_GYM_INSTAGRAM || 'lineup.gym',
   CLOSE_TIME: process.env.NEXT_PUBLIC_GYM_CLOSE_TIME || '21:00',
   RATING: '4.9',
-  TAGLINE: 'Tempat nyaman, alat baru, fasilitas lengkap',
+  TAGLINE: 'BE STRONG BE HEALTHY',
 };
 
 export const COLORS = {
