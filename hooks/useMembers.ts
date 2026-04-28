@@ -31,6 +31,7 @@ export function useMembersWithSubscription() {
       if (error) throw error
       return data as ActiveSubscriptionView[]
     },
+    refetchInterval: 10000, // Auto-refresh tiap 10 detik agar visitor baru langsung muncul
   })
 }
 

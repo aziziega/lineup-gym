@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useMembersWithSubscription, useCreateMember, useDeleteMember } from '@/hooks/useMembers'
+import { useState, useMemo, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { createClient } from '@/lib/supabase/client'
+import { useMembersWithSubscription, useCreateMember, useDeleteMember, useUpdateMember } from '@/hooks/useMembers'
 import { useActiveMemberships } from '@/hooks/useMemberships'
 import { useCheckIn } from '@/hooks/useAttendance'
 import { useRenewSubscription } from '@/hooks/useSubscriptions'
@@ -30,8 +32,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import NativeSelect from '@/components/dashboard/NativeSelect'
 import PackageCombobox from '@/components/dashboard/PackageCombobox'
-import { Search, Plus, UserCheck, RotateCcw, Trash2, Download } from 'lucide-react'
+import { Search, Plus, Download, Edit2, RotateCcw, Trash2, ShieldAlert, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { GYM_ID } from '@/lib/constants'
 import type { ActiveSubscriptionView, Membership } from '@/lib/types'
 
 export default function MembersPage() {
@@ -39,8 +42,29 @@ export default function MembersPage() {
   const { data: memberships } = useActiveMemberships()
   const createMember = useCreateMember()
   const deleteMember = useDeleteMember()
+  const updateMember = useUpdateMember()
   const checkIn = useCheckIn()
   const renewSub = useRenewSubscription()
+  const supabase = createClient()
+  const queryClient = useQueryClient()
+
+  // Realtime subscription agar data visitor baru langsung muncul (LIVE)
+  useEffect(() => {
+    const channel = supabase
+      .channel('members-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'members' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, queryClient])
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -49,19 +73,22 @@ export default function MembersPage() {
 
   // Dialog states
   const [addOpen, setAddOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editMemberData, setEditMemberData] = useState<ActiveSubscriptionView | null>(null)
   const [renewOpen, setRenewOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<ActiveSubscriptionView | null>(null)
 
   // Add form
   const [formName, setFormName] = useState('')
   const [formPhone, setFormPhone] = useState('')
-  const [formEmail, setFormEmail] = useState('')
+  const [formMemberNo, setFormMemberNo] = useState('')
   const [formEmergency, setFormEmergency] = useState('')
   const [formMembership, setFormMembership] = useState('') // Gym package
   const [formPtMembership, setFormPtMembership] = useState('') // PT package
   const [formPayMethod, setFormPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
   const [formStartDate, setFormStartDate] = useState(new Date().toISOString().split('T')[0])
   const [formNotes, setFormNotes] = useState('')
+  const [approvingId, setApprovingId] = useState<string | null>(null)
 
   // Renew form
   const [renewMembershipId, setRenewMembershipId] = useState('')
@@ -75,7 +102,7 @@ export default function MembersPage() {
     let list = members || []
     if (search) {
       const s = search.toLowerCase()
-      list = list.filter((m) => m.full_name.toLowerCase().includes(s) || m.phone.includes(s))
+      list = list.filter((m) => m.full_name.toLowerCase().includes(s) || m.phone.includes(s) || (m.member_no && m.member_no.toLowerCase().includes(s)))
     }
     if (statusFilter !== 'all') {
       list = list.filter((m) => m.status === statusFilter)
@@ -103,7 +130,7 @@ export default function MembersPage() {
           gym_id: 'lineup-gym-01',
           full_name: formName,
           phone: formPhone,
-          email: formEmail || null,
+          member_no: formMemberNo || null,
           emergency_contact: formEmergency || null,
           photo_url: null,
           notes: formNotes || null,
@@ -166,12 +193,29 @@ export default function MembersPage() {
     }
   }
 
-  const handleQuickCheckIn = async (memberId: string, memberName: string) => {
+  const handleUpdateMember = async () => {
+    if (!editMemberData) return
+    if (!formName || !formPhone) {
+      toast.error('Nama dan No. HP wajib diisi')
+      return
+    }
+
     try {
-      await checkIn.mutateAsync(memberId)
-      toast.success(`${memberName} berhasil check-in!`)
+      await updateMember.mutateAsync({
+        id: editMemberData.member_id,
+        data: {
+          full_name: formName,
+          phone: formPhone,
+          member_no: formMemberNo || null,
+          emergency_contact: formEmergency || null,
+          notes: formNotes || null,
+        }
+      })
+      toast.success('Member berhasil diupdate')
+      setEditOpen(false)
+      resetForm()
     } catch {
-      toast.error('Gagal check-in')
+      toast.error('Gagal mengupdate member')
     }
   }
 
@@ -184,13 +228,72 @@ export default function MembersPage() {
     }
   }
 
+  const handleApproveVisitor = async (m: any) => {
+    setApprovingId(m.member_id)
+    try {
+      // 1. Data Paket DAY sesuai screenshot user
+      const DAY_PACKAGE_ID = '6f53dd6e-74fd-4b75-a852-23d9ec00a77e'
+      const startDate = new Date().toISOString().split('T')[0]
+      const endDate = hitungEndDate(startDate, 1).toISOString().split('T')[0]
+      
+      // 1. Absen (Check-In)
+      const { error: attErr } = await supabase.from('attendance_logs').insert({
+        gym_id: GYM_ID,
+        member_id: m.member_id,
+        notes: 'Visitor Check-In (Admin Approved)'
+      })
+      if (attErr) throw attErr
+      
+      // 2. Tambah Subscription (Paket DAY 1 Hari)
+      const { error: subErr } = await supabase.from('subscriptions').insert({
+        member_id: m.member_id,
+        membership_id: DAY_PACKAGE_ID,
+        start_date: startDate,
+        end_date: endDate,
+        status: 'active'
+      })
+      if (subErr) throw subErr
+
+      // 3. Catat Keuangan (Revenue)
+      const { error: payErr } = await supabase.from('payments').insert({
+        gym_id: GYM_ID,
+        member_id: m.member_id,
+        amount: 15000,
+        payment_method: 'cash',
+        membership_type: 'DAY',
+        notes: 'Pembayaran Visitor Harian (Daily Pass)'
+      })
+      if (payErr) throw payErr
+      
+      // 4. Ubah notes agar tidak muncul lagi sebagai pending
+      const { error: updErr } = await supabase
+        .from('members')
+        .update({ notes: 'Visitor Harian (Selesai)' })
+        .eq('id', m.member_id)
+      
+      if (updErr) throw updErr
+      
+      // Invalidate semua query terkait agar dashboard update
+      queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      queryClient.invalidateQueries({ queryKey: ['overview'] })
+      
+      toast.success(`${m.full_name} berhasil disetujui! Paket DAY & Pembayaran Rp 15.000 tercatat.`)
+    } catch (err) {
+      toast.error('Gagal menyetujui visitor')
+      console.error(err)
+    } finally {
+      setApprovingId(null)
+    }
+  }
+
   const exportCSV = () => {
     const rows = [
-      ['Nama', 'Telepon', 'Email', 'Paket', 'Mulai', 'Expired', 'Status'],
+      ['No. Member', 'Nama', 'Telepon', 'Paket', 'Mulai', 'Expired', 'Status'],
       ...(filtered || []).map((m) => [
+        m.member_no ?? '',
         m.full_name,
         m.phone,
-        m.email ?? '',
         m.membership_name,
         m.start_date,
         m.end_date,
@@ -210,7 +313,7 @@ export default function MembersPage() {
   const resetForm = () => {
     setFormName('')
     setFormPhone('')
-    setFormEmail('')
+    setFormMemberNo('')
     setFormEmergency('')
     setFormMembership('')
     setFormPtMembership('')
@@ -269,8 +372,8 @@ export default function MembersPage() {
                   <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">Email</Label>
-                  <Input value={formEmail} onChange={(e) => setFormEmail(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-[#888]">No. Member (Opsional)</Label>
+                  <Input value={formMemberNo} onChange={(e) => setFormMemberNo(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
                 </div>
                 <div>
                   <Label className="text-xs text-[#888]">Kontak Darurat</Label>
@@ -350,6 +453,44 @@ export default function MembersPage() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Edit Member Dialog */}
+          <Dialog open={editOpen} onOpenChange={setEditOpen}>
+            <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-heading text-xl">Edit Profil Member</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-[#888]">Nama Lengkap *</Label>
+                  <Input value={formName} onChange={(e) => setFormName(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                </div>
+                <div>
+                  <Label className="text-xs text-[#888]">No. HP *</Label>
+                  <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                </div>
+                <div>
+                  <Label className="text-xs text-[#888]">No. Member (Opsional)</Label>
+                  <Input value={formMemberNo} onChange={(e) => setFormMemberNo(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                </div>
+                <div>
+                  <Label className="text-xs text-[#888]">Kontak Darurat</Label>
+                  <Input value={formEmergency} onChange={(e) => setFormEmergency(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                </div>
+                <div>
+                  <Label className="text-xs text-[#888]">Catatan</Label>
+                  <Input value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                </div>
+                <Button
+                  onClick={handleUpdateMember}
+                  disabled={updateMember.isPending}
+                  className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]"
+                >
+                  {updateMember.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -379,7 +520,10 @@ export default function MembersPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-white">{num}. {m.full_name}</p>
+                        <p className="truncate text-sm font-semibold text-white">
+                          {num}. {m.full_name} 
+                          {m.member_no && <span className="ml-1 text-xs text-[#888]">#{m.member_no}</span>}
+                        </p>
                         <p className="text-[11px] text-[#888]">{m.phone}</p>
                       </div>
                       <StatusBadge status={m.status} />
@@ -393,17 +537,55 @@ export default function MembersPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="mt-2 flex gap-1.5 border-t border-[#2A2A2A]/50 pt-2">
-                  {m.status !== 'expired' && (
+                {m.notes === 'Visitor Harian' && m.status === 'inactive' ? (
+                  <div className="mt-2 flex gap-1.5 border-t border-[#2A2A2A]/50 pt-2">
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleQuickCheckIn(m.member_id, m.full_name)}
-                      className="h-7 flex-1 text-[11px] text-[#D4FF00] hover:bg-[#D4FF00]/10"
+                      onClick={() => handleApproveVisitor(m)}
+                      disabled={approvingId === m.member_id}
+                      className="h-7 flex-1 text-[11px] bg-[#D4FF00]/10 text-[#D4FF00] hover:bg-[#D4FF00]/20"
                     >
-                      <UserCheck className="mr-1 h-3 w-3" /> Check-In
+                      <CheckCircle2 className="mr-1 h-3 w-3" /> {approvingId === m.member_id ? 'Loading...' : 'Izinkan & Absen'}
                     </Button>
-                  )}
+                    <AlertDialog>
+                      <AlertDialogTrigger render={<Button size="sm" variant="ghost" className="h-7 flex-1 text-[11px] text-red-400 hover:bg-red-500/10" />}>
+                        <Trash2 className="mr-1 h-3 w-3" /> Tolak & Hapus
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Tolak & Hapus {m.full_name}?</AlertDialogTitle>
+                          <AlertDialogDescription className="text-[#888]">
+                            Data visitor ini akan dihapus dari sistem.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(m.member_id, m.full_name)} className="bg-red-500 text-white hover:bg-red-600">
+                            Hapus
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex gap-1.5 border-t border-[#2A2A2A]/50 pt-2">
+                    <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditMemberData(m)
+                      setFormName(m.full_name)
+                      setFormPhone(m.phone)
+                      setFormMemberNo(m.member_no || '')
+                      setFormEmergency(m.emergency_contact || '')
+                      setFormNotes(m.notes || '')
+                      setEditOpen(true)
+                    }}
+                    className="h-7 flex-1 text-[11px] text-blue-400 hover:bg-blue-500/10"
+                  >
+                    <Edit2 className="mr-1 h-3 w-3" /> Edit
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -435,6 +617,7 @@ export default function MembersPage() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
+                )}
               </div>
             )
           })}

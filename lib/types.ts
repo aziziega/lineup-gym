@@ -25,7 +25,7 @@ export interface Member {
   id: string;
   gym_id: string;
   full_name: string;
-  email: string | null;
+  member_no: string | null;
   phone: string;
   emergency_contact: string | null;
   photo_url: string | null;
@@ -109,7 +109,9 @@ export interface ActiveSubscriptionView {
   gym_id: string;
   full_name: string;
   phone: string;
-  email: string | null;
+  member_no: string | null;
+  emergency_contact: string | null;
+  notes: string | null;
   photo_url: string | null;
   
   // Gym Info

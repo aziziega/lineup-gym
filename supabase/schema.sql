@@ -82,6 +82,7 @@ CREATE TABLE attendance_logs (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     gym_id TEXT NOT NULL DEFAULT 'lineup-gym-01',
     member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    notes TEXT,
     check_in_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -166,6 +167,9 @@ SELECT
     m.gym_id,
     m.full_name,
     m.phone,
+    m.member_no,
+    m.emergency_contact,
+    m.notes,
     m.photo_url,
     
     -- Gym Info
