@@ -53,19 +53,19 @@ export default function LoginPage() {
               45deg,
               transparent,
               transparent 40px,
-              #D4FF00 40px,
-              #D4FF00 41px
+              #FF2A2A 40px,
+              #FF2A2A 41px
             )`,
           }}
         />
         {/* Glow accent top */}
-        <div className="absolute -top-24 left-1/2 h-48 w-72 -translate-x-1/2 rounded-full bg-[#D4FF00]/10 blur-[100px]" />
+        <div className="absolute -top-24 left-1/2 h-48 w-72 -translate-x-1/2 rounded-full bg-[#FF2A2A]/10 blur-[100px]" />
       </div>
 
       {/* Logo & Branding */}
       <div className="relative z-10 mb-6 text-center">
         <h1 className="font-heading text-5xl leading-none tracking-tight sm:text-6xl">
-          <span className="text-[#D4FF00]">LINE UP</span>{' '}
+          <span className="text-[#FF2A2A]">LINE UP</span>{' '}
           <span className="text-white">GYM</span>
         </h1>
 
@@ -80,7 +80,7 @@ export default function LoginPage() {
             ))}
           </div>
           <span className="text-white/80">{GYM_INFO.RATING}</span>
-          <span>· Ulasan Google</span>
+          <span>Â· Ulasan Google</span>
         </div>
 
         {/* Tagline */}
@@ -108,7 +108,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="border-[#2A2A2A] bg-[#111] text-white placeholder:text-[#555] focus:border-[#D4FF00] focus:ring-[#D4FF00]/30"
+                className="border-[#2A2A2A] bg-[#111] text-white placeholder:text-[#555] focus:border-[#FF2A2A] focus:ring-[#FF2A2A]/30"
               />
             </div>
 
@@ -120,11 +120,11 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
+                  placeholder="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="border-[#2A2A2A] bg-[#111] pr-10 text-white placeholder:text-[#555] focus:border-[#D4FF00] focus:ring-[#D4FF00]/30"
+                  className="border-[#2A2A2A] bg-[#111] pr-10 text-white placeholder:text-[#555] focus:border-[#FF2A2A] focus:ring-[#FF2A2A]/30"
                 />
                 <button
                   type="button"
@@ -145,7 +145,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#D4FF00] text-sm font-bold text-black transition-transform hover:scale-[1.02] hover:bg-[#c5ef00] active:scale-[0.98] disabled:opacity-50"
+              className="w-full bg-[#FF2A2A] text-sm font-bold text-black transition-transform hover:scale-[1.02] hover:bg-[#E60000] active:scale-[0.98] disabled:opacity-50"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -172,13 +172,13 @@ export default function LoginPage() {
             href={`https://wa.me/6285647618646`}
             target="_blank"
             rel="noopener noreferrer"
-            className="transition-colors hover:text-[#D4FF00]"
+            className="transition-colors hover:text-[#FF2A2A]"
           >
             {GYM_INFO.PHONE}
           </a>
         </div>
         <p className="pt-2 text-[10px] text-[#333]">
-          © {new Date().getFullYear()} {GYM_INFO.NAME}. All rights reserved.
+          Â© {new Date().getFullYear()} {GYM_INFO.NAME}. All rights reserved.
         </p>
       </div>
     </div>

@@ -1,275 +1,269 @@
 'use client'
 
-import { useState } from 'react'
-import { useClasses, useCreateClass, useToggleClass, useBookingsByDate, useCreateBooking, useCancelBooking, dayMap } from '@/hooks/useClasses'
-import { useMembers } from '@/hooks/useMembers'
+import { useState, useMemo } from 'react'
+import { usePtSessionsByWeek, usePtActiveMembers, useCreatePtSession, useCompletePtSession, useDeletePtSession } from '@/hooks/usePtSessions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import NativeSelect from '@/components/dashboard/NativeSelect'
-import MemberCombobox from '@/components/dashboard/MemberCombobox'
-import { Plus, Clock, Users, ToggleRight, ToggleLeft, X } from 'lucide-react'
+import { Plus, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle, Trash2, Dumbbell } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Class } from '@/lib/types'
 
 const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
+const dayLabels: Record<string, string> = { monday: 'Senin', tuesday: 'Selasa', wednesday: 'Rabu', thursday: 'Kamis', friday: 'Jumat', saturday: 'Sabtu', sunday: 'Minggu' }
+
+function getWeekDates(offset: number) {
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + offset * 7)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d.toISOString().split('T')[0]
+  })
+}
+
+/** Cek apakah 2 waktu bentrok (jarak < 1 jam) */
+function isTimeConflict(timeA: string, timeB: string): boolean {
+  const [hA, mA] = timeA.split(':').map(Number)
+  const [hB, mB] = timeB.split(':').map(Number)
+  const minutesA = hA * 60 + mA
+  const minutesB = hB * 60 + mB
+  return Math.abs(minutesA - minutesB) < 60
+}
 
 export default function SchedulePage() {
-  const { data: classes, isLoading } = useClasses()
-  const { data: members } = useMembers()
-  const createClass = useCreateClass()
-  const toggleClass = useToggleClass()
-  const createBooking = useCreateBooking()
-  const cancelBooking = useCancelBooking()
-
-  const todayIdx = (new Date().getDay() + 6) % 7 // 0 = monday
-  const [selectedDay, setSelectedDay] = useState(daysOfWeek[todayIdx])
+  const [weekOffset, setWeekOffset] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
-  const [detailClass, setDetailClass] = useState<Class | null>(null)
-  const [bookingMemberId, setBookingMemberId] = useState('')
+  const [addDate, setAddDate] = useState('')
+  const [addTime, setAddTime] = useState('07:00')
+  const [addMemberId, setAddMemberId] = useState('')
 
-  // Form
-  const [fName, setFName] = useState('')
-  const [fTrainer, setFTrainer] = useState('')
-  const [fStart, setFStart] = useState('')
-  const [fEnd, setFEnd] = useState('')
-  const [fCap, setFCap] = useState('12')
-  const [fDay, setFDay] = useState<string>(daysOfWeek[todayIdx])
+  const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
+  const startDate = weekDates[0]
+  const endDate = weekDates[6]
 
-  const today = new Date().toISOString().split('T')[0]
-  const { data: bookings, refetch: refetchBookings } = useBookingsByDate(detailClass?.id ?? null, today)
+  const { data: sessions, isLoading } = usePtSessionsByWeek(startDate, endDate)
+  const { data: ptMembers } = usePtActiveMembers()
+  const createSession = useCreatePtSession()
+  const completeSession = useCompletePtSession()
+  const deleteSession = useDeletePtSession()
 
-  const filteredClasses = (classes || []).filter((c) => c.day_of_week === selectedDay)
+  const selectedPtMember = ptMembers?.find(m => m.member_id === addMemberId)
 
-  const handleAddClass = async () => {
-    if (!fName || !fTrainer || !fStart || !fEnd) {
-      toast.error('Semua field wajib diisi')
+  const handleAddSession = async () => {
+    if (!addMemberId || !addDate || !addTime) { toast.error('Pilih member, tanggal, dan jam'); return }
+    const ptMember = ptMembers?.find(m => m.member_id === addMemberId)
+    if (!ptMember?.pt_subscription_id) { toast.error('Member tidak punya PT aktif'); return }
+
+    // Cek bentrok jadwal (1 coach, 1 sesi per jam)
+    const sameDaySessions = (sessions || []).filter(s => s.session_date === addDate && !s.is_completed)
+    const conflict = sameDaySessions.find(s => isTimeConflict(s.session_time, addTime))
+    if (conflict) {
+      toast.error(`Jadwal bentrok! Sudah ada sesi ${conflict.member_name} jam ${conflict.session_time?.slice(0, 5)} di hari itu. Coach hanya 1, tidak bisa double booking.`)
       return
     }
+
     try {
-      await createClass.mutateAsync({
-        gym_id: '',
-        name: fName,
-        trainer_name: fTrainer,
-        start_time: fStart,
-        end_time: fEnd,
-        capacity: parseInt(fCap),
-        day_of_week: fDay as Class['day_of_week'],
-      })
-      toast.success(`Kelas ${fName} ditambahkan!`)
+      await createSession.mutateAsync({ memberId: addMemberId, subscriptionId: ptMember.pt_subscription_id, sessionDate: addDate, sessionTime: addTime })
+      toast.success('Sesi PT dijadwalkan!')
       setAddOpen(false)
-    } catch {
-      toast.error('Gagal menambahkan kelas')
-    }
+      setAddMemberId('')
+    } catch { toast.error('Gagal menjadwalkan sesi') }
   }
 
-  const handleToggle = async (cls: Class) => {
+  const handleComplete = async (session: any) => {
     try {
-      await toggleClass.mutateAsync({ id: cls.id, is_active: !cls.is_active })
-      toast.success(`Kelas ${cls.name} ${!cls.is_active ? 'diaktifkan' : 'dinonaktifkan'}`)
-    } catch {
-      toast.error('Gagal mengubah status')
-    }
+      await completeSession.mutateAsync({ sessionId: session.id, subscriptionId: session.subscription_id })
+      toast.success(`Sesi ${session.member_name} selesai!`)
+    } catch { toast.error('Gagal menandai sesi') }
   }
 
-  const handleAddBooking = async () => {
-    if (!detailClass || !bookingMemberId) return
-    try {
-      await createBooking.mutateAsync({
-        member_id: bookingMemberId,
-        class_id: detailClass.id,
-        booked_date: today,
-      })
-      toast.success('Booking berhasil!')
-      setBookingMemberId('')
-      refetchBookings()
-    } catch {
-      toast.error('Gagal booking. Mungkin sudah terdaftar.')
-    }
+  const handleDelete = async (sessionId: string) => {
+    try { await deleteSession.mutateAsync(sessionId); toast.success('Sesi dihapus') }
+    catch { toast.error('Gagal menghapus sesi') }
   }
 
-  const handleCancelBooking = async (bookingId: string) => {
-    try {
-      await cancelBooking.mutateAsync(bookingId)
-      toast.success('Booking dibatalkan')
-      refetchBookings()
-    } catch {
-      toast.error('Gagal membatalkan')
-    }
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00')
+    return `${d.getDate()}/${d.getMonth() + 1}`
   }
+
+  const weekLabel = (() => {
+    const s = new Date(startDate + 'T00:00:00')
+    const e = new Date(endDate + 'T00:00:00')
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des']
+    return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`
+  })()
+
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  // Hitung total sesi minggu ini
+  const weekSessionCount = (sessions || []).length
+  const completedCount = (sessions || []).filter(s => s.is_completed).length
 
   return (
     <div className="space-y-4">
-      {/* Day tabs — horizontal scroll mobile */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {daysOfWeek.map((day) => (
-          <button
-            key={day}
-            onClick={() => setSelectedDay(day)}
-            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-              selectedDay === day
-                ? 'bg-[#D4FF00] text-black'
-                : 'border border-[#2A2A2A] bg-[#1A1A1A] text-[#888] hover:text-white'
-            }`}
-          >
-            {dayMap[day]}
-          </button>
-        ))}
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Dumbbell className="h-5 w-5 text-[#FF2A2A]" />
+        <h2 className="font-heading text-lg text-white">Jadwal Personal Trainer</h2>
       </div>
 
-      {/* Add class button */}
-      <Button size="sm" onClick={() => setAddOpen(true)} className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]">
-        <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Kelas
+      {/* Stats bar */}
+      <div className="flex gap-2">
+        <div className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-1.5">
+          <span className="text-[11px] text-[#888]">Minggu ini:</span>
+          <span className="font-heading text-sm text-[#D4FF00]">{weekSessionCount} sesi</span>
+        </div>
+        <div className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-1.5">
+          <span className="text-[11px] text-[#888]">Selesai:</span>
+          <span className="font-heading text-sm text-green-400">{completedCount}/{weekSessionCount}</span>
+        </div>
+      </div>
+
+      {/* Week navigation */}
+      <div className="flex items-center justify-between">
+        <Button size="sm" variant="ghost" onClick={() => setWeekOffset(w => w - 1)} className="text-[#888]">
+          <ChevronLeft className="h-4 w-4 mr-1" /> Sebelumnya
+        </Button>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-white">{weekLabel}</p>
+          {weekOffset !== 0 && (
+            <button onClick={() => setWeekOffset(0)} className="text-[10px] text-[#FF2A2A] hover:underline">Minggu Ini</button>
+          )}
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => setWeekOffset(w => w + 1)} className="text-[#888]">
+          Selanjutnya <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </div>
+
+      {/* Add session button */}
+      <Button size="sm" onClick={() => { setAddOpen(true); setAddDate(weekDates[0]) }} className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#E60000]">
+        <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Sesi PT
       </Button>
 
-      {/* Class cards */}
+      {/* 7-day grid */}
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
-          ))}
-        </div>
-      ) : filteredClasses.length === 0 ? (
-        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-          <p className="text-sm text-[#555]">Tidak ada kelas di hari {dayMap[selectedDay]}</p>
-        </div>
+        <div className="grid grid-cols-7 gap-1">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-32 animate-pulse rounded-lg bg-[#1A1A1A] border border-[#2A2A2A]" />)}</div>
       ) : (
-        <div className="space-y-2">
-          {filteredClasses.map((cls) => (
-            <div
-              key={cls.id}
-              className={`rounded-xl border bg-[#1A1A1A] p-3 ${cls.is_active ? 'border-[#2A2A2A]/50' : 'border-[#2A2A2A]/30 opacity-50'}`}
-            >
-              <div className="flex items-start justify-between">
-                <button onClick={() => setDetailClass(cls)} className="min-w-0 text-left">
-                  <p className="text-sm font-semibold text-white">{cls.name}</p>
-                  <div className="mt-1 flex items-center gap-3 text-[11px] text-[#888]">
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {cls.start_time.slice(0, 5)} - {cls.end_time.slice(0, 5)}
-                    </span>
-                    <span>{cls.trainer_name}</span>
-                    <span className="flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      {cls.capacity}
-                    </span>
-                  </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+          {weekDates.map((date, idx) => {
+            const daySessions = (sessions || []).filter(s => s.session_date === date).sort((a, b) => a.session_time.localeCompare(b.session_time))
+            const isToday = date === todayStr
+            return (
+              <div key={date} className={`rounded-xl border p-2 min-h-[140px] ${isToday ? 'border-[#D4FF00]/50 bg-[#1A1A1A]' : 'border-[#2A2A2A]/50 bg-[#111]'}`}>
+                {/* Day header */}
+                <div className={`mb-2 pb-1.5 border-b ${isToday ? 'border-[#D4FF00]/30' : 'border-[#2A2A2A]/50'}`}>
+                  <p className={`text-[10px] font-bold uppercase ${isToday ? 'text-[#D4FF00]' : 'text-[#888]'}`}>{dayLabels[daysOfWeek[idx]]}</p>
+                  <p className={`text-xs ${isToday ? 'text-[#D4FF00]' : 'text-[#555]'}`}>{formatDate(date)}</p>
+                </div>
+
+                {/* Sessions */}
+                <div className="space-y-1.5">
+                  {daySessions.map(s => (
+                    <div key={s.id} className={`rounded-lg p-1.5 text-[10px] transition-all ${s.is_completed ? 'bg-green-500/10 border border-green-500/20' : 'bg-[#1A1A1A] border border-[#2A2A2A]/30 hover:border-[#FF2A2A]/30'}`}>
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="min-w-0">
+                          <p className={`font-semibold truncate ${s.is_completed ? 'text-green-400' : 'text-white'}`}>{s.member_name}</p>
+                          <p className="text-[#888]">{s.session_time?.slice(0, 5)}</p>
+                        </div>
+                        <div className="flex shrink-0 gap-0.5">
+                          {!s.is_completed ? (
+                            <>
+                              <button onClick={() => handleComplete(s)} className="rounded p-0.5 text-[#D4FF00] hover:bg-[#D4FF00]/10" title="Tandai Selesai">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button onClick={() => handleDelete(s.id)} className="rounded p-0.5 text-red-400 hover:bg-red-500/10" title="Hapus">
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[9px] text-green-400">✓</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Warning jika sesi hampir habis */}
+                      {!s.is_completed && s.remaining_sessions != null && s.remaining_sessions <= 2 && (
+                        <div className="mt-1 flex items-center gap-0.5 text-[9px] text-amber-400">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Sisa {s.remaining_sessions} sesi
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {daySessions.length === 0 && (
+                    <p className="text-[10px] text-[#333] italic">Kosong</p>
+                  )}
+                </div>
+
+                {/* Quick add for this day */}
+                <button onClick={() => { setAddDate(date); setAddOpen(true) }} className="mt-1.5 flex w-full items-center justify-center rounded-md border border-dashed border-[#2A2A2A]/50 py-1 text-[10px] text-[#555] hover:border-[#FF2A2A]/30 hover:text-[#FF2A2A] transition-colors">
+                  <Plus className="h-3 w-3 mr-0.5" /> Tambah
                 </button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleToggle(cls)}
-                  className={`h-8 w-8 p-0 ${cls.is_active ? 'text-[#D4FF00]' : 'text-[#555]'}`}
-                >
-                  {cls.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                </Button>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
-      {/* Add class dialog */}
+      {/* Add PT Session Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading text-xl">Tambah Kelas Baru</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-sm">
+          <DialogHeader><DialogTitle className="font-heading text-xl">Jadwalkan Sesi PT</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs text-[#888]">Nama Kelas *</Label>
-              <Input value={fName} onChange={(e) => setFName(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-            </div>
-            <div>
-              <Label className="text-xs text-[#888]">Trainer *</Label>
-              <Input value={fTrainer} onChange={(e) => setFTrainer(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs text-[#888]">Jam Mulai *</Label>
-                <Input type="time" value={fStart} onChange={(e) => setFStart(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-              </div>
-              <div>
-                <Label className="text-xs text-[#888]">Jam Selesai *</Label>
-                <Input type="time" value={fEnd} onChange={(e) => setFEnd(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs text-[#888]">Kapasitas</Label>
-                <Input type="number" value={fCap} onChange={(e) => setFCap(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-              </div>
-              <div>
-                <Label className="text-xs text-[#888]">Hari</Label>
+              <Label className="text-xs text-[#888]">Member (PT Aktif)</Label>
+              {ptMembers && ptMembers.length > 0 ? (
                 <NativeSelect
-                  value={fDay}
-                  onChange={(e) => setFDay(e.target.value)}
-                  options={daysOfWeek.map((d) => ({ value: d, label: dayMap[d] }))}
+                  value={addMemberId}
+                  onChange={(e) => setAddMemberId(e.target.value)}
+                  options={[
+                    { value: '', label: 'Pilih member...' },
+                    ...ptMembers.map(m => ({
+                      value: m.member_id,
+                      label: `${m.full_name} (${m.pt_membership_name} · Sisa ${m.pt_remaining_sessions} sesi)`
+                    }))
+                  ]}
                 />
+              ) : (
+                <p className="text-xs text-[#555] mt-1">Tidak ada member dengan PT aktif</p>
+              )}
+              {selectedPtMember && selectedPtMember.pt_remaining_sessions !== null && selectedPtMember.pt_remaining_sessions <= 0 && (
+                <p className="mt-1 text-xs text-amber-400 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Sesi PT sudah habis!</p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs text-[#888]">Tanggal</Label>
+                <Input type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+              </div>
+              <div>
+                <Label className="text-xs text-[#888]">Jam</Label>
+                <Input type="time" value={addTime} onChange={(e) => setAddTime(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
               </div>
             </div>
-            <Button onClick={handleAddClass} disabled={createClass.isPending} className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
-              {createClass.isPending ? 'Menyimpan...' : 'Simpan Kelas'}
+
+            {/* Preview bentrok */}
+            {addDate && addTime && (() => {
+              const sameDaySessions = (sessions || []).filter(s => s.session_date === addDate && !s.is_completed)
+              const conflict = sameDaySessions.find(s => isTimeConflict(s.session_time, addTime))
+              if (conflict) return (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400 flex items-start gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>Bentrok dengan sesi <strong>{conflict.member_name}</strong> jam {conflict.session_time?.slice(0, 5)}. Coach hanya 1, pilih jam lain.</span>
+                </div>
+              )
+              return null
+            })()}
+
+            <Button onClick={handleAddSession} disabled={createSession.isPending || !addMemberId} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
+              {createSession.isPending ? 'Menyimpan...' : 'Jadwalkan Sesi'}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Class detail sheet */}
-      <Sheet open={!!detailClass} onOpenChange={(open) => !open && setDetailClass(null)}>
-        <SheetContent className="border-[#2A2A2A] bg-[#111] text-white">
-          <SheetHeader>
-            <SheetTitle className="font-heading text-xl text-white">{detailClass?.name}</SheetTitle>
-          </SheetHeader>
-          {detailClass && (
-            <div className="mt-4 space-y-4">
-              <div className="space-y-1 text-sm text-[#888]">
-                <p>Trainer: <span className="text-white">{detailClass.trainer_name}</span></p>
-                <p>Waktu: <span className="text-white">{detailClass.start_time.slice(0, 5)} - {detailClass.end_time.slice(0, 5)}</span></p>
-                <p>Kapasitas: <span className="text-white">{detailClass.capacity}</span></p>
-              </div>
-
-              <div>
-                <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-[#888]">Booking Hari Ini</h4>
-                {(!bookings || bookings.length === 0) ? (
-                  <p className="text-sm text-[#555]">Belum ada booking</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {bookings.map((b: any) => (
-                      <div key={b.id} className="flex items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-2">
-                        <span className="text-sm text-white">{b.members?.full_name}</span>
-                        <Button size="sm" variant="ghost" onClick={() => handleCancelBooking(b.id)} className="h-7 text-[11px] text-red-400">
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Add booking */}
-              <div>
-                <Label className="text-xs text-[#888]">Tambah Booking</Label>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <MemberCombobox
-                      members={members || []}
-                      value={bookingMemberId}
-                      onValueChange={setBookingMemberId}
-                      placeholder="Cari member..."
-                    />
-                  </div>
-                  <Button onClick={handleAddBooking} disabled={!bookingMemberId} className="bg-[#D4FF00] text-sm font-bold text-black">
-                    Booking
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
   )
 }

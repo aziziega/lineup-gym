@@ -111,12 +111,13 @@ export default function OverviewPage() {
       {/* Greeting */}
       <div>
         <h1 className="font-heading text-2xl text-white lg:text-3xl">
-          {greeting}, {adminName} 👋
+          {greeting}, {adminName}👋
+
         </h1>
         <p className="text-xs text-[#888]">{formatTanggal(new Date().toISOString())}</p>
       </div>
 
-      {/* 4 Metric Cards — 2 kolom di mobile, 4 di desktop */}
+      {/* 4 Metric Cards â€” 2 kolom di mobile, 4 di desktop */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard
           label="Member Aktif"
@@ -148,7 +149,7 @@ export default function OverviewPage() {
         />
       </div>
 
-      {/* Charts — stacked di mobile, side by side di desktop */}
+      {/* Charts â€” stacked di mobile, side by side di desktop */}
       <div className="grid gap-4 lg:grid-cols-2">
         <RevenueChart />
         <PackageDonutChart />
@@ -158,7 +159,7 @@ export default function OverviewPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <TodaySchedule />
 
-        {/* 5 Member Terbaru — tanpa scroll */}
+        {/* 5 Member Terbaru â€” tanpa scroll */}
         <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
           <h3 className="mb-3 text-sm font-semibold text-white">Member Terbaru</h3>
           {(!recentMembers || recentMembers.length === 0) ? (

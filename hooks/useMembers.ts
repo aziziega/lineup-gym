@@ -137,14 +137,15 @@ export function useUpdateMember() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Member> }) => {
-      const { data: old } = await supabase.from('members').select().eq('id', id).single()
+      const { data: old } = await supabase.from('members').select().eq('id', id)
       const { data: updated, error } = await supabase
         .from('members')
         .update(data)
         .eq('id', id)
         .select()
-        .single()
+        
       if (error) throw error
+      const updatedRow = updated?.[0]
 
       await supabase.from('activity_logs').insert({
         gym_id: GYM_ID,
@@ -152,10 +153,10 @@ export function useUpdateMember() {
         action_type: 'update_member',
         table_name: 'members',
         record_id: id,
-        details: { old_data: old, new_data: updated }
+        details: { old_data: old?.[0], new_data: updatedRow }
       })
 
-      return updated
+      return updatedRow
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['members'] })
@@ -168,11 +169,17 @@ export function useDeleteMember() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data: old } = await supabase.from('members').select().eq('id', id).single()
+      const { data: old } = await supabase.from('members').select().eq('id', id)
       
-      // Detach payments agar income tidak hilang
-      await supabase.from('payments').update({ member_id: null }).eq('member_id', id)
+      // 1. Hapus pt_sessions, logs, subscriptions, payments terlebih dahulu
+      await supabase.from('pt_sessions').delete().eq('member_id', id)
+      await supabase.from('attendance_logs').delete().eq('member_id', id)
+      await supabase.from('subscriptions').delete().eq('member_id', id)
       
+      // 2. Hapus payments juga agar tidak menyangkut FK constraint
+      await supabase.from('payments').delete().eq('member_id', id)
+      
+      // 3. Hapus data member utama
       const { error } = await supabase.from('members').delete().eq('id', id)
       if (error) throw error
 
@@ -189,6 +196,11 @@ export function useDeleteMember() {
       queryClient.invalidateQueries({ queryKey: ['members'] })
       queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
       queryClient.invalidateQueries({ queryKey: ['critical-count'] })
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      queryClient.invalidateQueries({ queryKey: ['revenue-monthly'] })
+      queryClient.invalidateQueries({ queryKey: ['revenue-current-month'] })
+      queryClient.invalidateQueries({ queryKey: ['overview'] })
+      queryClient.invalidateQueries({ queryKey: ['expiry'] })
     },
   })
 }

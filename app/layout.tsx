@@ -18,7 +18,7 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Line Up Gym - Admin Dashboard',
+  title: 'LineUp Gym',
   description: 'Be Strong Be Healthy',
 };
 

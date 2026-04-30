@@ -30,6 +30,7 @@ export function useRenewSubscription() {
       amount,
       paymentMethod,
       membershipType,
+      ptPayment,
     }: {
       memberId: string
       membershipId: string
@@ -38,15 +39,31 @@ export function useRenewSubscription() {
       amount: number
       paymentMethod: 'cash' | 'transfer' | 'qris'
       membershipType: string
+      ptPayment?: {
+        membershipId: string
+        startDate: string
+        endDate: string
+        amount: number
+        membershipType: string
+        totalSessions: number
+      }
     }) => {
-      // Nonaktifkan subscription lama
-      await supabase
+      // Nonaktifkan subscription GYM lama saja (JANGAN sentuh PT!)
+      const { data: gymSubs } = await supabase
         .from('subscriptions')
-        .update({ status: 'expired' })
+        .select('id, memberships!inner(category)')
         .eq('member_id', memberId)
         .eq('status', 'active')
+        .eq('memberships.category', 'gym')
 
-      // Buat subscription baru
+      if (gymSubs && gymSubs.length > 0) {
+        await supabase
+          .from('subscriptions')
+          .update({ status: 'expired' })
+          .in('id', gymSubs.map((s: any) => s.id))
+      }
+
+      // Buat subscription gym baru
       const { data: sub, error: subError } = await supabase
         .from('subscriptions')
         .insert({
@@ -60,7 +77,7 @@ export function useRenewSubscription() {
         .single()
       if (subError) throw subError
 
-      // Insert payment
+      // Insert gym payment
       const { error: payError } = await supabase
         .from('payments')
         .insert({
@@ -72,6 +89,33 @@ export function useRenewSubscription() {
         })
       if (payError) throw payError
 
+      // Jika ada PT package, buat subscription + payment PT juga
+      if (ptPayment) {
+        const { error: ptSubError } = await supabase
+          .from('subscriptions')
+          .insert({
+            member_id: memberId,
+            membership_id: ptPayment.membershipId,
+            start_date: ptPayment.startDate,
+            end_date: ptPayment.endDate,
+            remaining_sessions: ptPayment.totalSessions,
+            status: 'active',
+          })
+        if (ptSubError) throw ptSubError
+
+        const { error: ptPayError } = await supabase
+          .from('payments')
+          .insert({
+            gym_id: GYM_ID,
+            member_id: memberId,
+            amount: ptPayment.amount,
+            payment_method: paymentMethod,
+            membership_type: ptPayment.membershipType,
+            notes: 'Pembayaran Paket PT (Perpanjangan)',
+          })
+        if (ptPayError) throw ptPayError
+      }
+
       // Audit log
       await supabase.from('activity_logs').insert({
         gym_id: GYM_ID,
@@ -79,7 +123,7 @@ export function useRenewSubscription() {
         action_type: 'renew_subscription',
         table_name: 'subscriptions',
         record_id: sub.id,
-        details: { new_data: sub },
+        details: { new_data: sub, has_pt: !!ptPayment },
       })
 
       return sub

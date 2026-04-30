@@ -11,7 +11,7 @@ interface NativeSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement
 }
 
 /**
- * NativeSelect — drop-in replacement for Base UI Select.
+ * NativeSelect â€” drop-in replacement for Base UI Select.
  * Uses a real <select> element so it works reliably on desktop (click, scroll, keyboard).
  */
 export default function NativeSelect({
@@ -29,7 +29,7 @@ export default function NativeSelect({
         value={value || ''}
         onChange={onChange}
         className={cn(
-          'flex w-full cursor-pointer appearance-none items-center rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 pr-8 text-sm text-white transition-colors outline-none hover:bg-[#1A1A1A] focus:ring-2 focus:ring-[#D4FF00]/30',
+          'flex w-full cursor-pointer appearance-none items-center rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 pr-8 text-sm text-white transition-colors outline-none hover:bg-[#1A1A1A] focus:ring-2 focus:ring-[#FF2A2A]/30',
           !value && 'text-[#555]',
           triggerClassName
         )}

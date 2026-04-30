@@ -9,7 +9,7 @@ interface StatusBadgeProps {
 const statusConfig = {
   active: {
     label: 'Aktif',
-    className: 'bg-[#D4FF00]/10 text-[#D4FF00] border-[#D4FF00]/30',
+    className: 'bg-[#FF2A2A]/10 text-[#FF2A2A] border-[#FF2A2A]/30',
   },
   expiring_soon: {
     label: 'Segera',

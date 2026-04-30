@@ -70,7 +70,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
         {/* Kanan: tanggal + jam + avatar */}
         <div className="flex items-center gap-3">
-          {/* Tanggal & jam — desktop */}
+          {/* Tanggal & jam â€” desktop */}
           <div className="hidden text-right lg:block">
             <p className="text-xs text-[#888]">{currentDate}</p>
             <p className="font-heading text-lg leading-none text-[#D4FF00]">{currentTime}</p>

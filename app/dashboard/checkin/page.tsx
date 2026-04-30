@@ -26,17 +26,18 @@ export default function CheckInDashboard() {
         async (payload) => {
           console.log('Realtime Payload Received:', payload)
           fetchLogs() // Re-fetch to get member joins
-          
+
           // Tampilkan Pop-up
-          if (payload.new && payload.new.member_id) {
+          const newPayload = payload.new as any
+          if (newPayload && newPayload.member_id) {
             const { data: m } = await supabase
               .from('members')
               .select('full_name')
-              .eq('id', payload.new.member_id)
+              .eq('id', newPayload.member_id)
               .single()
-              
+
             if (m) {
-              const isVisitor = payload.new.notes?.includes('Visitor')
+              const isVisitor = newPayload.notes?.includes('Visitor')
               toast.success(`${m.full_name} baru saja Check-In!`, {
                 description: isVisitor ? 'Visitor Harian' : 'Member Gym',
                 icon: '👋',
@@ -78,7 +79,7 @@ export default function CheckInDashboard() {
         console.error('Supabase Fetch Error:', error)
         throw error
       }
-      
+
       // Filter tanggal di sisi client untuk menghindari bug zona waktu (UTC vs WIB)
       const filtered = (data || []).filter(log => {
         if (!log.check_in_at) return false
@@ -86,7 +87,7 @@ export default function CheckInDashboard() {
         const logDate = new Date(log.check_in_at).toLocaleDateString('sv-SE') // sv-SE produces YYYY-MM-DD format based on local time
         return logDate === selectedDate
       })
-      
+
       setLogs(filtered)
     } catch (err) {
       console.error('Error fetching logs:', err)
@@ -95,7 +96,7 @@ export default function CheckInDashboard() {
     }
   }
 
-  const visitors = logs.filter(l => l.notes === 'Visitor Harian' || l.notes === 'Visitor Check-In').length
+  const visitors = logs.filter(l => l.notes?.toLowerCase().includes('visitor')).length
   const members = logs.length - visitors
 
   return (
@@ -118,7 +119,7 @@ export default function CheckInDashboard() {
       <div className="grid grid-cols-3 gap-4">
         <Card className="border-[#2A2A2A]/50 bg-[#1A1A1A]">
           <CardContent className="flex flex-col items-center justify-center p-6">
-            <Users className="mb-2 h-8 w-8 text-[#D4FF00]" />
+            <Users className="mb-2 h-8 w-8 text-[#FF2A2A]" />
             <p className="text-sm text-[#888]">Total Masuk</p>
             <p className="font-heading text-3xl text-white">{logs.length}</p>
           </CardContent>
@@ -159,7 +160,7 @@ export default function CheckInDashboard() {
                 return (
                   <div key={log.id} className="flex items-center justify-between rounded-lg border border-[#2A2A2A]/50 bg-[#111] p-4">
                     <div className="flex items-center gap-4">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${isVisitor ? 'bg-blue-500/10 text-blue-400' : 'bg-[#D4FF00]/10 text-[#D4FF00]'}`}>
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${isVisitor ? 'bg-blue-500/10 text-blue-400' : 'bg-[#FF2A2A]/10 text-[#FF2A2A]'}`}>
                         <UserCheck className="h-5 w-5" />
                       </div>
                       <div>

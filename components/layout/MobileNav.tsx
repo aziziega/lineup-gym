@@ -39,15 +39,15 @@ export default function MobileNav() {
               className={cn(
                 'flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 text-[10px] font-medium transition-colors',
                 active
-                  ? 'text-[#D4FF00]'
+                  ? 'text-[#FF2A2A]'
                   : 'text-[#666] active:text-[#999]'
               )}
             >
-              <item.icon className={cn('h-5 w-5', active && 'text-[#D4FF00]')} />
+              <item.icon className={cn('h-5 w-5', active && 'text-[#FF2A2A]')} />
               <span>{item.label}</span>
               {/* dot indicator aktif */}
               {active && (
-                <div className="h-1 w-1 rounded-full bg-[#D4FF00]" />
+                <div className="h-1 w-1 rounded-full bg-[#FF2A2A]" />
               )}
             </Link>
           )

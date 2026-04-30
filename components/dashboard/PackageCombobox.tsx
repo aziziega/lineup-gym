@@ -87,7 +87,7 @@ export default function PackageCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className={cn(
-          'flex w-full items-center justify-between gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white transition-colors hover:bg-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#D4FF00]/30',
+          'flex w-full items-center justify-between gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white transition-colors hover:bg-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#FF2A2A]/30',
           !value && 'text-[#555]',
           className
         )}
@@ -154,7 +154,7 @@ export default function PackageCombobox({
                     className={cn(
                       'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
                       isHighlighted && 'bg-[#1A1A1A]',
-                      isSelected && 'text-[#D4FF00]',
+                      isSelected && 'text-[#FF2A2A]',
                       !isSelected && 'text-white'
                     )}
                   >
@@ -162,7 +162,7 @@ export default function PackageCombobox({
                       className={cn(
                         'h-4 w-4 shrink-0 transition-opacity',
                         isSelected
-                          ? 'opacity-100 text-[#D4FF00]'
+                          ? 'opacity-100 text-[#FF2A2A]'
                           : 'opacity-0'
                       )}
                     />
@@ -170,7 +170,7 @@ export default function PackageCombobox({
                       <p className="truncate font-medium">{p.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <p className="truncate text-[11px] text-[#555]">{formatRupiah(p.price)}</p>
-                        <span className="shrink-0 rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#D4FF00]">
+                        <span className="shrink-0 rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#FF2A2A]">
                           {p.category === 'pt' ? `${p.total_sessions} Sesi` : `${p.duration_days} Hari`}
                         </span>
                       </div>

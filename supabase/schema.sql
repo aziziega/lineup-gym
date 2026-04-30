@@ -44,6 +44,7 @@ CREATE TABLE members (
     gym_id TEXT NOT NULL DEFAULT 'lineup-gym-01',
     full_name TEXT NOT NULL,
     phone TEXT NOT NULL,
+    member_no TEXT UNIQUE,
     email TEXT,
     emergency_contact TEXT,
     photo_url TEXT,
@@ -136,6 +137,20 @@ CREATE TABLE activity_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Table: PT Sessions (Jadwal Sesi Personal Trainer)
+CREATE TABLE pt_sessions (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    gym_id TEXT NOT NULL DEFAULT 'lineup-gym-01',
+    member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    session_date DATE NOT NULL,
+    session_time TIME NOT NULL,
+    is_completed BOOLEAN DEFAULT false,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 
 -- ==========================================
 -- 3. VIEWS (TAMPILAN DATA TERGABUNG)
@@ -195,9 +210,9 @@ SELECT
     p.remaining_sessions AS pt_remaining_sessions,
     p.total_sessions AS pt_total_sessions,
     CASE
-        WHEN p.pt_end_date IS NULL THEN 'inactive'
-        WHEN p.remaining_sessions <= 0 THEN 'expired'
-        WHEN p.pt_end_date < CURRENT_DATE THEN 'expired'
+        WHEN p.pt_subscription_id IS NULL THEN 'inactive'
+        WHEN p.pt_sub_status = 'expired' OR p.pt_sub_status = 'cancelled' THEN 'expired'
+        WHEN p.remaining_sessions IS NOT NULL AND p.remaining_sessions <= 0 THEN 'expired'
         ELSE 'active'
     END AS pt_status
 
@@ -230,10 +245,20 @@ ALTER TABLE attendance_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE classes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE class_bookings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE pt_sessions DISABLE ROW LEVEL SECURITY;
 
 -- ==========================================
 -- 5. SEED DATA DEFAULT (OPSIONAL)
 -- ==========================================
--- Masukkan 1 paket default agar saat Anda tes, fiturnya sudah jalan
-INSERT INTO memberships (name, duration_days, price, description)
-VALUES ('Paket Bulanan (Promo)', 30, 250000, 'Akses penuh selama sebulan penuh (Tanpa PT)');
+-- Seed data paket default Line Up Gym Prambanan
+INSERT INTO memberships (name, category, duration_days, total_sessions, price, description) VALUES
+  ('DAY',                'gym', 1,    NULL, 15000,  'AKSES 1 HARI FULL'),
+  ('SAUNA',              'gym', 1,    NULL, 25000,  '15 MENIT'),
+  ('COUPLE',             'gym', 30,   NULL, 300000, 'AKSES PENUH 1 BULAN (2 ORANG)'),
+  ('SISWA/MAHASISWA',    'gym', 30,   NULL, 125000, 'AKSES PENUH 1 BULAN'),
+  ('UMUM',               'gym', 30,   NULL, 150000, 'AKSES PENUH 1 BULAN'),
+  ('PELAJAR 3 BULAN',    'gym', 90,   NULL, 300000, 'AKSES PENUH 3 BULAN'),
+  ('UMUM 3 BULAN',       'gym', 90,   NULL, 375000, 'AKSES PENUH 3 BULAN'),
+  ('PERSONAL TRAINER 4', 'pt',  30,   4,   300000, '4 KALI PERTEMUAN'),
+  ('PERSONAL TRAINER 8', 'pt',  30,   8,   500000, '8 KALI PERTEMUAN'),
+  ('PERSONAL TRAINER 16','pt',  60,   16,  750000, '16 KALI PERTEMUAN');

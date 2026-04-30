@@ -7,6 +7,7 @@ import { useMembers, useMembersWithSubscription } from '@/hooks/useMembers'
 import { useActiveMemberships } from '@/hooks/useMemberships'
 import { formatRupiah, formatTanggal } from '@/lib/utils'
 import MetricCard from '@/components/dashboard/MetricCard'
+import ExportFinanceModal from '@/components/dashboard/ExportFinanceModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,7 +38,6 @@ export default function FinancePage() {
   const [filterMethod, setFilterMethod] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<'income' | 'expenses'>('income')
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar')
-  const [monthCount, setMonthCount] = useState<number>(6)
   const [customModalOpen, setCustomModalOpen] = useState(false)
   const [customMonth, setCustomMonth] = useState('12')
 
@@ -47,7 +47,7 @@ export default function FinancePage() {
   // Edit Form (Payment)
   const [editOpen, setEditOpen] = useState(false)
   const [editData, setEditData] = useState<any>(null)
-  
+
   // Delete Dialog (Payment)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string>('')
@@ -57,6 +57,9 @@ export default function FinancePage() {
   const [expCategory, setExpCategory] = useState('operasional')
   const [expAmount, setExpAmount] = useState('')
   const [expDesc, setExpDesc] = useState('')
+
+  // Export Modal State
+  const [exportOpen, setExportOpen] = useState(false)
 
   // Edit Form (Expense)
   const [editExpOpen, setEditExpOpen] = useState(false)
@@ -106,22 +109,37 @@ export default function FinancePage() {
     })
   }, [expenses, selectedDate])
 
-  // Chart data (income + expenses aggregated by month)
+  // Chart data (income + expenses aggregated by month for full current year)
   const chartData = useMemo(() => {
-    // Build expense map by month (YYYY-MM)
-    const expMap: Record<string, number> = {}
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const currentYear = new Date().getFullYear()
+
+    const expMap: Record<number, number> = {}
     for (const e of expenses || []) {
-      const m = e.expense_date?.substring(0, 7) // YYYY-MM
-      if (m) expMap[m] = (expMap[m] || 0) + Number(e.amount)
+      if (!e.expense_date) continue
+      const dObj = new Date(e.expense_date)
+      if (dObj.getFullYear() === currentYear) {
+        const mIdx = dObj.getMonth()
+        expMap[mIdx] = (expMap[mIdx] || 0) + Number(e.amount)
+      }
     }
 
-    const all = (monthlyRevenue || []).map((d) => ({
-      name: d.month_label,
-      pemasukan: Number(d.total),
-      pengeluaran: expMap[d.month?.substring(0, 7)] || 0,
+    const incMap: Record<number, number> = {}
+    for (const d of monthlyRevenue || []) {
+      if (!d.month) continue
+      const dObj = new Date(d.month)
+      if (dObj.getFullYear() === currentYear) {
+        const mIdx = dObj.getMonth()
+        incMap[mIdx] = (incMap[mIdx] || 0) + Number(d.total)
+      }
+    }
+
+    return months.map((monthName, index) => ({
+      name: monthName,
+      pemasukan: incMap[index] || 0,
+      pengeluaran: expMap[index] || 0,
     }))
-    return all.slice(-monthCount)
-  }, [monthlyRevenue, expenses, monthCount])
+  }, [monthlyRevenue, expenses])
 
   // Selected date formatted for display
   const selectedDateFormatted = new Intl.DateTimeFormat('id-ID', {
@@ -206,26 +224,7 @@ export default function FinancePage() {
     }
   }
 
-  const exportCSV = () => {
-    const rows = [
-      ['Nama', 'Paket', 'Metode', 'Jumlah', 'Tanggal'],
-      ...(filtered || []).map((p: any) => [
-        p.members?.full_name ?? '',
-        p.membership_type,
-        p.payment_method,
-        p.amount,
-        p.paid_at,
-      ]),
-    ]
-    const csv = rows.map((r) => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `finance_${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
@@ -276,21 +275,18 @@ export default function FinancePage() {
 
       {/* Chart */}
       <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-white">Revenue {monthCount} Bulan</h3>
-              <div className="ml-2 flex gap-1 rounded-lg bg-[#111] p-0.5">
-                <button onClick={() => setMonthCount(1)} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${monthCount === 1 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'}`}>1B</button>
-                <button onClick={() => setMonthCount(6)} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${monthCount === 6 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'}`}>6B</button>
-                <button onClick={() => setCustomModalOpen(true)} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${monthCount !== 1 && monthCount !== 6 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'}`}>Custom</button>
-              </div>
-            </div>
-            <div className="flex gap-1 rounded-lg bg-[#111] p-0.5 self-start sm:self-auto">
-              <button onClick={() => setChartType('bar')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'}`}>Bar</button>
-              <button onClick={() => setChartType('line')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'}`}>Line</button>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-white">Revenue Lineup GYM</h3>
+            <div className="ml-2 flex gap-1 rounded-lg bg-[#111] p-0.5">
             </div>
           </div>
-          {chartData.length > 0 ? (
+          <div className="flex gap-1 rounded-lg bg-[#111] p-0.5 self-start sm:self-auto">
+            <button onClick={() => setChartType('bar')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-[#FF2A2A] text-black' : 'text-[#888] hover:text-white'}`}>Bar</button>
+            <button onClick={() => setChartType('line')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-[#FF2A2A] text-black' : 'text-[#888] hover:text-white'}`}>Line</button>
+          </div>
+        </div>
+        {chartData.length > 0 ? (
           <div className="h-48 lg:h-64">
             <ResponsiveContainer width="100%" height="100%">
               {chartType === 'bar' ? (
@@ -314,12 +310,12 @@ export default function FinancePage() {
               )}
             </ResponsiveContainer>
           </div>
-          ) : (
-            <div className="flex h-48 items-center justify-center">
-              <p className="text-sm text-[#555]">Belum ada data revenue</p>
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="flex h-48 items-center justify-center">
+            <p className="text-sm text-[#555]">Belum ada data revenue</p>
+          </div>
+        )}
+      </div>
 
       {/* Custom Month Dialog */}
       <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
@@ -327,7 +323,7 @@ export default function FinancePage() {
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">Kustomisasi Rentang Waktu</DialogTitle>
           </DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); const val = parseInt(customMonth, 10); if (!isNaN(val) && val > 0) { setMonthCount(val); setCustomModalOpen(false); } }} className="space-y-4 py-4">
+          <form onSubmit={(e) => { e.preventDefault(); const val = parseInt(customMonth, 10); if (!isNaN(val) && val > 0) { setCustomModalOpen(false); } }} className="space-y-4 py-4">
             <div className="space-y-2">
               <Label className="text-sm text-[#888]">Jumlah Bulan</Label>
               <Input type="number" min="1" max="120" value={customMonth} onChange={(e) => setCustomMonth(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" autoFocus />
@@ -335,7 +331,7 @@ export default function FinancePage() {
             </div>
             <DialogFooter className="border-t border-[#2A2A2A] bg-transparent pt-4 sm:justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setCustomModalOpen(false)} className="border-[#2A2A2A] text-white hover:bg-[#2A2A2A]">Batal</Button>
-              <Button type="submit" className="bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90">Terapkan</Button>
+              <Button type="submit" className="bg-[#FF2A2A] text-black hover:bg-[#FF2A2A]/90">Terapkan</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -345,17 +341,15 @@ export default function FinancePage() {
       <div className="flex gap-2 rounded-xl bg-[#1A1A1A] p-1 border border-[#2A2A2A]">
         <button
           onClick={() => setActiveTab('income')}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
-            activeTab === 'income' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
-          }`}
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${activeTab === 'income' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
+            }`}
         >
           Pemasukan
         </button>
         <button
           onClick={() => setActiveTab('expenses')}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
-            activeTab === 'expenses' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
-          }`}
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${activeTab === 'expenses' ? 'bg-[#FF2A2A] text-black' : 'text-[#888] hover:text-white'
+            }`}
         >
           Pengeluaran
         </button>
@@ -363,161 +357,171 @@ export default function FinancePage() {
 
       {activeTab === 'income' && (
         <div className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-sm font-semibold text-white">Pemasukan <span className="text-[10px] font-normal text-[#555]">(otomatis dari pendaftaran member)</span></h3>
-          <div className="flex gap-2">
-            <div className="relative flex-1 sm:w-48 sm:flex-none">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
-              <Input
-                placeholder="Cari nama..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border-[#2A2A2A] bg-[#1A1A1A] pl-9 text-sm text-white placeholder:text-[#555]"
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="text-sm font-semibold text-white">Pemasukan <span className="text-[10px] font-normal text-[#555]">(otomatis dari pendaftaran member)</span></h3>
+            <div className="flex gap-2">
+              <div className="relative flex-1 sm:w-48 sm:flex-none">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
+                <Input
+                  placeholder="Cari nama..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="border-[#2A2A2A] bg-[#1A1A1A] pl-9 text-sm text-white placeholder:text-[#555]"
+                />
+              </div>
+              <NativeSelect
+                value={filterMethod}
+                onChange={(e) => setFilterMethod(e.target.value)}
+                options={[
+                  { value: 'all', label: 'Semua' },
+                  { value: 'cash', label: 'Cash' },
+                  { value: 'transfer', label: 'Transfer' },
+                  { value: 'qris', label: 'QRIS' },
+                ]}
+                triggerClassName="w-28 text-xs"
+              />
+              <Button size="sm" variant="outline" onClick={() => setExportOpen(true)} className="border-[#2A2A2A] text-xs text-[#888]">
+                <Download className="mr-1 h-3.5 w-3.5" /> Export Excel
+              </Button>
+
+              <ExportFinanceModal
+                isOpen={exportOpen}
+                onOpenChange={setExportOpen}
+                payments={payments || []}
+                expenses={expenses || []}
               />
             </div>
-            <NativeSelect
-              value={filterMethod}
-              onChange={(e) => setFilterMethod(e.target.value)}
-              options={[
-                { value: 'all', label: 'Semua' },
-                { value: 'cash', label: 'Cash' },
-                { value: 'transfer', label: 'Transfer' },
-                { value: 'qris', label: 'QRIS' },
-              ]}
-              triggerClassName="w-28 text-xs"
-            />
-            <Button size="sm" variant="outline" onClick={exportCSV} className="border-[#2A2A2A] text-xs text-[#888]">
-              <Download className="mr-1 h-3.5 w-3.5" /> CSV
-            </Button>
           </div>
+
+          {/* Transaction cards */}
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
+              <p className="text-sm text-[#555]">Tidak ada transaksi pada tanggal ini</p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {filtered.slice(0, 20).map((p: any) => (
+                <div key={p.id} className="flex items-center justify-between rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-white">{p.members?.full_name ?? 'Unknown'}</p>
+                    <div className="flex items-center gap-2 text-[11px] text-[#888]">
+                      <span>{p.membership_type}</span>
+                      <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] uppercase">{p.payment_method}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 text-right">
+                    <div>
+                      <p className="font-heading text-lg text-[#D4FF00]">{formatRupiah(Number(p.amount))}</p>
+                      <p className="text-[10px] text-[#555]">{formatTanggal(p.paid_at)}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => { setEditData(p); setEditOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => { setDeleteId(p.id); setDeleteOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-red-400">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+      )
+      }
 
-        {/* Transaction cards */}
-        {isLoading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-            <p className="text-sm text-[#555]">Tidak ada transaksi pada tanggal ini</p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {filtered.slice(0, 20).map((p: any) => (
-              <div key={p.id} className="flex items-center justify-between rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-white">{p.members?.full_name ?? 'Unknown'}</p>
-                  <div className="flex items-center gap-2 text-[11px] text-[#888]">
-                    <span>{p.membership_type}</span>
-                    <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] uppercase">{p.payment_method}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 text-right">
-                  <div>
-                    <p className="font-heading text-lg text-[#D4FF00]">{formatRupiah(Number(p.amount))}</p>
-                    <p className="text-[10px] text-[#555]">{formatTanggal(p.paid_at)}</p>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => { setEditData(p); setEditOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => { setDeleteId(p.id); setDeleteOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-red-400">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
+      {
+        activeTab === 'expenses' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Pengeluaran</h3>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-      )}
+              <Dialog open={expOpen} onOpenChange={setExpOpen}>
+                <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#E60000]" />}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pengeluaran
+                </DialogTrigger>
+                <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="font-heading text-xl">Catat Pengeluaran</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs text-[#888]">Kategori</Label>
+                      <NativeSelect
+                        value={expCategory}
+                        onChange={(e) => setExpCategory(e.target.value)}
+                        options={[
+                          { value: 'operasional', label: 'Operasional (Listrik, Air)' },
+                          { value: 'maintenance', label: 'Maintenance Alat' },
+                          { value: 'gaji', label: 'Gaji Staff / PT' },
+                          { value: 'marketing', label: 'Marketing & Iklan' },
+                          { value: 'lainnya', label: 'Lainnya' },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-[#888]">Nominal (Rp)</Label>
+                      <Input type="number" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-[#888]">Keterangan</Label>
+                      <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                    </div>
+                    <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
+                      {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
 
-      {activeTab === 'expenses' && (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-white">Pengeluaran</h3>
-          </div>
-          <Dialog open={expOpen} onOpenChange={setExpOpen}>
-            <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]" />}>
-              <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pengeluaran
-            </DialogTrigger>
-            <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="font-heading text-xl">Catat Pengeluaran</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-xs text-[#888]">Kategori</Label>
-                  <NativeSelect
-                    value={expCategory}
-                    onChange={(e) => setExpCategory(e.target.value)}
-                    options={[
-                      { value: 'operasional', label: 'Operasional (Listrik, Air)' },
-                      { value: 'maintenance', label: 'Maintenance Alat' },
-                      { value: 'gaji', label: 'Gaji Staff / PT' },
-                      { value: 'marketing', label: 'Marketing & Iklan' },
-                      { value: 'lainnya', label: 'Lainnya' },
-                    ]}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-[#888]">Nominal (Rp)</Label>
-                  <Input type="number" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-                </div>
-                <div>
-                  <Label className="text-xs text-[#888]">Keterangan</Label>
-                  <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-                </div>
-                <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
-                  {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}
-                </Button>
+            {expLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-16 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
+                ))}
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        {expLoading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
-            ))}
-          </div>
-        ) : filteredExpenses.length === 0 ? (
-          <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-            <p className="text-sm text-[#555]">Tidak ada pengeluaran pada tanggal ini</p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {filteredExpenses.map((e: any) => (
-              <div key={e.id} className="flex items-center justify-between rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-white">{categoryLabels[e.category] || e.category}</p>
-                  <p className="text-[11px] text-[#888]">{e.description || '-'}</p>
-                </div>
-                <div className="flex items-center gap-4 text-right">
-                  <div>
-                    <p className="font-heading text-lg text-red-400">{formatRupiah(Number(e.amount))}</p>
-                    <p className="text-[10px] text-[#555]">{formatTanggal(e.expense_date)}</p>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => { setEditExpData(e); setEditExpOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => { setDeleteExpId(e.id); setDeleteExpOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-red-400">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
+            ) : filteredExpenses.length === 0 ? (
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
+                <p className="text-sm text-[#555]">Tidak ada pengeluaran pada tanggal ini</p>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-1.5">
+                {filteredExpenses.map((e: any) => (
+                  <div key={e.id} className="flex items-center justify-between rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{categoryLabels[e.category] || e.category}</p>
+                      <p className="text-[11px] text-[#888]">{e.description || '-'}</p>
+                    </div>
+                    <div className="flex items-center gap-4 text-right">
+                      <div>
+                        <p className="font-heading text-lg text-red-400">{formatRupiah(Number(e.amount))}</p>
+                        <p className="text-[10px] text-[#555]">{formatTanggal(e.expense_date)}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => { setEditExpData(e); setEditExpOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => { setDeleteExpId(e.id); setDeleteExpOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-red-400">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      )}
+        )
+      }
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -553,7 +557,7 @@ export default function FinancePage() {
               </div>
               <DialogFooter className="mt-4">
                 <Button variant="outline" onClick={() => setEditOpen(false)} className="border-[#2A2A2A] text-[#888]">Batal</Button>
-                <Button onClick={handleEditSave} disabled={updatePayment.isPending} className="bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
+                <Button onClick={handleEditSave} disabled={updatePayment.isPending} className="bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
                   {updatePayment.isPending ? 'Menyimpan...' : 'Simpan Edit'}
                 </Button>
               </DialogFooter>
@@ -630,7 +634,7 @@ export default function FinancePage() {
               </div>
               <DialogFooter className="mt-4">
                 <Button variant="outline" onClick={() => setEditExpOpen(false)} className="border-[#2A2A2A] text-[#888] hover:bg-[#2A2A2A] hover:text-white">Batal</Button>
-                <Button onClick={handleEditExpenseSave} disabled={updateExpense.isPending} className="bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
+                <Button onClick={handleEditExpenseSave} disabled={updateExpense.isPending} className="bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
                   {updateExpense.isPending ? 'Menyimpan...' : 'Simpan Edit'}
                 </Button>
               </DialogFooter>
@@ -638,6 +642,6 @@ export default function FinancePage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   )
 }

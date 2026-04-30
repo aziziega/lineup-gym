@@ -102,7 +102,7 @@ export default function PackagesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-[#888]">Kelola paket membership dari sini. Perubahan langsung mempengaruhi form tambah member.</p>
-        <Button size="sm" onClick={openCreate} className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]">
+        <Button size="sm" onClick={openCreate} className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#E60000]">
           <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Paket
         </Button>
       </div>
@@ -134,13 +134,13 @@ export default function PackagesPage() {
                       <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#888]">Nonaktif</span>
                     )}
                   </div>
-                  <p className="mt-0.5 font-heading text-2xl text-[#D4FF00]">{formatRupiah(pkg.price)}</p>
+                  <p className="mt-0.5 font-heading text-2xl text-[#FF2A2A]">{formatRupiah(pkg.price)}</p>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${pkg.category === 'pt' ? 'bg-blue-500/20 text-blue-400' : 'bg-[#D4FF00]/10 text-[#D4FF00]'}`}>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${pkg.category === 'pt' ? 'bg-blue-500/20 text-blue-400' : 'bg-[#FF2A2A]/10 text-[#FF2A2A]'}`}>
                       {pkg.category === 'pt' ? 'PT' : 'GYM'}
                     </span>
                     <span className="text-xs text-[#888]">{pkg.duration_days} hari</span>
-                    {pkg.total_sessions && <span className="text-xs text-[#888]">· {pkg.total_sessions} sesi</span>}
+                    {pkg.total_sessions && <span className="text-xs text-[#888]">Â· {pkg.total_sessions} sesi</span>}
                   </div>
                   {pkg.description && (
                     <p className="mt-1 text-xs text-[#555]">{pkg.description}</p>
@@ -159,7 +159,7 @@ export default function PackagesPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() => handleToggle(pkg.id, pkg.is_active, pkg.name)}
-                    className={`h-8 w-8 p-0 ${pkg.is_active ? 'text-[#D4FF00]' : 'text-[#555]'}`}
+                    className={`h-8 w-8 p-0 ${pkg.is_active ? 'text-[#FF2A2A]' : 'text-[#555]'}`}
                   >
                     {pkg.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
                   </Button>
@@ -217,7 +217,7 @@ export default function PackagesPage() {
             <Button
               onClick={handleSubmit}
               disabled={createMembership.isPending || updateMembership.isPending}
-              className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]"
+              className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
             >
               {(createMembership.isPending || updateMembership.isPending) ? 'Menyimpan...' : editing ? 'Perbarui Paket' : 'Simpan Paket'}
             </Button>

@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { AlertTriangle, Clock, CalendarX, MessageCircle, RotateCcw, Send } from 'lucide-react'
 import { toast } from 'sonner'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { ActiveSubscriptionView } from '@/lib/types'
 
 export default function ExpiryPage() {
@@ -33,10 +33,20 @@ export default function ExpiryPage() {
   const { data: memberships } = useActiveMemberships()
   const renewSub = useRenewSubscription()
 
+  const [activeTab, setActiveTab] = useState<'membership' | 'visitor'>('membership')
   const [renewOpen, setRenewOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<ActiveSubscriptionView | null>(null)
   const [renewMembershipId, setRenewMembershipId] = useState('')
   const [renewPayMethod, setRenewPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
+
+  const filteredList = useMemo(() => {
+    let list = expiryList || []
+    if (activeTab === 'visitor') {
+      return list.filter((m) => m.membership_name === 'DAY' || m.notes?.includes('Visitor'))
+    }
+    return list.filter((m) => m.membership_name !== 'DAY' && !m.notes?.includes('Visitor'))
+  }, [expiryList, activeTab])
+
 
   const getPriorityLabel = (daysRemaining: number) => {
     if (daysRemaining <= 3) return 'critical'
@@ -106,6 +116,24 @@ export default function ExpiryPage() {
         <MetricCard label="Exp ≤ 30 Hari" value={stats?.monthCount ?? 0} icon={Clock} accent="muted" />
       </div>
 
+      {/* Tabs Custom */}
+      <div className="flex gap-2 rounded-xl bg-[#1A1A1A] p-1 border border-[#2A2A2A]/50 max-w-md">
+        <button
+          onClick={() => setActiveTab('membership')}
+          className={`flex-1 rounded-lg py-2 text-xs font-bold transition-colors ${activeTab === 'membership' ? 'bg-[#FF2A2A] text-black' : 'text-[#888] hover:text-white'
+            }`}
+        >
+          REGULARS MEMBER
+        </button>
+        <button
+          onClick={() => setActiveTab('visitor')}
+          className={`flex-1 rounded-lg py-2 text-xs font-bold transition-colors ${activeTab === 'visitor' ? 'bg-[#FF2A2A] text-black' : 'text-[#888] hover:text-white'
+            }`}
+        >
+          VISITOR
+        </button>
+      </div>
+
       {/* Kirim semua reminder */}
       <div className="flex gap-2">
         <AlertDialog>
@@ -121,7 +149,7 @@ export default function ExpiryPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
-              <AlertDialogAction onClick={handleSendAllReminders} className="bg-[#D4FF00] text-black">
+              <AlertDialogAction onClick={handleSendAllReminders} className="bg-[#FF2A2A] text-black">
                 Kirim Semua
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -140,13 +168,13 @@ export default function ExpiryPage() {
             <div key={i} className="h-24 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
           ))}
         </div>
-      ) : (!expiryList || expiryList.length === 0) ? (
+      ) : (!filteredList || filteredList.length === 0) ? (
         <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-          <p className="text-sm text-[#555]">🎉 Tidak ada member yang akan expired dalam 30 hari!</p>
+          <p className="text-sm text-[#555]">🎉 Tidak ada data expiry pada tab ini!</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {expiryList.map((m) => {
+          {filteredList.map((m) => {
             const initials = m.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
             const priority = getPriorityLabel(m.days_remaining ?? 99)
 
@@ -169,7 +197,7 @@ export default function ExpiryPage() {
                       <StatusBadge status={m.status} />
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-[#888]">
-                      <span>{m.membership_name} · {formatRupiah(m.price ?? 0)}</span>
+                      <span>{m.membership_name} Â· {formatRupiah(m.price ?? 0)}</span>
                       <span>Exp: {formatTanggal(m.end_date)}</span>
                     </div>
                     <p className={`mt-0.5 text-xs font-semibold ${(m.days_remaining ?? 99) <= 3 ? 'text-red-400' : (m.days_remaining ?? 99) <= 7 ? 'text-[#FF6B35]' : 'text-[#888]'
@@ -193,7 +221,7 @@ export default function ExpiryPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() => { setRenewMember(m); setRenewOpen(true) }}
-                    className="h-7 flex-1 text-[11px] text-[#D4FF00] hover:bg-[#D4FF00]/10"
+                    className="h-7 flex-1 text-[11px] text-[#FF2A2A] hover:bg-[#FF2A2A]/10"
                   >
                     <RotateCcw className="mr-1 h-3 w-3" /> Perpanjang
                   </Button>
@@ -234,7 +262,7 @@ export default function ExpiryPage() {
                   ]}
                 />
               </div>
-              <Button onClick={handleRenew} disabled={renewSub.isPending || !renewMembershipId} className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
+              <Button onClick={handleRenew} disabled={renewSub.isPending || !renewMembershipId} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
                 {renewSub.isPending ? 'Memproses...' : 'Perpanjang & Bayar'}
               </Button>
             </div>

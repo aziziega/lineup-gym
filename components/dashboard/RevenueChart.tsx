@@ -24,14 +24,20 @@ export default function RevenueChart() {
     )
   }
 
-  const slicedData = monthCount === 1 
-    ? (data || []).slice(-1) 
-    : (data || []).slice(0, -1).slice(-monthCount)
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const currentYear = new Date().getFullYear()
 
-  const chartData = slicedData.map((d) => ({
-    name: d.month_label,
-    revenue: Number(d.total),
-  }))
+  const chartData = months.map((monthName, index) => {
+    const record = (data || []).find((d: any) => {
+      if (!d.month) return false
+      const dateObj = new Date(d.month)
+      return dateObj.getFullYear() === currentYear && dateObj.getMonth() === index
+    })
+    return {
+      name: monthName,
+      revenue: record ? Number(record.total) : 0,
+    }
+  })
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
@@ -57,49 +63,21 @@ export default function RevenueChart() {
       <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-white">Revenue {monthCount} Bulan Terakhir</h3>
-            <div className="flex gap-1 rounded-lg bg-[#111] p-0.5 ml-2">
-              <button
-                onClick={() => setMonthCount(1)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  monthCount === 1 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'
-                }`}
-              >
-                1B
-              </button>
-              <button
-                onClick={() => setMonthCount(6)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  monthCount === 6 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'
-                }`}
-              >
-                6B
-              </button>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  monthCount !== 1 && monthCount !== 6 ? 'bg-[#333] text-white' : 'text-[#888] hover:text-white'
-                }`}
-              >
-                Custom
-              </button>
-            </div>
+            <h3 className="text-sm font-semibold text-white">Revenue Overview</h3>
           </div>
-          
+
           <div className="flex gap-1 rounded-lg bg-[#111] p-0.5 self-start sm:self-auto">
             <button
               onClick={() => setChartType('bar')}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                chartType === 'bar' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
-              }`}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
+                }`}
             >
               Bar
             </button>
             <button
               onClick={() => setChartType('line')}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                chartType === 'line' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
-              }`}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
+                }`}
             >
               Line
             </button>
@@ -147,7 +125,7 @@ export default function RevenueChart() {
                   max="120"
                   value={customMonth}
                   onChange={(e) => setCustomMonth(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white placeholder:text-[#555] focus:outline-none focus:ring-1 focus:ring-[#D4FF00]"
+                  className="flex h-10 w-full rounded-md border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white placeholder:text-[#555] focus:outline-none focus:ring-1 focus:ring-[#FF2A2A]"
                   placeholder="Contoh: 12"
                   autoFocus
                 />
@@ -165,7 +143,7 @@ export default function RevenueChart() {
               </Button>
               <Button
                 type="submit"
-                className="bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
+                className="bg-[#FF2A2A] text-black hover:bg-[#FF2A2A]/90"
               >
                 Terapkan
               </Button>

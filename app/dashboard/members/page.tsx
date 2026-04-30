@@ -68,6 +68,7 @@ export default function MembersPage() {
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
   const PER_PAGE = 10
 
@@ -92,6 +93,8 @@ export default function MembersPage() {
 
   // Renew form
   const [renewMembershipId, setRenewMembershipId] = useState('')
+  const [renewPtMembershipId, setRenewPtMembershipId] = useState('')
+  const [renewMemberNo, setRenewMemberNo] = useState('')
   const [renewPayMethod, setRenewPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
 
   const gymPackages = useMemo(() => memberships?.filter(m => m.category === 'gym') || [], [memberships])
@@ -107,8 +110,35 @@ export default function MembersPage() {
     if (statusFilter !== 'all') {
       list = list.filter((m) => m.status === statusFilter)
     }
+    
+    // Filter Tipe Membership vs Visitor
+    if (typeFilter === 'visitor') {
+      list = list.filter((m) => {
+        // Visitor = belum punya subscription, paket DAY, atau notes masih visitor
+        const isVisitorNotes = m.notes?.toLowerCase().includes('visitor')
+        const isDayPkg = m.membership_name === 'DAY'
+        const noSubscription = !m.membership_name
+        return isVisitorNotes || isDayPkg || noSubscription
+      })
+    } else if (typeFilter === 'regular') {
+      list = list.filter((m) => {
+        // Regular = punya subscription selain DAY DAN bukan visitor pending
+        const isVisitorPending = m.notes === 'Visitor Harian' && m.status === 'inactive'
+        const isDayOnly = m.membership_name === 'DAY' || !m.membership_name
+        const isVisitorNotes = m.notes?.toLowerCase().includes('visitor') && isDayOnly
+        return !isVisitorPending && !isVisitorNotes && m.membership_name
+      })
+    }
+    
+    // Urutkan: Paling atas untuk yang baru absen/pending (status inactive)
+    list.sort((a, b) => {
+      const aPending = (a.notes?.toLowerCase().includes('visitor') && a.status === 'inactive') ? 1 : 0
+      const bPending = (b.notes?.toLowerCase().includes('visitor') && b.status === 'inactive') ? 1 : 0
+      return bPending - aPending
+    })
+    
     return list
-  }, [members, search, statusFilter])
+  }, [members, search, statusFilter, typeFilter])
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
@@ -176,6 +206,43 @@ export default function MembersPage() {
     const endDate = hitungEndDate(startDate, pkg.duration_days).toISOString().split('T')[0]
 
     try {
+      // Update member_no & notes
+      const isNotDay = pkg.name !== 'DAY'
+      const updateData: any = {
+        member_no: renewMemberNo?.trim() || null,
+      }
+      
+      if (isNotDay && renewMember.notes?.toLowerCase().includes('visitor')) {
+        updateData.notes = 'Membership Regular'
+      }
+
+      const { error: updErr } = await supabase
+        .from('members')
+        .update(updateData)
+        .eq('id', renewMember.member_id)
+      
+      if (updErr) throw updErr
+
+      // Jika visitor pending sedang diperpanjang, otomatis buat attendance log (Check-In)
+      if (renewMember.notes?.toLowerCase().includes('visitor') && renewMember.status === 'inactive') {
+        await supabase.from('attendance_logs').insert({
+          gym_id: GYM_ID,
+          member_id: renewMember.member_id,
+          notes: `Visitor Extended to ${pkg.name} (Check-In)`
+        })
+      }
+
+      // Build PT payment jika ada
+      const ptPkg = renewPtMembershipId ? memberships?.find(m => m.id === renewPtMembershipId) : null
+      const ptPaymentData = ptPkg ? {
+        membershipId: ptPkg.id,
+        startDate,
+        endDate: hitungEndDate(startDate, ptPkg.duration_days).toISOString().split('T')[0],
+        amount: ptPkg.price,
+        membershipType: ptPkg.name,
+        totalSessions: ptPkg.total_sessions || 0,
+      } : undefined
+
       await renewSub.mutateAsync({
         memberId: renewMember.member_id,
         membershipId: renewMembershipId,
@@ -184,12 +251,18 @@ export default function MembersPage() {
         amount: pkg.price,
         paymentMethod: renewPayMethod,
         membershipType: pkg.name,
+        ptPayment: ptPaymentData,
       })
+
+      // Invalidate cache agar data UI ter-update
+      queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
+      
       toast.success(`Membership ${renewMember.full_name} berhasil diperpanjang!`)
       setRenewOpen(false)
       setRenewMember(null)
-    } catch {
-      toast.error('Gagal memperpanjang membership')
+    } catch (err: any) {
+      console.error('Renew error:', err)
+      toast.error(`Gagal memperpanjang: ${err?.message || err}`)
     }
   }
 
@@ -214,8 +287,9 @@ export default function MembersPage() {
       toast.success('Member berhasil diupdate')
       setEditOpen(false)
       resetForm()
-    } catch {
-      toast.error('Gagal mengupdate member')
+    } catch (err: any) {
+      console.error('Update member error:', err)
+      toast.error(`Gagal mengupdate member: ${err?.message || err}`)
     }
   }
 
@@ -223,7 +297,8 @@ export default function MembersPage() {
     try {
       await deleteMember.mutateAsync(id)
       toast.success(`${name} berhasil dihapus`)
-    } catch {
+    } catch (err) {
+      console.error(err)
       toast.error('Gagal menghapus member')
     }
   }
@@ -231,11 +306,39 @@ export default function MembersPage() {
   const handleApproveVisitor = async (m: any) => {
     setApprovingId(m.member_id)
     try {
-      // 1. Data Paket DAY sesuai screenshot user
-      const DAY_PACKAGE_ID = '6f53dd6e-74fd-4b75-a852-23d9ec00a77e'
+      // Ambil paket DAY secara dinamis dari database
+      let { data: pkgData } = await supabase
+        .from('memberships')
+        .select('id, price')
+        .eq('name', 'DAY')
+        .limit(1)
+        .single()
+      
+      if (!pkgData) {
+        const { data: fallbackPkg } = await supabase
+          .from('memberships')
+          .select('id, price')
+          .ilike('name', '%DAY%')
+          .limit(1)
+          .single()
+        pkgData = fallbackPkg
+      }
+
+      if (!pkgData) {
+        const { data: absoluteFallback } = await supabase
+          .from('memberships')
+          .select('id, price')
+          .limit(1)
+          .single()
+        pkgData = absoluteFallback
+      }
+
+      const DAY_PACKAGE_ID = pkgData?.id || '6f53dd6e-74fd-4b75-a852-23d9ec00a77e'
+      const pkgPrice = pkgData?.price || 15000
+
       const startDate = new Date().toISOString().split('T')[0]
       const endDate = hitungEndDate(startDate, 1).toISOString().split('T')[0]
-      
+
       // 1. Absen (Check-In)
       const { error: attErr } = await supabase.from('attendance_logs').insert({
         gym_id: GYM_ID,
@@ -258,7 +361,7 @@ export default function MembersPage() {
       const { error: payErr } = await supabase.from('payments').insert({
         gym_id: GYM_ID,
         member_id: m.member_id,
-        amount: 15000,
+        amount: pkgPrice,
         payment_method: 'cash',
         membership_type: 'DAY',
         notes: 'Pembayaran Visitor Harian (Daily Pass)'
@@ -278,7 +381,7 @@ export default function MembersPage() {
       queryClient.invalidateQueries({ queryKey: ['payments'] })
       queryClient.invalidateQueries({ queryKey: ['overview'] })
       
-      toast.success(`${m.full_name} berhasil disetujui! Paket DAY & Pembayaran Rp 15.000 tercatat.`)
+      toast.success(`${m.full_name} berhasil disetujui! Paket DAY & Pembayaran ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(pkgPrice)} tercatat.`)
     } catch (err) {
       toast.error('Gagal menyetujui visitor')
       console.error(err)
@@ -287,7 +390,7 @@ export default function MembersPage() {
     }
   }
 
-  const exportCSV = () => {
+  const exportExcel = () => {
     const rows = [
       ['No. Member', 'Nama', 'Telepon', 'Paket', 'Mulai', 'Expired', 'Status'],
       ...(filtered || []).map((m) => [
@@ -300,12 +403,38 @@ export default function MembersPage() {
         m.status,
       ]),
     ]
-    const csv = rows.map((r) => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Members</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+        <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
+        <style>
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #aaaaaa; padding: 8px; text-align: left; font-family: Arial, sans-serif; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <thead>
+            <tr>
+              ${rows[0].map(cell => `<th>${cell}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.slice(1).map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `members_${new Date().toISOString().split('T')[0]}.csv`
+    a.download = `members_${new Date().toISOString().split('T')[0]}.xls`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -325,6 +454,12 @@ export default function MembersPage() {
 
   return (
     <div className="space-y-4">
+      {/* Header manajemen member */}
+      <div className="flex flex-col gap-1">
+        <h1 className="font-heading text-2xl uppercase text-white sm:text-3xl">Manajemen Member</h1>
+        <p className="text-sm text-[#888]">Kelola data member reguler dan pengunjung harian</p>
+      </div>
+
       {/* Mobile header: search + actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1">
@@ -338,6 +473,16 @@ export default function MembersPage() {
         </div>
         <div className="flex gap-2">
           <NativeSelect
+            value={typeFilter}
+            onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+            options={[
+              { value: 'all', label: 'Semua Tipe' },
+              { value: 'regular', label: 'Member Reguler' },
+              { value: 'visitor', label: 'Pengunjung Harian' },
+            ]}
+            triggerClassName="w-36 text-xs"
+          />
+          <NativeSelect
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
             options={[
@@ -350,12 +495,12 @@ export default function MembersPage() {
             triggerClassName="w-28 text-xs"
           />
 
-          <Button size="sm" variant="outline" onClick={exportCSV} className="border-[#2A2A2A] text-xs text-[#888]">
-            <Download className="mr-1 h-3.5 w-3.5" /> CSV
+          <Button size="sm" variant="outline" onClick={exportExcel} className="border-[#2A2A2A] text-xs text-[#888]">
+            <Download className="mr-1 h-3.5 w-3.5" /> Excel
           </Button>
 
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]" />}>
+            <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#E60000]" />}>
               <Plus className="mr-1 h-3.5 w-3.5" /> Tambah
             </DialogTrigger>
             <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
@@ -389,7 +534,7 @@ export default function MembersPage() {
                       placeholder="Pilih paket gym"
                     />
                     {selectedPkg && (
-                      <p className="mt-1 text-[10px] text-[#D4FF00]">
+                      <p className="mt-1 text-[10px] text-[#FF2A2A]">
                         Aktif sampai: {formatTanggal(hitungEndDate(formStartDate, selectedPkg.duration_days).toISOString())}
                       </p>
                     )}
@@ -403,7 +548,7 @@ export default function MembersPage() {
                       placeholder="Pilih paket PT"
                     />
                     {formPtMembership && ptPackages.find(p => p.id === formPtMembership) && (
-                      <p className="mt-1 text-[10px] text-[#D4FF00]">
+                      <p className="mt-1 text-[10px] text-[#FF2A2A]">
                         Sesi: {ptPackages.find(p => p.id === formPtMembership)?.total_sessions} Sesi
                       </p>
                     )}
@@ -446,7 +591,7 @@ export default function MembersPage() {
                 <Button
                   onClick={handleAddMember}
                   disabled={createMember.isPending}
-                  className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]"
+                  className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
                 >
                   {createMember.isPending ? 'Menyimpan...' : 'Simpan Member'}
                 </Button>
@@ -484,7 +629,7 @@ export default function MembersPage() {
                 <Button
                   onClick={handleUpdateMember}
                   disabled={updateMember.isPending}
-                  className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]"
+                  className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
                 >
                   {updateMember.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
                 </Button>
@@ -544,7 +689,7 @@ export default function MembersPage() {
                       variant="ghost"
                       onClick={() => handleApproveVisitor(m)}
                       disabled={approvingId === m.member_id}
-                      className="h-7 flex-1 text-[11px] bg-[#D4FF00]/10 text-[#D4FF00] hover:bg-[#D4FF00]/20"
+                      className="h-7 flex-1 text-[11px] bg-[#FF2A2A]/10 text-[#FF2A2A] hover:bg-[#FF2A2A]/20"
                     >
                       <CheckCircle2 className="mr-1 h-3 w-3" /> {approvingId === m.member_id ? 'Loading...' : 'Izinkan & Absen'}
                     </Button>
@@ -555,6 +700,53 @@ export default function MembersPage() {
                       <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
                         <AlertDialogHeader>
                           <AlertDialogTitle>Tolak & Hapus {m.full_name}?</AlertDialogTitle>
+                          <AlertDialogDescription className="text-[#888]">
+                            Data visitor ini akan dihapus dari sistem.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(m.member_id, m.full_name)} className="bg-red-500 text-white hover:bg-red-600">
+                            Hapus
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                ) : m.notes?.toLowerCase().includes('visitor') && m.status === 'inactive' ? (
+                  /* Visitor yang sudah di-approve (DAY aktif) — tampilkan Edit, Perpanjang, Hapus */
+                  <div className="mt-2 flex gap-1.5 border-t border-[#2A2A2A]/50 pt-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditMemberData(m)
+                        setFormName(m.full_name)
+                        setFormPhone(m.phone)
+                        setFormMemberNo(m.member_no || '')
+                        setFormEmergency(m.emergency_contact || '')
+                        setFormNotes(m.notes || '')
+                        setEditOpen(true)
+                      }}
+                      className="h-7 flex-1 text-[11px] text-blue-400 hover:bg-blue-500/10"
+                    >
+                      <Edit2 className="mr-1 h-3 w-3" /> Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => { setRenewMember(m); setRenewMemberNo(m.member_no || ''); setRenewPtMembershipId(''); setRenewOpen(true) }}
+                      className="h-7 flex-1 text-[11px] text-[#FF6B35] hover:bg-[#FF6B35]/10"
+                    >
+                      <RotateCcw className="mr-1 h-3 w-3" /> Perpanjang
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger render={<Button size="sm" variant="ghost" className="h-7 text-[11px] text-red-400 hover:bg-red-500/10" />}>
+                        <Trash2 className="h-3 w-3" />
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Hapus {m.full_name}?</AlertDialogTitle>
                           <AlertDialogDescription className="text-[#888]">
                             Data visitor ini akan dihapus dari sistem.
                           </AlertDialogDescription>
@@ -589,7 +781,7 @@ export default function MembersPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => { setRenewMember(m); setRenewOpen(true) }}
+                    onClick={() => { setRenewMember(m); setRenewMemberNo(m.member_no || ''); setRenewOpen(true) }}
                     className="h-7 flex-1 text-[11px] text-[#FF6B35] hover:bg-[#FF6B35]/10"
                   >
                     <RotateCcw className="mr-1 h-3 w-3" /> Perpanjang
@@ -652,44 +844,94 @@ export default function MembersPage() {
       )}
 
       {/* Renew Dialog */}
-      <Dialog open={renewOpen} onOpenChange={setRenewOpen}>
-        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+      <Dialog open={renewOpen} onOpenChange={(open) => { setRenewOpen(open); if (!open) { setRenewPtMembershipId(''); setRenewMembershipId(''); } }}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">Perpanjang Membership</DialogTitle>
           </DialogHeader>
-          {renewMember && (
+          {renewMember && (() => {
+            const renewGymPkg = memberships?.find(m => m.id === renewMembershipId)
+            const renewPtPkg = renewPtMembershipId ? memberships?.find(m => m.id === renewPtMembershipId) : null
+            const totalAmount = (renewGymPkg?.price || 0) + (renewPtPkg?.price || 0)
+
+            return (
             <div className="space-y-3">
               <p className="text-sm text-[#888]">Member: <span className="text-white">{renewMember.full_name}</span></p>
+              
               <div>
-                <Label className="text-xs text-[#888]">Pilih Paket</Label>
-                <PackageCombobox
-                  packages={memberships || []}
-                  value={renewMembershipId}
-                  onValueChange={setRenewMembershipId}
-                  placeholder="Cari paket..."
+                <Label className="text-xs text-[#888]">No. Member (Baru/Opsional)</Label>
+                <Input
+                  value={renewMemberNo}
+                  onChange={(e) => setRenewMemberNo(e.target.value)}
+                  placeholder="Misal: 001"
+                  className="border-[#2A2A2A] bg-[#111] text-white mt-1"
                 />
               </div>
-              <div>
-                <Label className="text-xs text-[#888]">Metode Bayar</Label>
-                <NativeSelect
-                  value={renewPayMethod}
-                  onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
-                  options={[
-                    { value: 'cash', label: 'Cash' },
-                    { value: 'transfer', label: 'Transfer' },
-                    { value: 'qris', label: 'QRIS' },
-                  ]}
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-[#888]">Paket Gym (Wajib)</Label>
+                  <PackageCombobox
+                    packages={gymPackages}
+                    value={renewMembershipId}
+                    onValueChange={setRenewMembershipId}
+                    placeholder="Pilih paket gym"
+                  />
+                  {renewGymPkg && (
+                    <p className="mt-1 text-[10px] text-[#D4FF00]">
+                      Aktif sampai: {formatTanggal(hitungEndDate(new Date().toISOString().split('T')[0], renewGymPkg.duration_days).toISOString())}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs text-[#888]">Paket PT (Opsional)</Label>
+                  <PackageCombobox
+                    packages={ptPackages}
+                    value={renewPtMembershipId}
+                    onValueChange={setRenewPtMembershipId}
+                    placeholder="Pilih paket PT"
+                  />
+                  {renewPtPkg && (
+                    <p className="mt-1 text-[10px] text-[#D4FF00]">
+                      {renewPtPkg.total_sessions} Sesi PT
+                    </p>
+                  )}
+                </div>
               </div>
+
+              {(renewMembershipId || renewPtMembershipId) && (
+                <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3">
+                  <div className="mb-3 flex items-center justify-between border-b border-[#2A2A2A] pb-2 text-sm">
+                    <span className="text-[#888]">Total Tagihan:</span>
+                    <span className="font-heading text-lg text-[#D4FF00]">
+                      {formatRupiah(totalAmount)}
+                    </span>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-[#888]">Metode Bayar</Label>
+                    <NativeSelect
+                      value={renewPayMethod}
+                      onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
+                      options={[
+                        { value: 'cash', label: 'Cash' },
+                        { value: 'transfer', label: 'Transfer' },
+                        { value: 'qris', label: 'QRIS' },
+                      ]}
+                    />
+                  </div>
+                </div>
+              )}
+
               <Button
                 onClick={handleRenew}
                 disabled={renewSub.isPending || !renewMembershipId}
-                className="w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]"
+                className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
               >
                 {renewSub.isPending ? 'Memproses...' : 'Perpanjang & Bayar'}
               </Button>
             </div>
-          )}
+            )
+          })()}
         </DialogContent>
       </Dialog>
     </div>

@@ -57,8 +57,8 @@ export default function MetricCard({
 
       {/* Trend */}
       {trend && (
-        <p className={cn('mt-1 text-xs', trendUp ? 'text-[#D4FF00]' : 'text-[#FF6B35]')}>
-          {trendUp ? '↑' : '↓'} {trend}
+        <p className={cn('mt-1 text-xs', trendUp ? 'text-[#FF2A2A]' : 'text-[#FF6B35]')}>
+          {trendUp ? 'â†‘' : 'â†“'} {trend}
         </p>
       )}
     </div>

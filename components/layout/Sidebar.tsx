@@ -27,7 +27,7 @@ const navItems = [
   { label: 'Check-In', href: '/dashboard/checkin', icon: UserCheck },
   { label: 'Member', href: '/dashboard/members', icon: Users },
   { label: 'Paket', href: '/dashboard/packages', icon: Package },
-  { label: 'Jadwal', href: '/dashboard/schedule', icon: CalendarDays },
+  { label: 'Jadwal PT', href: '/dashboard/schedule', icon: CalendarDays },
   { label: 'Keuangan', href: '/dashboard/finance', icon: Wallet },
   { label: 'Expiry', href: '/dashboard/expiry', icon: Bell },
 ]
@@ -66,11 +66,14 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       {/* Header: Logo */}
       <div className="flex items-center justify-between px-5 pb-2 pt-5">
         <div>
-          <h1 className="font-heading text-[28px] leading-none tracking-tight">
-            <span className="text-[#D4FF00]">LINE UP</span>{' '}
-            <span className="text-white">GYM</span>
-          </h1>
-          <div className="mt-1 flex items-center gap-1">
+          <div className="flex items-center gap-3 mb-2">
+            <img src="/logo.jpg" alt="Logo" className="w-10 h-10 rounded-full object-cover border border-[#FF2A2A]" />
+            <h1 className="font-heading text-[24px] leading-none tracking-tight">
+              <span className="text-[#FF2A2A]">LINE UP</span>{' '}
+              <span className="text-white">GYM</span>
+            </h1>
+          </div>
+          <div className="flex items-center gap-1">
             <Star className="h-3 w-3 fill-[#D4FF00] text-[#D4FF00]" />
             <span className="text-xs text-[#888]">{GYM_INFO.RATING} · Prambanan</span>
           </div>
@@ -94,11 +97,11 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               className={cn(
                 'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
                 active
-                  ? 'border-l-[3px] border-[#D4FF00] bg-[#D4FF00]/10 text-[#D4FF00]'
+                  ? 'border-l-[3px] border-[#FF2A2A] bg-[#FF2A2A]/10 text-[#FF2A2A]'
                   : 'border-l-[3px] border-transparent text-[#888] hover:bg-[#1A1A1A] hover:text-white'
               )}
             >
-              <item.icon className={cn('h-[18px] w-[18px]', active && 'text-[#D4FF00]')} />
+              <item.icon className={cn('h-[18px] w-[18px]', active && 'text-[#FF2A2A]')} />
               <span>{item.label}</span>
               {/* Badge merah untuk Expiry */}
               {item.href === '/dashboard/expiry' && criticalCount && criticalCount > 0 && (
@@ -125,7 +128,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               href="https://wa.me/6285647618646"
               target="_blank"
               rel="noopener noreferrer"
-              className="transition-colors hover:text-[#D4FF00]"
+              className="transition-colors hover:text-[#FF2A2A]"
             >
               {GYM_INFO.PHONE}
             </a>
@@ -142,7 +145,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         </button>
 
         <p className="mt-3 text-center text-[10px] text-[#333]">
-          © {new Date().getFullYear()} {GYM_INFO.NAME}
+          Â© {new Date().getFullYear()} {GYM_INFO.NAME}
         </p>
       </div>
     </div>
