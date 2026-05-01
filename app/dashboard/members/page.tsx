@@ -198,16 +198,16 @@ export default function MembersPage() {
   }
 
   const handleRenew = async () => {
-    if (!renewMember || !renewMembershipId) return
-    const pkg = memberships?.find((m) => m.id === renewMembershipId)
-    if (!pkg) return
-
+    if (!renewMember || (!renewMembershipId && !renewPtMembershipId)) return
+    
+    const pkg = renewMembershipId ? memberships?.find((m) => m.id === renewMembershipId) : null
+    
     const startDate = new Date().toISOString().split('T')[0]
-    const endDate = hitungEndDate(startDate, pkg.duration_days).toISOString().split('T')[0]
+    const endDate = pkg ? hitungEndDate(startDate, pkg.duration_days).toISOString().split('T')[0] : ''
 
     try {
       // Update member_no & notes
-      const isNotDay = pkg.name !== 'DAY'
+      const isNotDay = pkg ? pkg.name !== 'DAY' : true
       const updateData: any = {
         member_no: renewMemberNo?.trim() || null,
       }
@@ -228,7 +228,7 @@ export default function MembersPage() {
         await supabase.from('attendance_logs').insert({
           gym_id: GYM_ID,
           member_id: renewMember.member_id,
-          notes: `Visitor Extended to ${pkg.name} (Check-In)`
+          notes: `Visitor Extended to ${pkg ? pkg.name : 'PT Package'} (Check-In)`
         })
       }
 
@@ -245,12 +245,12 @@ export default function MembersPage() {
 
       await renewSub.mutateAsync({
         memberId: renewMember.member_id,
-        membershipId: renewMembershipId,
-        startDate,
-        endDate,
-        amount: pkg.price,
+        membershipId: renewMembershipId || undefined,
+        startDate: pkg ? startDate : undefined,
+        endDate: pkg ? endDate : undefined,
+        amount: pkg?.price,
         paymentMethod: renewPayMethod,
-        membershipType: pkg.name,
+        membershipType: pkg?.name,
         ptPayment: ptPaymentData,
       })
 
@@ -870,7 +870,7 @@ export default function MembersPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs text-[#888]">Paket Gym (Wajib)</Label>
+                  <Label className="text-xs text-[#888]">Paket Gym (Opsional)</Label>
                   <PackageCombobox
                     packages={gymPackages}
                     value={renewMembershipId}
@@ -924,7 +924,7 @@ export default function MembersPage() {
 
               <Button
                 onClick={handleRenew}
-                disabled={renewSub.isPending || !renewMembershipId}
+                disabled={renewSub.isPending || (!renewMembershipId && !renewPtMembershipId)}
                 className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
               >
                 {renewSub.isPending ? 'Memproses...' : 'Perpanjang & Bayar'}

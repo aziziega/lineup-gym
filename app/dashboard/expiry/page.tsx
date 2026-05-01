@@ -8,6 +8,7 @@ import MetricCard from '@/components/dashboard/MetricCard'
 import StatusBadge from '@/components/members/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import NativeSelect from '@/components/dashboard/NativeSelect'
 import PackageCombobox from '@/components/dashboard/PackageCombobox'
@@ -36,8 +37,13 @@ export default function ExpiryPage() {
   const [activeTab, setActiveTab] = useState<'membership' | 'visitor'>('membership')
   const [renewOpen, setRenewOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<ActiveSubscriptionView | null>(null)
+  const [renewMemberNo, setRenewMemberNo] = useState('')
   const [renewMembershipId, setRenewMembershipId] = useState('')
+  const [renewPtMembershipId, setRenewPtMembershipId] = useState('')
   const [renewPayMethod, setRenewPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
+
+  const gymPackages = useMemo(() => memberships?.filter(m => m.category === 'gym') || [], [memberships])
+  const ptPackages = useMemo(() => memberships?.filter(m => m.category === 'pt') || [], [memberships])
 
   const filteredList = useMemo(() => {
     let list = expiryList || []
@@ -55,26 +61,41 @@ export default function ExpiryPage() {
   }
 
   const handleRenew = async () => {
-    if (!renewMember || !renewMembershipId) return
-    const pkg = memberships?.find((m) => m.id === renewMembershipId)
-    if (!pkg) return
-
+    if (!renewMember || (!renewMembershipId && !renewPtMembershipId)) return
+    
+    const pkg = renewMembershipId ? memberships?.find((m) => m.id === renewMembershipId) : null
+    
     const startDate = new Date().toISOString().split('T')[0]
-    const endDate = hitungEndDate(startDate, pkg.duration_days).toISOString().split('T')[0]
+    const endDate = pkg ? hitungEndDate(startDate, pkg.duration_days).toISOString().split('T')[0] : ''
 
     try {
+      // Build PT payment jika ada
+      const ptPkg = renewPtMembershipId ? memberships?.find(m => m.id === renewPtMembershipId) : null
+      const ptPaymentData = ptPkg ? {
+        membershipId: ptPkg.id,
+        startDate,
+        endDate: hitungEndDate(startDate, ptPkg.duration_days).toISOString().split('T')[0],
+        amount: ptPkg.price,
+        membershipType: ptPkg.name,
+        totalSessions: ptPkg.total_sessions || 0,
+      } : undefined
+
       await renewSub.mutateAsync({
         memberId: renewMember.member_id,
-        membershipId: renewMembershipId,
-        startDate,
-        endDate,
-        amount: pkg.price,
+        membershipId: renewMembershipId || undefined,
+        startDate: pkg ? startDate : undefined,
+        endDate: pkg ? endDate : undefined,
+        amount: pkg?.price,
         paymentMethod: renewPayMethod,
-        membershipType: pkg.name,
+        membershipType: pkg?.name,
+        ptPayment: ptPaymentData,
       })
       toast.success(`Membership ${renewMember.full_name} berhasil diperpanjang!`)
       setRenewOpen(false)
       setRenewMember(null)
+      setRenewMemberNo('')
+      setRenewMembershipId('')
+      setRenewPtMembershipId('')
     } catch {
       toast.error('Gagal memperpanjang membership')
     }
@@ -233,40 +254,94 @@ export default function ExpiryPage() {
       )}
 
       {/* Renew Dialog */}
-      <Dialog open={renewOpen} onOpenChange={setRenewOpen}>
-        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+      <Dialog open={renewOpen} onOpenChange={(open) => { setRenewOpen(open); if (!open) { setRenewPtMembershipId(''); setRenewMembershipId(''); setRenewMemberNo(''); } }}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">Perpanjang Membership</DialogTitle>
           </DialogHeader>
-          {renewMember && (
+          {renewMember && (() => {
+            const renewGymPkg = memberships?.find(m => m.id === renewMembershipId)
+            const renewPtPkg = renewPtMembershipId ? memberships?.find(m => m.id === renewPtMembershipId) : null
+            const totalAmount = (renewGymPkg?.price || 0) + (renewPtPkg?.price || 0)
+
+            return (
             <div className="space-y-3">
               <p className="text-sm text-[#888]">Member: <span className="text-white">{renewMember.full_name}</span></p>
+              
               <div>
-                <Label className="text-xs text-[#888]">Pilih Paket</Label>
-                <PackageCombobox
-                  packages={memberships || []}
-                  value={renewMembershipId}
-                  onValueChange={setRenewMembershipId}
-                  placeholder="Cari paket..."
+                <Label className="text-xs text-[#888]">No. Member (Baru/Opsional)</Label>
+                <Input
+                  value={renewMemberNo}
+                  onChange={(e) => setRenewMemberNo(e.target.value)}
+                  placeholder="Misal: 001"
+                  className="border-[#2A2A2A] bg-[#111] text-white mt-1"
                 />
               </div>
-              <div>
-                <Label className="text-xs text-[#888]">Metode Bayar</Label>
-                <NativeSelect
-                  value={renewPayMethod}
-                  onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
-                  options={[
-                    { value: 'cash', label: 'Cash' },
-                    { value: 'transfer', label: 'Transfer' },
-                    { value: 'qris', label: 'QRIS' },
-                  ]}
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-[#888]">Paket Gym (Opsional)</Label>
+                  <PackageCombobox
+                    packages={gymPackages}
+                    value={renewMembershipId}
+                    onValueChange={setRenewMembershipId}
+                    placeholder="Pilih paket gym"
+                  />
+                  {renewGymPkg && (
+                    <p className="mt-1 text-[10px] text-[#D4FF00]">
+                      Aktif sampai: {formatTanggal(hitungEndDate(new Date().toISOString().split('T')[0], renewGymPkg.duration_days).toISOString())}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs text-[#888]">Paket PT (Opsional)</Label>
+                  <PackageCombobox
+                    packages={ptPackages}
+                    value={renewPtMembershipId}
+                    onValueChange={setRenewPtMembershipId}
+                    placeholder="Pilih paket PT"
+                  />
+                  {renewPtPkg && (
+                    <p className="mt-1 text-[10px] text-[#D4FF00]">
+                      {renewPtPkg.total_sessions} Sesi PT
+                    </p>
+                  )}
+                </div>
               </div>
-              <Button onClick={handleRenew} disabled={renewSub.isPending || !renewMembershipId} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
+
+              {(renewMembershipId || renewPtMembershipId) && (
+                <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3">
+                  <div className="mb-3 flex items-center justify-between border-b border-[#2A2A2A] pb-2 text-sm">
+                    <span className="text-[#888]">Total Tagihan:</span>
+                    <span className="font-heading text-lg text-[#D4FF00]">
+                      {formatRupiah(totalAmount)}
+                    </span>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-[#888]">Metode Bayar</Label>
+                    <NativeSelect
+                      value={renewPayMethod}
+                      onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
+                      options={[
+                        { value: 'cash', label: 'Cash' },
+                        { value: 'transfer', label: 'Transfer' },
+                        { value: 'qris', label: 'QRIS' },
+                      ]}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Button
+                onClick={handleRenew}
+                disabled={renewSub.isPending || (!renewMembershipId && !renewPtMembershipId)}
+                className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
+              >
                 {renewSub.isPending ? 'Memproses...' : 'Perpanjang & Bayar'}
               </Button>
             </div>
-          )}
+            )
+          })()}
         </DialogContent>
       </Dialog>
     </div>
