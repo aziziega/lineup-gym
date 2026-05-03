@@ -129,6 +129,7 @@ export function useCreateMember() {
       queryClient.invalidateQueries({ queryKey: ['revenue-current-month'] })
       queryClient.invalidateQueries({ queryKey: ['overview'] })
       queryClient.invalidateQueries({ queryKey: ['expiry'] })
+      queryClient.invalidateQueries({ queryKey: ['pt-active-members'] })
     },
   })
 }

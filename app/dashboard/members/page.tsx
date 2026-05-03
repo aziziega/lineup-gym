@@ -7,7 +7,7 @@ import { useMembersWithSubscription, useCreateMember, useDeleteMember, useUpdate
 import { useActiveMemberships } from '@/hooks/useMemberships'
 import { useCheckIn } from '@/hooks/useAttendance'
 import { useRenewSubscription } from '@/hooks/useSubscriptions'
-import { formatRupiah, formatTanggal, hitungEndDate } from '@/lib/utils'
+import { formatRupiah, formatTanggal, hitungEndDate, generateReceiptWALink, type ReceiptData } from '@/lib/utils'
 import StatusBadge from '@/components/members/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import NativeSelect from '@/components/dashboard/NativeSelect'
 import PackageCombobox from '@/components/dashboard/PackageCombobox'
-import { Search, Plus, Download, Edit2, RotateCcw, Trash2, ShieldAlert, CheckCircle2 } from 'lucide-react'
+import { Search, Plus, Download, Edit2, RotateCcw, Trash2, ShieldAlert, CheckCircle2, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { GYM_ID } from '@/lib/constants'
 import type { ActiveSubscriptionView, Membership } from '@/lib/types'
@@ -91,6 +91,10 @@ export default function MembersPage() {
   const [formNotes, setFormNotes] = useState('')
   const [approvingId, setApprovingId] = useState<string | null>(null)
 
+  // Receipt dialog
+  const [receiptOpen, setReceiptOpen] = useState(false)
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
+
   // Renew form
   const [renewMembershipId, setRenewMembershipId] = useState('')
   const [renewPtMembershipId, setRenewPtMembershipId] = useState('')
@@ -128,6 +132,8 @@ export default function MembersPage() {
         const isVisitorNotes = m.notes?.toLowerCase().includes('visitor') && isDayOnly
         return !isVisitorPending && !isVisitorNotes && m.membership_name
       })
+    } else if (typeFilter === 'pt') {
+      list = list.filter((m) => !!m.pt_membership_name)
     }
     
     // Urutkan: Paling atas untuk yang baru absen/pending (status inactive)
@@ -190,10 +196,33 @@ export default function MembersPage() {
         } : undefined,
       })
       toast.success(`${formName} berhasil ditambahkan!`)
+
+      // Prepare receipt data
+      const totalAmount = (selectedPkg?.price || 0) + (selectedPtPkg?.price || 0)
+      if (totalAmount > 0) {
+        setReceiptData({
+          memberName: formName,
+          memberPhone: formPhone,
+          gymPackageName: selectedPkg?.name,
+          gymEndDate: selectedPkg ? hitungEndDate(formStartDate, selectedPkg.duration_days).toISOString().split('T')[0] : undefined,
+          ptPackageName: selectedPtPkg?.name,
+          ptSessions: selectedPtPkg?.total_sessions ?? undefined,
+          totalAmount,
+          paymentMethod: formPayMethod,
+          transactionType: 'new',
+        })
+        setReceiptOpen(true)
+      }
+
       resetForm()
       setAddOpen(false)
-    } catch {
-      toast.error('Gagal menambahkan member')
+    } catch (err: any) {
+      const msg = err?.message || String(err)
+      if (msg.includes('members_member_no_key') || msg.includes('duplicate key value')) {
+        toast.error('No Member sudah digunakan, silakan pilih nomor lain.')
+      } else {
+        toast.error('Gagal menambahkan member')
+      }
     }
   }
 
@@ -258,11 +287,34 @@ export default function MembersPage() {
       queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
       
       toast.success(`Membership ${renewMember.full_name} berhasil diperpanjang!`)
+
+      // Prepare receipt data
+      const totalAmount = (pkg?.price || 0) + (ptPkg?.price || 0)
+      if (totalAmount > 0) {
+        setReceiptData({
+          memberName: renewMember.full_name,
+          memberPhone: renewMember.phone,
+          gymPackageName: pkg?.name,
+          gymEndDate: pkg ? endDate : undefined,
+          ptPackageName: ptPkg?.name,
+          ptSessions: ptPkg?.total_sessions ?? undefined,
+          totalAmount,
+          paymentMethod: renewPayMethod,
+          transactionType: 'renew',
+        })
+        setReceiptOpen(true)
+      }
+
       setRenewOpen(false)
       setRenewMember(null)
     } catch (err: any) {
       console.error('Renew error:', err)
-      toast.error(`Gagal memperpanjang: ${err?.message || err}`)
+      const msg = err?.message || String(err)
+      if (msg.includes('members_member_no_key') || msg.includes('duplicate key value')) {
+        toast.error('No Member sudah digunakan, silakan pilih nomor lain.')
+      } else {
+        toast.error(`Gagal memperpanjang: ${msg}`)
+      }
     }
   }
 
@@ -289,7 +341,12 @@ export default function MembersPage() {
       resetForm()
     } catch (err: any) {
       console.error('Update member error:', err)
-      toast.error(`Gagal mengupdate member: ${err?.message || err}`)
+      const msg = err?.message || String(err)
+      if (msg.includes('members_member_no_key') || msg.includes('duplicate key value')) {
+        toast.error('No Member sudah digunakan, silakan pilih nomor lain.')
+      } else {
+        toast.error(`Gagal mengupdate member: ${msg}`)
+      }
     }
   }
 
@@ -478,6 +535,7 @@ export default function MembersPage() {
             options={[
               { value: 'all', label: 'Semua Tipe' },
               { value: 'regular', label: 'Member Reguler' },
+              { value: 'pt', label: 'Member PT' },
               { value: 'visitor', label: 'Pengunjung Harian' },
             ]}
             triggerClassName="w-36 text-xs"
@@ -678,6 +736,21 @@ export default function MembersPage() {
                       <span>Exp: {formatTanggal(m.end_date)}</span>
                       <span>Sisa {m.days_remaining} hari</span>
                     </div>
+                    {m.pt_membership_name && (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+                          m.pt_remaining_sessions === null || m.pt_remaining_sessions === undefined
+                            ? 'bg-[#555]/20 text-[#888]'
+                            : m.pt_remaining_sessions <= 0
+                              ? 'bg-red-500/15 text-red-400'
+                              : m.pt_remaining_sessions <= 2
+                                ? 'bg-amber-500/15 text-amber-400'
+                                : 'bg-emerald-500/15 text-emerald-400'
+                        }`}>
+                          🏋️ {m.pt_membership_name} · {m.pt_remaining_sessions ?? 0}/{m.pt_total_sessions ?? 0} sesi
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -932,6 +1005,94 @@ export default function MembersPage() {
             </div>
             )
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt / Kwitansi Dialog */}
+      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Kwitansi Pembayaran</DialogTitle>
+          </DialogHeader>
+          {receiptData && (
+            <div className="space-y-4">
+              {/* Receipt preview */}
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-4 space-y-3">
+                <div className="text-center border-b border-dashed border-[#333] pb-3">
+                  <p className="font-heading text-sm font-bold text-[#FF2A2A]">LINEUP GYM PRAMBANAN</p>
+                  <p className="text-[10px] text-[#555]">Be Strong Be Healthy!</p>
+                </div>
+
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-[#888]">Member</span>
+                    <span className="text-white font-medium">{receiptData.memberName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#888]">Jenis</span>
+                    <span className="text-white">{receiptData.transactionType === 'new' ? 'Pendaftaran Baru' : 'Perpanjangan'}</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-dashed border-[#333] pt-2 space-y-1.5 text-xs">
+                  {receiptData.gymPackageName && (
+                    <div className="flex justify-between">
+                      <span className="text-[#888]">Paket Gym</span>
+                      <span className="text-white">{receiptData.gymPackageName}</span>
+                    </div>
+                  )}
+                  {receiptData.gymEndDate && (
+                    <div className="flex justify-between">
+                      <span className="text-[#888]">Berlaku s/d</span>
+                      <span className="text-[#D4FF00] font-medium">{formatTanggal(receiptData.gymEndDate)}</span>
+                    </div>
+                  )}
+                  {receiptData.ptPackageName && (
+                    <div className="flex justify-between">
+                      <span className="text-[#888]">Paket PT</span>
+                      <span className="text-white">{receiptData.ptPackageName}{receiptData.ptSessions ? ` (${receiptData.ptSessions} Sesi)` : ''}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-dashed border-[#333] pt-2 space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-[#888]">Metode Bayar</span>
+                    <span className="text-white capitalize">{receiptData.paymentMethod}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold">
+                    <span className="text-[#888]">Total</span>
+                    <span className="text-[#D4FF00] font-heading text-base">{formatRupiah(receiptData.totalAmount)}</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-dashed border-[#333] pt-2 text-center">
+                  <p className="text-[10px] text-[#555]">{formatTanggal(new Date())} — Terima kasih!</p>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setReceiptOpen(false)}
+                  className="flex-1 border-[#2A2A2A] text-[#888] hover:bg-[#2A2A2A] hover:text-white"
+                >
+                  Lewati
+                </Button>
+                <Button
+                  onClick={() => {
+                    const url = generateReceiptWALink(receiptData)
+                    window.open(url, '_blank')
+                    setReceiptOpen(false)
+                  }}
+                  className="flex-1 bg-[#25D366] font-bold text-white hover:bg-[#1DA851]"
+                >
+                  <MessageSquare className="mr-1.5 h-4 w-4" /> Kirim ke WA
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

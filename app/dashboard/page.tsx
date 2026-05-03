@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import MetricCard from '@/components/dashboard/MetricCard'
 import RevenueChart from '@/components/dashboard/RevenueChart'
 import PackageDonutChart from '@/components/dashboard/PackageDonutChart'
-import TodaySchedule from '@/components/dashboard/TodaySchedule'
+import TodayPTSchedule from '@/components/dashboard/TodayPTSchedule'
 
 export default function OverviewPage() {
   const supabase = createClient()
@@ -149,17 +149,17 @@ export default function OverviewPage() {
         />
       </div>
 
-      {/* Charts â€” stacked di mobile, side by side di desktop */}
+      {/* Charts — stacked di mobile, side by side di desktop */}
       <div className="grid gap-4 lg:grid-cols-2">
         <RevenueChart />
         <PackageDonutChart />
       </div>
 
-      {/* Jadwal + Member terbaru */}
+      {/* Jadwal PT & Member Terbaru */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <TodaySchedule />
+        <TodayPTSchedule />
 
-        {/* 5 Member Terbaru â€” tanpa scroll */}
+        {/* 5 Member Terbaru — tanpa scroll */}
         <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
           <h3 className="mb-3 text-sm font-semibold text-white">Member Terbaru</h3>
           {(!recentMembers || recentMembers.length === 0) ? (

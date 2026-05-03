@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import NativeSelect from '@/components/dashboard/NativeSelect'
+import MemberCombobox from '@/components/dashboard/MemberCombobox'
 import { Plus, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle, Trash2, Dumbbell } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -52,16 +52,36 @@ export default function SchedulePage() {
 
   const selectedPtMember = ptMembers?.find(m => m.member_id === addMemberId)
 
+  // Build member options for searchable combobox
+  const ptMemberOptions = useMemo(() =>
+    (ptMembers || []).map(m => ({
+      id: m.member_id,
+      full_name: m.full_name,
+      phone: m.phone,
+    })), [ptMembers])
+
+  const ptStatusMap = useMemo(() => {
+    const map = new Map<string, string>()
+      ; (ptMembers || []).forEach(m => {
+        map.set(m.member_id, `${m.pt_membership_name} · Sisa ${m.pt_remaining_sessions} sesi`)
+      })
+    return map
+  }, [ptMembers])
+
   const handleAddSession = async () => {
     if (!addMemberId || !addDate || !addTime) { toast.error('Pilih member, tanggal, dan jam'); return }
     const ptMember = ptMembers?.find(m => m.member_id === addMemberId)
     if (!ptMember?.pt_subscription_id) { toast.error('Member tidak punya PT aktif'); return }
 
     // Cek bentrok jadwal (1 coach, 1 sesi per jam)
-    const sameDaySessions = (sessions || []).filter(s => s.session_date === addDate && !s.is_completed)
+    const sameDaySessions = (sessions || []).filter(s => s.session_date === addDate)
     const conflict = sameDaySessions.find(s => isTimeConflict(s.session_time, addTime))
     if (conflict) {
-      toast.error(`Jadwal bentrok! Sudah ada sesi ${conflict.member_name} jam ${conflict.session_time?.slice(0, 5)} di hari itu. Coach hanya 1, tidak bisa double booking.`)
+      if (conflict.is_completed) {
+        toast.error(`Sesi jam ${conflict.session_time?.slice(0, 5)} sudah selesai dilakukan bersama ${conflict.member_name}. Silahkan pilih jam lain.`)
+      } else {
+        toast.error(`Jadwal bentrok! Sudah ada sesi ${conflict.member_name} jam ${conflict.session_time?.slice(0, 5)} di hari itu. Coach hanya 1, tidak bisa double booking.`)
+      }
       return
     }
 
@@ -167,7 +187,7 @@ export default function SchedulePage() {
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
                           <p className={`font-semibold truncate ${s.is_completed ? 'text-green-400' : 'text-white'}`}>{s.member_name}</p>
-                          <p className="text-[#888]">{s.session_time?.slice(0, 5)}</p>
+                          <p className={`${s.is_completed ? 'text-green-400/50' : 'text-[#888]'}`}>{s.session_time?.slice(0, 5)}</p>
                         </div>
                         <div className="flex shrink-0 gap-0.5">
                           {!s.is_completed ? (
@@ -180,7 +200,7 @@ export default function SchedulePage() {
                               </button>
                             </>
                           ) : (
-                            <span className="text-[9px] text-green-400">✓</span>
+                            <span className="flex items-center gap-0.5 rounded bg-green-500/20 px-1 py-0.5 text-[9px] font-semibold text-green-400">✓ Selesai</span>
                           )}
                         </div>
                       </div>
@@ -215,17 +235,14 @@ export default function SchedulePage() {
           <div className="space-y-3">
             <div>
               <Label className="text-xs text-[#888]">Member (PT Aktif)</Label>
-              {ptMembers && ptMembers.length > 0 ? (
-                <NativeSelect
+              {ptMemberOptions.length > 0 ? (
+                <MemberCombobox
+                  members={ptMemberOptions}
                   value={addMemberId}
-                  onChange={(e) => setAddMemberId(e.target.value)}
-                  options={[
-                    { value: '', label: 'Pilih member...' },
-                    ...ptMembers.map(m => ({
-                      value: m.member_id,
-                      label: `${m.full_name} (${m.pt_membership_name} · Sisa ${m.pt_remaining_sessions} sesi)`
-                    }))
-                  ]}
+                  onValueChange={setAddMemberId}
+                  placeholder="Cari & pilih member..."
+                  statusMap={ptStatusMap}
+                  emptyMessage="Tidak ada member PT yang cocok"
                 />
               ) : (
                 <p className="text-xs text-[#555] mt-1">Tidak ada member dengan PT aktif</p>
@@ -247,14 +264,24 @@ export default function SchedulePage() {
 
             {/* Preview bentrok */}
             {addDate && addTime && (() => {
-              const sameDaySessions = (sessions || []).filter(s => s.session_date === addDate && !s.is_completed)
+              const sameDaySessions = (sessions || []).filter(s => s.session_date === addDate)
               const conflict = sameDaySessions.find(s => isTimeConflict(s.session_time, addTime))
-              if (conflict) return (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400 flex items-start gap-1.5">
-                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  <span>Bentrok dengan sesi <strong>{conflict.member_name}</strong> jam {conflict.session_time?.slice(0, 5)}. Coach hanya 1, pilih jam lain.</span>
-                </div>
-              )
+              if (conflict) {
+                if (conflict.is_completed) {
+                  return (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-400 flex items-start gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <span>Sesi jam {conflict.session_time?.slice(0, 5)} bersama <strong>{conflict.member_name}</strong> sudah selesai. Silahkan pilih jam lain.</span>
+                    </div>
+                  )
+                }
+                return (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400 flex items-start gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>Bentrok dengan sesi <strong>{conflict.member_name}</strong> jam {conflict.session_time?.slice(0, 5)}. Coach hanya 1, pilih jam lain.</span>
+                  </div>
+                )
+              }
               return null
             })()}
 

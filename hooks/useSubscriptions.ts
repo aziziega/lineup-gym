@@ -142,6 +142,7 @@ export function useRenewSubscription() {
       queryClient.invalidateQueries({ queryKey: ['critical-count'] })
       queryClient.invalidateQueries({ queryKey: ['overview'] })
       queryClient.invalidateQueries({ queryKey: ['expiry'] })
+      queryClient.invalidateQueries({ queryKey: ['pt-active-members'] })
     },
   })
 }

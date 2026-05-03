@@ -62,6 +62,7 @@ export function usePtSessionsByWeek(startDate: string, endDate: string) {
         total_sessions: s.subscriptions?.memberships?.total_sessions,
       })) as PtSession[]
     },
+    refetchInterval: 10000, // Auto-refresh agar sesi yang selesai langsung hilang dari grid
   })
 }
 
@@ -142,6 +143,7 @@ export function useCompletePtSession() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pt-sessions'] })
       queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
+      queryClient.invalidateQueries({ queryKey: ['pt-active-members'] })
     },
   })
 }
@@ -177,5 +179,6 @@ export function usePtActiveMembers() {
       if (error) throw error
       return data || []
     },
+    refetchInterval: 10000, // Auto-refresh tiap 10 detik agar member baru langsung muncul
   })
 }
