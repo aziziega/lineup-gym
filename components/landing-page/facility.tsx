@@ -13,6 +13,8 @@ const FACILITIES = [
   { icon: Wind, title: 'Mushola', desc: 'Tempat ibadah nyaman' },
 ]
 
+import { StaggerContainer, StaggerItem } from '@/components/ui/fade-in'
+
 export default function Facility() {
   return (
     <section id="fasilitas" className="py-20">
@@ -23,20 +25,19 @@ export default function Facility() {
           <p className="mt-2 text-sm text-[#888]">Fasilitas lengkap untuk mendukung latihan maksimal kamu</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <StaggerContainer className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {FACILITIES.map((f, i) => (
-            <div
-              key={i}
-              className="group rounded-xl border border-[#1A1A1A] bg-[#111] p-5 transition-all hover:border-[#FF2A2A]/30 hover:bg-[#1A1A1A]"
-            >
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-[#FF2A2A]/10 text-[#FF2A2A] transition-colors group-hover:bg-[#FF2A2A]/20">
-                <f.icon className="h-5 w-5" />
+            <StaggerItem key={i}>
+              <div className="group h-full rounded-xl border border-[#1A1A1A] bg-[#111] p-5 transition-all hover:border-[#FF2A2A]/30 hover:bg-[#1A1A1A]">
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-[#FF2A2A]/10 text-[#FF2A2A] transition-colors group-hover:bg-[#FF2A2A]/20">
+                  <f.icon className="h-5 w-5" />
+                </div>
+                <h3 className="text-sm font-semibold text-white">{f.title}</h3>
+                <p className="mt-0.5 text-[11px] text-[#888]">{f.desc}</p>
               </div>
-              <h3 className="text-sm font-semibold text-white">{f.title}</h3>
-              <p className="mt-0.5 text-[11px] text-[#888]">{f.desc}</p>
-            </div>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerContainer>
       </div>
     </section>
   )

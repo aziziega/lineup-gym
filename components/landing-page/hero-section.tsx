@@ -1,27 +1,52 @@
 'use client'
 
+import { useRef } from 'react'
 import Image from 'next/image'
 import { ChevronRight, Star } from 'lucide-react'
+import { motion, useScroll, useTransform } from 'framer-motion'
 import Stats from './stats'
 
 export default function HeroSection() {
+  const ref = useRef(null)
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ['start start', 'end start']
+  })
+  
+  // Parallax effect: moves down and scales slightly as you scroll down
+  const yBg = useTransform(scrollYProgress, [0, 1], ['0%', '30%'])
+  const scaleBg = useTransform(scrollYProgress, [0, 1], [1, 1.1])
+
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
   }
 
   return (
-    <section id="hero" className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
-      {/* Background image */}
-      <div className="absolute inset-0">
+    <section ref={ref} id="hero" className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
+      {/* Background image with Parallax */}
+      <motion.div 
+        style={{ y: yBg, scale: scaleBg }}
+        className="absolute inset-0 z-0 origin-bottom"
+      >
         <Image src="/gym-hero.png" alt="Line Up Gym" fill className="object-cover opacity-30" priority />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0A]/60 via-transparent to-[#0A0A0A]" />
-      </div>
+      </motion.div>
+      <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#0A0A0A]/60 via-transparent to-[#0A0A0A]" />
 
-      <div className="relative z-10 mx-auto max-w-4xl px-4 text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#FF2A2A]/30 bg-[#FF2A2A]/10 px-4 py-1.5">
+      <motion.div 
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="relative z-10 mx-auto max-w-4xl px-4 text-center mt-10"
+      >
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2, duration: 0.5, type: "spring" }}
+          className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#FF2A2A]/30 bg-[#FF2A2A]/10 px-4 py-1.5"
+        >
           <Star className="h-4 w-4 text-[#FF2A2A]" />
           <span className="text-sm text-[#FF2A2A]">Rating 4.9 di Google Maps</span>
-        </div>
+        </motion.div>
 
         <h1 className="font-heading text-5xl leading-tight text-white sm:text-7xl md:text-8xl">
           <span className="text-[#FF2A2A] italic">LINEUP</span> GYM
@@ -52,7 +77,7 @@ export default function HeroSection() {
         </div>
 
         <Stats />
-      </div>
+      </motion.div>
     </section>
   )
 }

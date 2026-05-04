@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { motion } from 'framer-motion'
 
 const GALLERY = [
   { src: '/gym-hero.png', alt: 'Area utama Line Up Gym' },
@@ -20,18 +21,25 @@ export default function Galery() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {GALLERY.map((img, i) => (
-            <div key={i} className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-[#1A1A1A]">
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, scale: 0.8 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true, margin: '-50px' }}
+              transition={{ duration: 0.6, delay: i * 0.15, ease: 'easeOut' }}
+              className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-[#1A1A1A]"
+            >
               <Image
                 src={img.src}
                 alt={img.alt}
                 fill
-                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                className="object-cover transition-transform duration-700 group-hover:scale-110"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-              <p className="absolute bottom-3 left-3 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              <p className="absolute bottom-3 left-3 text-sm font-medium text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {img.alt}
               </p>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>

@@ -1,42 +1,51 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { ReactNode } from 'react'
 
-export function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
-  const [isVisible, setIsVisible] = useState(false)
-  const domRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          setIsVisible(true)
-          observer.unobserve(entry.target)
-        }
-      })
-    }, { threshold: 0.1, rootMargin: '50px' })
-
-    const currentRef = domRef.current
-    if (currentRef) {
-      observer.observe(currentRef)
-    }
-
-    return () => {
-      if (currentRef) {
-        observer.unobserve(currentRef)
-      }
-    }
-  }, [])
+export function StaggerContainer({ children, className = '' }: { children: ReactNode, className?: string }) {
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15, // Delay between each item
+      },
+    },
+  }
 
   return (
-    <div
-      ref={domRef}
-      className={`transition-all duration-[1500ms] ease-out ${
-        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
-      }`}
-      style={{ transitionDelay: `${delay}ms` }}
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, margin: '-50px' }}
+      className={className}
     >
       {children}
-    </div>
+    </motion.div>
+  )
+}
+
+export function StaggerItem({ children, className = '' }: { children: ReactNode, className?: string }) {
+  const itemVariants = {
+    hidden: { opacity: 0, y: 30, scale: 0.95 },
+    show: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: 'spring',
+        stiffness: 100,
+        damping: 15,
+        mass: 1,
+      },
+    },
+  }
+
+  return (
+    <motion.div variants={itemVariants} className={className}>
+      {children}
+    </motion.div>
   )
 }
