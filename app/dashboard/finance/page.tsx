@@ -57,6 +57,7 @@ export default function FinancePage() {
   const [expCategory, setExpCategory] = useState('operasional')
   const [expAmount, setExpAmount] = useState('')
   const [expDesc, setExpDesc] = useState('')
+  const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0])
 
   // Export Modal State
   const [exportOpen, setExportOpen] = useState(false)
@@ -182,7 +183,7 @@ export default function FinancePage() {
       await createExpense.mutateAsync({
         category: expCategory,
         amount: Number(expAmount),
-        expense_date: new Date().toISOString().split('T')[0],
+        expense_date: expDate,
         description: expDesc
       })
       toast.success('Pengeluaran berhasil dicatat!')
@@ -203,6 +204,7 @@ export default function FinancePage() {
           category: editExpData.category,
           amount: editExpData.amount,
           description: editExpData.description,
+          expense_date: editExpData.expense_date,
         }
       })
       toast.success('Pengeluaran berhasil di-update!')
@@ -475,6 +477,10 @@ export default function FinancePage() {
                       <Label className="text-xs text-[#888]">Keterangan</Label>
                       <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
                     </div>
+                    <div>
+                      <Label className="text-xs text-[#888]">Tanggal Pengeluaran</Label>
+                      <Input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                    </div>
                     <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
                       {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}
                     </Button>
@@ -631,6 +637,10 @@ export default function FinancePage() {
               <div>
                 <Label className="text-xs text-[#888]">Keterangan</Label>
                 <Input value={editExpData.description || ''} onChange={(e) => setEditExpData({ ...editExpData, description: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
+              </div>
+              <div>
+                <Label className="text-xs text-[#888]">Tanggal Pengeluaran</Label>
+                <Input type="date" value={editExpData.expense_date ? editExpData.expense_date.split('T')[0] : ''} onChange={(e) => setEditExpData({ ...editExpData, expense_date: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
               </div>
               <DialogFooter className="mt-4">
                 <Button variant="outline" onClick={() => setEditExpOpen(false)} className="border-[#2A2A2A] text-[#888] hover:bg-[#2A2A2A] hover:text-white">Batal</Button>

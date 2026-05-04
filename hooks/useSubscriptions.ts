@@ -90,6 +90,7 @@ export function useRenewSubscription() {
             amount,
             payment_method: paymentMethod,
             membership_type: membershipType,
+            paid_at: startDate,
           })
         if (payError) throw payError
       }
@@ -117,6 +118,7 @@ export function useRenewSubscription() {
             payment_method: paymentMethod,
             membership_type: ptPayment.membershipType,
             notes: 'Pembayaran Paket PT (Perpanjangan)',
+            paid_at: ptPayment.startDate,
           })
         if (ptPayError) throw ptPayError
       }

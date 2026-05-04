@@ -91,6 +91,7 @@ export function useCreateMember() {
           payment_method: payload.payment.paymentMethod,
           membership_type: payload.payment.membershipType,
           notes: payload.payment.notes || 'Pembayaran Member Baru (Gym)',
+          paid_at: payload.subscription?.start_date,
         })
         if (payError) throw payError
       }
@@ -104,6 +105,7 @@ export function useCreateMember() {
           payment_method: payload.ptPayment.paymentMethod,
           membership_type: payload.ptPayment.membershipType,
           notes: payload.ptPayment.notes || 'Pembayaran Member Baru (PT)',
+          paid_at: payload.ptSubscription?.start_date,
         })
         if (ptPayError) throw ptPayError
       }
