@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { CheckCircle2, AlertTriangle, ArrowLeft, Clock } from 'lucide-react'
 import { GYM_ID } from '@/lib/constants'
 
@@ -135,6 +135,24 @@ export default function CheckinKiosk() {
     setLoading(true)
 
     try {
+      // 0. Cek apakah visitor sudah pernah daftar (berdasarkan No HP)
+      const { data: existing } = await supabase
+        .from('members')
+        .select('id')
+        .eq('gym_id', GYM_ID)
+        .eq('phone', visitorPhone)
+        .limit(1)
+        .maybeSingle()
+
+      if (existing) {
+        toast.error('Data sudah Terinput sebelumnya, silahkan konfirmasi ke kasir.', {
+          duration: 5000,
+          icon: '⚠️',
+        })
+        setLoading(false)
+        return
+      }
+
       // 1. Buat member baru
       const { data: newMember, error: memberErr } = await supabase.from('members').insert({
         gym_id: GYM_ID,

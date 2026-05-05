@@ -58,7 +58,7 @@ export function useCurrentMonthRevenue() {
 export function useCreatePayment() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (payment: Omit<Payment, 'id' | 'created_at' | 'paid_at'>) => {
+    mutationFn: async (payment: Omit<Payment, 'id' | 'gym_id' | 'created_at' | 'paid_at'> & { paid_at?: string }) => {
       const { data, error } = await supabase
         .from('payments')
         .insert({ ...payment, gym_id: GYM_ID })

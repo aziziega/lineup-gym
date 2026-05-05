@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { usePayments, useCurrentMonthRevenue, useUpdatePayment, useDeletePayment } from '@/hooks/usePayments'
+import { usePayments, useCurrentMonthRevenue, useUpdatePayment, useDeletePayment, useCreatePayment } from '@/hooks/usePayments'
 import { useMonthlyRevenue } from '@/hooks/usePayments'
 import { useMembers, useMembersWithSubscription } from '@/hooks/useMembers'
 import { useActiveMemberships } from '@/hooks/useMemberships'
@@ -33,6 +33,18 @@ export default function FinancePage() {
   const createExpense = useCreateExpense()
   const updateExpense = useUpdateExpense()
   const deleteExpense = useDeleteExpense()
+  const createPayment = useCreatePayment()
+
+  // Search & Filter for Expenses
+  const [searchExp, setSearchExp] = useState('')
+  const [filterExpCategory, setFilterExpCategory] = useState<string>('all')
+
+  // Income Form
+  const [incOpen, setIncOpen] = useState(false)
+  const [incAmount, setIncAmount] = useState('')
+  const [incDesc, setIncDesc] = useState('')
+  const [incDate, setIncDate] = useState(new Date().toISOString().split('T')[0])
+  const [incMethod, setIncMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
 
   const [search, setSearch] = useState('')
   const [filterMethod, setFilterMethod] = useState<string>('all')
@@ -102,13 +114,29 @@ export default function FinancePage() {
     return list
   }, [payments, search, filterMethod, selectedDate])
 
-  // Filter expenses by selectedDate
+  // Filter expenses by selectedDate + search + category
   const filteredExpenses = useMemo(() => {
-    return (expenses || []).filter((e: any) => {
+    let list = expenses || []
+
+    // Filter by date
+    list = list.filter((e: any) => {
       const expDate = e.expense_date?.split('T')[0]
       return expDate === selectedDate
     })
-  }, [expenses, selectedDate])
+
+    // Filter by search
+    if (searchExp) {
+      const s = searchExp.toLowerCase()
+      list = list.filter((e: any) => e.description?.toLowerCase().includes(s))
+    }
+
+    // Filter by category
+    if (filterExpCategory !== 'all') {
+      list = list.filter((e: any) => e.category === filterExpCategory)
+    }
+
+    return list
+  }, [expenses, selectedDate, searchExp, filterExpCategory])
 
   // Chart data (income + expenses aggregated by month for full current year)
   const chartData = useMemo(() => {
@@ -174,6 +202,27 @@ export default function FinancePage() {
       setDeleteId('')
     } catch {
       toast.error('Gagal menghapus pembayaran')
+    }
+  }
+
+  const handleAddIncome = async () => {
+    if (!incAmount || !incDesc) return
+    try {
+      await createPayment.mutateAsync({
+        member_id: null,
+        amount: Number(incAmount),
+        payment_method: incMethod,
+        membership_type: 'Pemasukan Lainnya',
+        notes: incDesc,
+        paid_at: incDate,
+      })
+      toast.success('Pemasukan tambahan berhasil dicatat!')
+      setIncOpen(false)
+      setIncAmount('')
+      setIncDesc('')
+      setIncDate(new Date().toISOString().split('T')[0])
+    } catch {
+      toast.error('Gagal mencatat pemasukan tambahan')
     }
   }
 
@@ -386,6 +435,46 @@ export default function FinancePage() {
                 <Download className="mr-1 h-3.5 w-3.5" /> Export Excel
               </Button>
 
+              <Dialog open={incOpen} onOpenChange={setIncOpen}>
+                <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]" />}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pemasukan
+                </DialogTrigger>
+                <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="font-heading text-xl">Catat Pemasukan Tambahan</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3 pt-4">
+                    <div>
+                      <Label className="text-xs text-[#888]">Keterangan (Contoh: Jualan Air)</Label>
+                      <Input value={incDesc} onChange={(e) => setIncDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-[#888]">Nominal Pemasukan (Rp)</Label>
+                      <Input type="number" value={incAmount} onChange={(e) => setIncAmount(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-[#888]">Metode Bayar</Label>
+                      <NativeSelect
+                        value={incMethod}
+                        onChange={(e) => setIncMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
+                        options={[
+                          { value: 'cash', label: 'Cash' },
+                          { value: 'transfer', label: 'Transfer' },
+                          { value: 'qris', label: 'QRIS' },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-[#888]">Tanggal</Label>
+                      <Input type="date" value={incDate} onChange={(e) => setIncDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                    </div>
+                    <Button onClick={handleAddIncome} disabled={createPayment.isPending} className="mt-2 w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
+                      {createPayment.isPending ? 'Menyimpan...' : 'Simpan Pemasukan'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               <ExportFinanceModal
                 isOpen={exportOpen}
                 onOpenChange={setExportOpen}
@@ -442,51 +531,75 @@ export default function FinancePage() {
       {
         activeTab === 'expenses' && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-white">Pengeluaran</h3>
               </div>
-              <Dialog open={expOpen} onOpenChange={setExpOpen}>
-                <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#E60000]" />}>
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pengeluaran
-                </DialogTrigger>
-                <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle className="font-heading text-xl">Catat Pengeluaran</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-xs text-[#888]">Kategori</Label>
-                      <NativeSelect
-                        value={expCategory}
-                        onChange={(e) => setExpCategory(e.target.value)}
-                        options={[
-                          { value: 'operasional', label: 'Operasional (Listrik, Air)' },
-                          { value: 'maintenance', label: 'Maintenance Alat' },
-                          { value: 'gaji', label: 'Gaji Staff / PT' },
-                          { value: 'marketing', label: 'Marketing & Iklan' },
-                          { value: 'lainnya', label: 'Lainnya' },
-                        ]}
-                      />
+              <div className="flex gap-2">
+                <div className="relative flex-1 sm:w-48 sm:flex-none">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
+                  <Input
+                    placeholder="Cari keterangan..."
+                    value={searchExp}
+                    onChange={(e) => setSearchExp(e.target.value)}
+                    className="border-[#2A2A2A] bg-[#1A1A1A] pl-9 text-sm text-white placeholder:text-[#555]"
+                  />
+                </div>
+                <NativeSelect
+                  value={filterExpCategory}
+                  onChange={(e) => setFilterExpCategory(e.target.value)}
+                  options={[
+                    { value: 'all', label: 'Semua Kategori' },
+                    { value: 'operasional', label: 'Operasional' },
+                    { value: 'maintenance', label: 'Maintenance' },
+                    { value: 'gaji', label: 'Gaji Staff / PT' },
+                    { value: 'marketing', label: 'Marketing' },
+                    { value: 'lainnya', label: 'Lainnya' },
+                  ]}
+                  triggerClassName="w-32 text-xs"
+                />
+                <Dialog open={expOpen} onOpenChange={setExpOpen}>
+                  <DialogTrigger render={<Button size="sm" className="bg-[#FF2A2A] text-xs font-bold text-black hover:bg-[#E60000]" />}>
+                    <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pengeluaran
+                  </DialogTrigger>
+                  <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="font-heading text-xl">Catat Pengeluaran</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs text-[#888]">Kategori</Label>
+                        <NativeSelect
+                          value={expCategory}
+                          onChange={(e) => setExpCategory(e.target.value)}
+                          options={[
+                            { value: 'operasional', label: 'Operasional (Listrik, Air)' },
+                            { value: 'maintenance', label: 'Maintenance Alat' },
+                            { value: 'gaji', label: 'Gaji Staff / PT' },
+                            { value: 'marketing', label: 'Marketing & Iklan' },
+                            { value: 'lainnya', label: 'Lainnya' },
+                          ]}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-[#888]">Nominal (Rp)</Label>
+                        <Input type="number" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-[#888]">Keterangan</Label>
+                        <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-[#888]">Tanggal Pengeluaran</Label>
+                        <Input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                      </div>
+                      <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
+                        {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}
+                      </Button>
                     </div>
-                    <div>
-                      <Label className="text-xs text-[#888]">Nominal (Rp)</Label>
-                      <Input type="number" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-[#888]">Keterangan</Label>
-                      <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-[#888]">Tanggal Pengeluaran</Label>
-                      <Input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
-                    </div>
-                    <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
-                      {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
 
             {expLoading ? (

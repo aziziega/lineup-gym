@@ -18,8 +18,11 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'LineUp Gym',
+  title: 'LineUp Gym - Prambanan',
   description: 'Be Strong Be Healthy',
+  icons: {
+    icon: '/logo.jpg',
+  },
 };
 
 export default function RootLayout({

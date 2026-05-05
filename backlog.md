@@ -94,6 +94,10 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
    - **Status Saat Ini:** Menggunakan Opsi Semi-Auto (generate link `wa.me` dengan teks kwitansi) yang sudah berjalan di V1.
    - **Target V2:** Server secara otomatis mengirim WA ke member tanpa admin perlu klik — begitu pembayaran selesai, kwitansi terkirim langsung.
 
+9. **Validasi Anti-Spam Check-In (Double Scan Protection)**
+   - **Target V2:** Member hanya bisa melakukan check-in 1x dalam kurun waktu 2-3 jam untuk mencegah kecurangan (misal QR code di-screenshot dan dikirim ke teman).
+
+
 ---
 
 ## 📝 CATATAN TEKNIS

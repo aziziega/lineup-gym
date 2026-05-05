@@ -163,7 +163,7 @@ export default function MembersPage() {
     try {
       await createMember.mutateAsync({
         member: {
-          gym_id: 'lineup-gym-01',
+          gym_id: GYM_ID,
           full_name: formName,
           phone: formPhone,
           member_no: formMemberNo || null,
