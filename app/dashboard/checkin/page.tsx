@@ -10,8 +10,20 @@ import { toast } from 'sonner'
 export default function CheckInDashboard() {
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('sv-SE'))
+  const [isToday, setIsToday] = useState(true)
   const supabase = createClient()
+
+  // Auto-switch date if it changes overnight
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const nowStr = new Date().toLocaleDateString('sv-SE')
+      if (isToday && selectedDate !== nowStr) {
+        setSelectedDate(nowStr)
+      }
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [isToday, selectedDate])
 
   useEffect(() => {
     fetchLogs()
@@ -25,11 +37,18 @@ export default function CheckInDashboard() {
         { event: '*', schema: 'public', table: 'attendance_logs' },
         async (payload) => {
           console.log('Realtime Payload Received:', payload)
-          fetchLogs() // Re-fetch to get member joins
-
-          // Tampilkan Pop-up
+          
+          // Hanya re-fetch jika payload baru masuk di tanggal yang sedang dipilih
           const newPayload = payload.new as any
-          if (newPayload && newPayload.member_id) {
+          if (newPayload && newPayload.check_in_at) {
+            const payloadDate = new Date(newPayload.check_in_at).toLocaleDateString('sv-SE')
+            if (payloadDate === selectedDate) {
+              fetchLogs()
+            }
+          }
+
+          // Tampilkan Pop-up untuk semua check-in baru (biar admin tahu ada yang datang)
+          if (payload.eventType === 'INSERT' && newPayload.member_id) {
             const { data: m } = await supabase
               .from('members')
               .select('full_name')
@@ -47,9 +66,7 @@ export default function CheckInDashboard() {
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Supabase Realtime Status:', status)
-      })
+      .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
@@ -59,6 +76,12 @@ export default function CheckInDashboard() {
   const fetchLogs = async () => {
     setLoading(true)
     try {
+      // Hitung rentang waktu lokal ke UTC untuk query database
+      const start = new Date(selectedDate)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(selectedDate)
+      end.setHours(23, 59, 59, 999)
+
       const { data, error } = await supabase
         .from('attendance_logs')
         .select(`
@@ -72,23 +95,12 @@ export default function CheckInDashboard() {
             phone
           )
         `)
+        .gte('check_in_at', start.toISOString())
+        .lte('check_in_at', end.toISOString())
         .order('check_in_at', { ascending: false })
-        .limit(200)
 
-      if (error) {
-        console.error('Supabase Fetch Error:', error)
-        throw error
-      }
-
-      // Filter tanggal di sisi client untuk menghindari bug zona waktu (UTC vs WIB)
-      const filtered = (data || []).filter(log => {
-        if (!log.check_in_at) return false
-        // Konversi check_in_at ke string format lokal (YYYY-MM-DD)
-        const logDate = new Date(log.check_in_at).toLocaleDateString('sv-SE') // sv-SE produces YYYY-MM-DD format based on local time
-        return logDate === selectedDate
-      })
-
-      setLogs(filtered)
+      if (error) throw error
+      setLogs(data || [])
     } catch (err) {
       console.error('Error fetching logs:', err)
     } finally {
@@ -110,7 +122,11 @@ export default function CheckInDashboard() {
           <input
             type="date"
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value
+              setSelectedDate(val)
+              setIsToday(val === new Date().toLocaleDateString('sv-SE'))
+            }}
             className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-1.5 text-sm text-white [color-scheme:dark]"
           />
         </div>
