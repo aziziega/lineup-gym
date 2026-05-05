@@ -500,7 +500,7 @@ export default function FinancePage() {
               {filtered.slice(0, 20).map((p: any) => (
                 <div key={p.id} className="flex items-center justify-between rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">{p.members?.full_name ?? 'Unknown'}</p>
+                    <p className="truncate text-sm font-medium text-white">{p.members?.full_name ?? p.notes ?? 'Pemasukan Lainnya'}</p>
                     <div className="flex items-center gap-2 text-[11px] text-[#888]">
                       <span>{p.membership_type}</span>
                       <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] uppercase">{p.payment_method}</span>

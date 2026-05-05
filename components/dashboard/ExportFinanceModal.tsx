@@ -65,7 +65,7 @@ export default function ExportFinanceModal({ isOpen, onOpenChange, payments, exp
           <tbody>
             ${incList.map(p => `
               <tr>
-                <td>${p.members?.full_name || '-'}</td>
+                <td>${p.members?.full_name ?? p.notes ?? '-'}</td>
                 <td>${p.membership_type || '-'}</td>
                 <td>${p.payment_method || '-'}</td>
                 <td>${p.amount}</td>
