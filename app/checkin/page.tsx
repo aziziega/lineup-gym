@@ -35,7 +35,7 @@ export default function CheckinKiosk() {
         now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       )
       const hour = now.getHours()
-      if (hour < 6 || hour >= 22) {
+      if (hour < 6 || hour >= 21) {
         setIsClosed(true)
       } else {
         setIsClosed(false)
