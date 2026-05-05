@@ -87,7 +87,14 @@ export default function MembersPage() {
   const [formMembership, setFormMembership] = useState('') // Gym package
   const [formPtMembership, setFormPtMembership] = useState('') // PT package
   const [formPayMethod, setFormPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
-  const [formStartDate, setFormStartDate] = useState(new Date().toISOString().split('T')[0])
+  const [formStartDate, setFormStartDate] = useState(new Date().toLocaleDateString('sv-SE'))
+
+  // Pastikan tanggal mulai selalu update ke "hari ini" saat modal dibuka
+  useEffect(() => {
+    if (addOpen) {
+      setFormStartDate(new Date().toLocaleDateString('sv-SE'))
+    }
+  }, [addOpen])
   const [formNotes, setFormNotes] = useState('')
   const [approvingId, setApprovingId] = useState<string | null>(null)
 

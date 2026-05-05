@@ -20,7 +20,7 @@ function getWeekDates(offset: number) {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return d.toISOString().split('T')[0]
+    return d.toLocaleDateString('sv-SE')
   })
 }
 
@@ -117,7 +117,7 @@ export default function SchedulePage() {
     return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`
   })()
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = new Date().toLocaleDateString('sv-SE')
 
   // Hitung total sesi minggu ini
   const weekSessionCount = (sessions || []).length

@@ -54,7 +54,19 @@ export default function FinancePage() {
   const [customMonth, setCustomMonth] = useState('12')
 
   // Date filter (default: today)
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('sv-SE'))
+  const [isToday, setIsToday] = useState(true)
+
+  // Auto-switch date if it changes overnight
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const nowStr = new Date().toLocaleDateString('sv-SE')
+      if (isToday && selectedDate !== nowStr) {
+        setSelectedDate(nowStr)
+      }
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [isToday, selectedDate])
 
   // Edit Form (Payment)
   const [editOpen, setEditOpen] = useState(false)
@@ -220,7 +232,7 @@ export default function FinancePage() {
       setIncOpen(false)
       setIncAmount('')
       setIncDesc('')
-      setIncDate(new Date().toISOString().split('T')[0])
+      setIncDate(new Date().toLocaleDateString('sv-SE'))
     } catch {
       toast.error('Gagal mencatat pemasukan tambahan')
     }
@@ -309,7 +321,11 @@ export default function FinancePage() {
           <input
             type="date"
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value
+              setSelectedDate(val)
+              setIsToday(val === new Date().toLocaleDateString('sv-SE'))
+            }}
             className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-1.5 text-sm text-white [color-scheme:dark]"
           />
         </div>

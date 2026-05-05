@@ -64,7 +64,7 @@ export default function OverviewPage() {
   const { data: checkInCount, isLoading: loadingCheckIn } = useQuery({
     queryKey: ['overview', 'checkin-today'],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0]
+      const today = new Date().toLocaleDateString('sv-SE')
       const { count, error } = await supabase
         .from('attendance_logs')
         .select('*', { count: 'exact', head: true })
@@ -114,7 +114,7 @@ export default function OverviewPage() {
           {greeting}, {adminName}👋
 
         </h1>
-        <p className="text-xs text-[#888]">{formatTanggal(new Date().toISOString())}</p>
+        <p className="text-xs text-[#888]">{new Intl.DateTimeFormat('id-ID', { dateStyle: 'full' }).format(new Date())}</p>
       </div>
 
       {/* 4 Metric Cards â€” 2 kolom di mobile, 4 di desktop */}

@@ -31,10 +31,10 @@ export function usePtSessionsByWeek(startDate: string, endDate: string) {
         .from('pt_sessions')
         .select(`
           *,
-          members!inner(full_name, phone),
-          subscriptions!inner(
+          members(full_name, phone),
+          subscriptions(
             remaining_sessions,
-            memberships!inner(name, total_sessions)
+            memberships(name, total_sessions)
           )
         `)
         .eq('gym_id', GYM_ID)

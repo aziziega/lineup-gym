@@ -3,9 +3,20 @@
 import { usePtSessionsByWeek } from '@/hooks/usePtSessions'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Clock, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 export default function TodayPTSchedule() {
-  const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local timezone
+  const [today, setToday] = useState(() => new Date().toLocaleDateString('sv-SE'))
+
+  // Auto-refresh date if page left open
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date().toLocaleDateString('sv-SE')
+      if (now !== today) setToday(now)
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [today])
+
   const { data, isLoading } = usePtSessionsByWeek(today, today)
 
   if (isLoading) {
