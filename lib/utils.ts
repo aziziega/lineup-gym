@@ -30,7 +30,7 @@ export const generateWALink = (phone: string, name: string, endDate: string | nu
   }
 
   const pesan = encodeURIComponent(
-    `Halo Kak ${name},\n\n${statusMsg}\n\nInfo perpanjangan hubungi kami:\nTelp: 0856-4761-8646\nLokasi: *Banjarsari, Kb. Dalem Kidul Kec. Prambanan, Klaten, Jawa Tengah, Indonesia 57454*\n\n*LINEUP GYM PRAMBANAN* - Be Strong Be Healthy!`
+    `Halo Kak ${name},\n\n${statusMsg}\n\nInfo perpanjangan hubungi kami:\nTelp: 0857-0767-8485\nLokasi: *Banjarsari, Kb. Dalem Kidul Kec. Prambanan, Klaten, Jawa Tengah, Indonesia 57454*\n\n*LINEUP GYM PRAMBANAN* - Be Strong Be Healthy!`
   )
   const cleanPhone = phone.replace(/[^0-9]/g, '').replace(/^0/, '62')
   return `https://wa.me/${cleanPhone}?text=${pesan}`

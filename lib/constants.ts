@@ -2,7 +2,7 @@ export const GYM_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'; // Default Line Up
 
 export const GYM_INFO = {
   NAME: process.env.NEXT_PUBLIC_GYM_NAME || 'Line Up Gym',
-  PHONE: process.env.NEXT_PUBLIC_GYM_PHONE || '0856-4761-8646',
+  PHONE: process.env.NEXT_PUBLIC_GYM_PHONE || '0857-0767-8485',
   ADDRESS: process.env.NEXT_PUBLIC_GYM_ADDRESS || 'Banjarsari, Kb. Dalem Kidul, Kec. Prambanan, Klaten, Jawa Tengah 57454',
   INSTAGRAM: process.env.NEXT_PUBLIC_GYM_INSTAGRAM || 'lineup.gym',
   CLOSE_TIME: process.env.NEXT_PUBLIC_GYM_CLOSE_TIME || '21:00',

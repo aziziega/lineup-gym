@@ -27,7 +27,7 @@ export default function CtaFinal() {
         <motion.a
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          href="https://wa.me/6285647618646?text=Halo,%20saya%20tertarik%20untuk%20mendaftar%20di%20Line%20Up%20Gym!"
+          href="https://wa.me/6285707678485?text=Halo,%20saya%20tertarik%20untuk%20mendaftar%20di%20Line%20Up%20Gym!"
           target="_blank"
           className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#FF2A2A] px-10 py-4 text-lg font-bold text-white shadow-[0_0_30px_-5px_rgba(255,42,42,0.4)] transition-colors hover:bg-[#CC2222]"
         >

@@ -125,7 +125,7 @@ export default function ExpiryPage() {
       console.log(`Pesan: Halo kak ${m.full_name}, paket membership Gym Lineup kakak ${m.days_remaining! <= 0 ? 'telah berakhir' : 'akan segera berakhir dalam ' + m.days_remaining + ' hari'}. Yuk perpanjang untuk lanjut nge-gym!`)
     })
     console.log('====================================')
-    toast.success(`Berhasil mengirim reminder ke ${targetMembers.length} member (Simulasi Fonnte)`)
+    toast.success(`Simulasi berhasil! ${targetMembers.length} pesan terkirim secara otomatis via API.`)
   }
 
   return (
@@ -177,9 +177,29 @@ export default function ExpiryPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <Button size="sm" variant="outline" onClick={handleFonnteSimulation} className="border-[#2A2A2A] text-xs text-[#128C7E] hover:bg-[#128C7E]/10 hover:text-[#128C7E]">
-          <Send className="mr-1 h-3.5 w-3.5" /> Fonnte Simulasi (≤ 3 hari)
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger render={<Button size="sm" variant="outline" className="border-[#2A2A2A] text-xs text-[#128C7E] hover:bg-[#128C7E]/10 hover:text-[#128C7E]" />}>
+            <Send className="mr-1 h-3.5 w-3.5" /> Auto-Blast Reminder (Simulasi)
+          </AlertDialogTrigger>
+          <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Kirim Pengingat Otomatis?</AlertDialogTitle>
+              <AlertDialogDescription className="text-[#888]">
+                Fitur ini akan mengirimkan pesan WhatsApp secara otomatis ke semua member yang akan expired (tanpa perlu klik satu per satu).
+                <br /><br />
+                <span className="text-[#D4FF00] font-semibold">Note:</span> Ini adalah simulasi fitur premium (V2). Untuk aktivasi fitur Automated WhatsApp API Gateway ini, silakan hubungi developer:
+                <br />
+                <span className="text-white font-bold text-lg">0821-5360-8914 (Azizi)</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
+              <AlertDialogAction onClick={handleFonnteSimulation} className="bg-[#128C7E] text-white hover:bg-[#0d6b5d]">
+                Mulai Simulasi
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Expiry cards */}
