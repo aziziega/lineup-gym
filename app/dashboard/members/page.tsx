@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { useMembersWithSubscription, useCreateMember, useDeleteMember, useUpdateMember } from '@/hooks/useMembers'
@@ -37,7 +38,7 @@ import { toast } from 'sonner'
 import { GYM_ID } from '@/lib/constants'
 import type { ActiveSubscriptionView, Membership } from '@/lib/types'
 
-export default function MembersPage() {
+function MembersContent() {
   const { data: members, isLoading } = useMembersWithSubscription()
   const { data: memberships } = useActiveMemberships()
   const createMember = useCreateMember()
@@ -68,7 +69,9 @@ export default function MembersPage() {
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const searchParams = useSearchParams()
+  const typeFilter = searchParams.get('type') || 'all'
+
   const [page, setPage] = useState(1)
   const PER_PAGE = 10
 
@@ -536,29 +539,27 @@ export default function MembersPage() {
           />
         </div>
         <div className="flex gap-2">
-          <NativeSelect
-            value={typeFilter}
-            onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-            options={[
-              { value: 'all', label: 'Semua Tipe' },
-              { value: 'regular', label: 'Member Reguler' },
-              { value: 'pt', label: 'Member PT' },
-              { value: 'visitor', label: 'Pengunjung Harian' },
-            ]}
-            triggerClassName="w-36 text-xs"
-          />
-          <NativeSelect
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            options={[
-              { value: 'all', label: 'Semua' },
-              { value: 'active', label: 'Aktif' },
-              { value: 'expiring_soon', label: 'Segera' },
-              { value: 'critical', label: 'Kritis' },
-              { value: 'expired', label: 'Expired' },
-            ]}
-            triggerClassName="w-28 text-xs"
-          />
+        <div className="flex w-full items-center gap-1 overflow-x-auto pb-1 sm:w-auto sm:pb-0 scrollbar-hide">
+          {[
+            { value: 'all', label: 'Semua' },
+            { value: 'active', label: 'Aktif' },
+            { value: 'expiring_soon', label: 'Segera' },
+            { value: 'critical', label: 'Kritis' },
+            { value: 'expired', label: 'Expired' },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { setStatusFilter(opt.value); setPage(1); }}
+              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border ${
+                statusFilter === opt.value
+                  ? 'bg-[#FF2A2A] text-white border-[#FF2A2A]'
+                  : 'bg-[#1A1A1A] text-[#888] hover:bg-[#2A2A2A] hover:text-white border-[#2A2A2A]'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
 
           <Button size="sm" variant="outline" onClick={exportExcel} className="border-[#2A2A2A] text-xs text-[#888]">
             <Download className="mr-1 h-3.5 w-3.5" /> Excel
@@ -1103,5 +1104,13 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function MembersPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-[#888]">Memuat data member...</div>}>
+      <MembersContent />
+    </Suspense>
   )
 }

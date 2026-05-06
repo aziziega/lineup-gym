@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import {
@@ -25,15 +26,89 @@ import { GYM_ID } from '@/lib/constants'
 const navItems = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Check-In', href: '/dashboard/checkin', icon: UserCheck },
-  { label: 'Member', href: '/dashboard/members', icon: Users },
+  { 
+    label: 'Member', 
+    href: '/dashboard/members', 
+    icon: Users,
+    subItems: [
+      { label: 'Semua Tipe', href: '/dashboard/members?type=all' },
+      { label: 'Member Reguler', href: '/dashboard/members?type=regular' },
+      { label: 'Member PT', href: '/dashboard/members?type=pt' },
+      { label: 'Pengunjung Harian', href: '/dashboard/members?type=visitor' },
+    ]
+  },
   { label: 'Paket', href: '/dashboard/packages', icon: Package },
   { label: 'Jadwal PT', href: '/dashboard/schedule', icon: CalendarDays },
   { label: 'Keuangan', href: '/dashboard/finance', icon: Wallet },
   { label: 'Expiry', href: '/dashboard/expiry', icon: Bell },
 ]
 
-export default function Sidebar({ onClose }: { onClose?: () => void }) {
+function SidebarNav({ onClose, criticalCount }: { onClose?: () => void, criticalCount?: number | null }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const isActive = (href: string) => {
+    const basePath = href.split('?')[0]
+    if (basePath === '/dashboard') return pathname === '/dashboard'
+    return pathname.startsWith(basePath)
+  }
+
+  return (
+    <nav className="mt-4 flex-1 space-y-1.5 px-3">
+      {navItems.map((item) => {
+        const active = isActive(item.href)
+        return (
+          <div key={item.label} className="space-y-1">
+            <Link
+              href={item.href}
+              className={cn(
+                'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                active
+                  ? 'border-l-[3px] border-[#FF2A2A] bg-[#FF2A2A]/10 text-[#FF2A2A]'
+                  : 'border-l-[3px] border-transparent text-[#888] hover:bg-[#1A1A1A] hover:text-white'
+              )}
+            >
+              <item.icon className={cn('h-[18px] w-[18px]', active && 'text-[#FF2A2A]')} />
+              <span>{item.label}</span>
+              {/* Badge merah untuk Expiry */}
+              {item.href.startsWith('/dashboard/expiry') && criticalCount && criticalCount > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                  {criticalCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Sub Items (Only shown if parent is active) */}
+            {item.subItems && active && (
+              <div className="ml-9 mt-1 flex flex-col gap-1 border-l border-[#2A2A2A] pl-4">
+                {item.subItems.map((sub) => {
+                  const currentType = searchParams.get('type') || 'all'
+                  const subType = sub.href.split('type=')[1] || 'all'
+                  const isSubActive = currentType === subType
+
+                  return (
+                    <Link
+                      key={sub.label}
+                      href={sub.href}
+                      className={cn(
+                        'block py-1.5 text-[11px] font-medium transition-colors',
+                        isSubActive ? 'text-[#D4FF00]' : 'text-[#888] hover:text-white'
+                      )}
+                    >
+                      {sub.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </nav>
+  )
+}
+
+export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -54,11 +129,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
-  }
-
-  const isActive = (href: string) => {
-    if (href === '/dashboard') return pathname === '/dashboard'
-    return pathname.startsWith(href)
   }
 
   return (
@@ -87,32 +157,9 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <nav className="mt-4 flex-1 space-y-0.5 px-3">
-        {navItems.map((item) => {
-          const active = isActive(item.href)
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                active
-                  ? 'border-l-[3px] border-[#FF2A2A] bg-[#FF2A2A]/10 text-[#FF2A2A]'
-                  : 'border-l-[3px] border-transparent text-[#888] hover:bg-[#1A1A1A] hover:text-white'
-              )}
-            >
-              <item.icon className={cn('h-[18px] w-[18px]', active && 'text-[#FF2A2A]')} />
-              <span>{item.label}</span>
-              {/* Badge merah untuk Expiry */}
-              {item.href === '/dashboard/expiry' && criticalCount && criticalCount > 0 && (
-                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                  {criticalCount}
-                </span>
-              )}
-            </Link>
-          )
-        })}
-      </nav>
+      <Suspense fallback={<div className="mt-4 flex-1 px-3" />}>
+        <SidebarNav onClose={onClose} criticalCount={criticalCount} />
+      </Suspense>
 
       {/* Footer */}
       <div className="border-t border-[#2A2A2A] px-4 py-4">
@@ -145,7 +192,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         </button>
 
         <p className="mt-3 text-center text-[10px] text-[#333]">
-          Â© {new Date().getFullYear()} {GYM_INFO.NAME}
+          © {new Date().getFullYear()} {GYM_INFO.NAME}
         </p>
       </div>
     </div>
