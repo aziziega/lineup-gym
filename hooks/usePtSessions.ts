@@ -144,6 +144,8 @@ export function useCompletePtSession() {
       queryClient.invalidateQueries({ queryKey: ['pt-sessions'] })
       queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
       queryClient.invalidateQueries({ queryKey: ['pt-active-members'] })
+      queryClient.invalidateQueries({ queryKey: ['expiry'] })
+      queryClient.invalidateQueries({ queryKey: ['expiry-stats'] })
     },
   })
 }

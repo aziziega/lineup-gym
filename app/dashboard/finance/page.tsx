@@ -292,8 +292,8 @@ export default function FinancePage() {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
     return (
-      <div className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-xs">
-        <p className="mb-1 text-[#888]">{label}</p>
+      <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs">
+        <p className="mb-1 text-muted-foreground">{label}</p>
         {payload.map((entry: any, i: number) => (
           <p key={i} style={{ color: entry.color }} className="font-heading text-sm">
             {entry.name === 'pemasukan' ? 'Pemasukan' : 'Pengeluaran'}: {formatRupiah(entry.value)}
@@ -315,9 +315,9 @@ export default function FinancePage() {
     <div className="space-y-5">
       {/* Date Header + Date Picker */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="font-heading text-lg text-white">Laporan Keuangan</h2>
+        <h2 className="font-heading text-lg text-foreground">Laporan Keuangan</h2>
         <div className="flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-[#888]" />
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
           <input
             type="date"
             value={selectedDate}
@@ -326,11 +326,11 @@ export default function FinancePage() {
               setSelectedDate(val)
               setIsToday(val === new Date().toLocaleDateString('sv-SE'))
             }}
-            className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-1.5 text-sm text-white [color-scheme:dark]"
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground [color-scheme:dark]"
           />
         </div>
       </div>
-      <p className="-mt-3 text-xs text-[#888]">{selectedDateFormatted}</p>
+      <p className="-mt-3 text-xs text-muted-foreground">{selectedDateFormatted}</p>
 
       {/* Metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -341,16 +341,16 @@ export default function FinancePage() {
       </div>
 
       {/* Chart */}
-      <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
+      <div className="rounded-xl border border-border/50 bg-card p-4">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-white">Revenue Lineup GYM</h3>
-            <div className="ml-2 flex gap-1 rounded-lg bg-[#111] p-0.5">
+            <h3 className="text-sm font-semibold text-foreground">Revenue Lineup GYM</h3>
+            <div className="ml-2 flex gap-1 rounded-lg bg-background p-0.5">
             </div>
           </div>
-          <div className="flex gap-1 rounded-lg bg-[#111] p-0.5 self-start sm:self-auto">
-            <button onClick={() => setChartType('bar')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-[#FF2A2A] text-black' : 'text-[#888] hover:text-white'}`}>Bar</button>
-            <button onClick={() => setChartType('line')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-[#FF2A2A] text-black' : 'text-[#888] hover:text-white'}`}>Line</button>
+          <div className="flex gap-1 rounded-lg bg-background p-0.5 self-start sm:self-auto">
+            <button onClick={() => setChartType('bar')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-primary text-black' : 'text-muted-foreground hover:text-foreground'}`}>Bar</button>
+            <button onClick={() => setChartType('line')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-primary text-black' : 'text-muted-foreground hover:text-foreground'}`}>Line</button>
           </div>
         </div>
         {chartData.length > 0 ? (
@@ -379,43 +379,43 @@ export default function FinancePage() {
           </div>
         ) : (
           <div className="flex h-48 items-center justify-center">
-            <p className="text-sm text-[#555]">Belum ada data revenue</p>
+            <p className="text-sm text-muted-foreground/60">Belum ada data revenue</p>
           </div>
         )}
       </div>
 
       {/* Custom Month Dialog */}
       <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
-        <DialogContent className="sm:max-w-md border-[#2A2A2A] bg-[#1A1A1A] text-white">
+        <DialogContent className="sm:max-w-md border-border bg-card text-foreground">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">Kustomisasi Rentang Waktu</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); const val = parseInt(customMonth, 10); if (!isNaN(val) && val > 0) { setCustomModalOpen(false); } }} className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label className="text-sm text-[#888]">Jumlah Bulan</Label>
-              <Input type="number" min="1" max="120" value={customMonth} onChange={(e) => setCustomMonth(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" autoFocus />
-              <p className="text-[11px] text-[#555]">Masukkan berapa bulan ke belakang yang ingin ditampilkan.</p>
+              <Label className="text-sm text-muted-foreground">Jumlah Bulan</Label>
+              <Input type="number" min="1" max="120" value={customMonth} onChange={(e) => setCustomMonth(e.target.value)} className="border-border bg-background text-foreground" autoFocus />
+              <p className="text-[11px] text-muted-foreground/60">Masukkan berapa bulan ke belakang yang ingin ditampilkan.</p>
             </div>
-            <DialogFooter className="border-t border-[#2A2A2A] bg-transparent pt-4 sm:justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setCustomModalOpen(false)} className="border-[#2A2A2A] text-white hover:bg-[#2A2A2A]">Batal</Button>
-              <Button type="submit" className="bg-[#FF2A2A] text-black hover:bg-[#FF2A2A]/90">Terapkan</Button>
+            <DialogFooter className="border-t border-border bg-transparent pt-4 sm:justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCustomModalOpen(false)} className="border-border text-foreground hover:bg-[#2A2A2A]">Batal</Button>
+              <Button type="submit" className="bg-primary text-black hover:bg-primary/90">Terapkan</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* Tabs Custom */}
-      <div className="flex gap-2 rounded-xl bg-[#1A1A1A] p-1 border border-[#2A2A2A]">
+      <div className="flex gap-2 rounded-xl bg-card p-1 border border-border">
         <button
           onClick={() => setActiveTab('income')}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${activeTab === 'income' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${activeTab === 'income' ? 'bg-[#D4FF00] text-black' : 'text-muted-foreground hover:text-foreground'
             }`}
         >
           Pemasukan
         </button>
         <button
           onClick={() => setActiveTab('expenses')}
-          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${activeTab === 'expenses' ? 'bg-[#FF2A2A] text-black' : 'text-[#888] hover:text-white'
+          className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${activeTab === 'expenses' ? 'bg-primary text-black' : 'text-muted-foreground hover:text-foreground'
             }`}
         >
           Pengeluaran
@@ -425,15 +425,15 @@ export default function FinancePage() {
       {activeTab === 'income' && (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="text-sm font-semibold text-white">Pemasukan <span className="text-[10px] font-normal text-[#555]">(otomatis dari pendaftaran member)</span></h3>
+            <h3 className="text-sm font-semibold text-foreground">Pemasukan <span className="text-[10px] font-normal text-muted-foreground/60">(otomatis dari pendaftaran member)</span></h3>
             <div className="flex gap-2">
               <div className="relative flex-1 sm:w-48 sm:flex-none">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
                 <Input
                   placeholder="Cari nama..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="border-[#2A2A2A] bg-[#1A1A1A] pl-9 text-sm text-white placeholder:text-[#555]"
+                  className="border-border bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground/60"
                 />
               </div>
               <NativeSelect
@@ -447,7 +447,7 @@ export default function FinancePage() {
                 ]}
                 triggerClassName="w-28 text-xs"
               />
-              <Button size="sm" variant="outline" onClick={() => setExportOpen(true)} className="border-[#2A2A2A] text-xs text-[#888]">
+              <Button size="sm" variant="outline" onClick={() => setExportOpen(true)} className="border-border text-xs text-muted-foreground">
                 <Download className="mr-1 h-3.5 w-3.5" /> Export Excel
               </Button>
 
@@ -455,21 +455,21 @@ export default function FinancePage() {
                 <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]" />}>
                   <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pemasukan
                 </DialogTrigger>
-                <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+                <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle className="font-heading text-xl">Catat Pemasukan Tambahan</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-3 pt-4">
                     <div>
-                      <Label className="text-xs text-[#888]">Keterangan (Contoh: Jualan Air)</Label>
-                      <Input value={incDesc} onChange={(e) => setIncDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                      <Label className="text-xs text-muted-foreground">Keterangan (Contoh: Jualan Air)</Label>
+                      <Input value={incDesc} onChange={(e) => setIncDesc(e.target.value)} className="border-border bg-background text-foreground" />
                     </div>
                     <div>
-                      <Label className="text-xs text-[#888]">Nominal Pemasukan (Rp)</Label>
-                      <Input type="number" value={incAmount} onChange={(e) => setIncAmount(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                      <Label className="text-xs text-muted-foreground">Nominal Pemasukan (Rp)</Label>
+                      <Input type="number" value={incAmount} onChange={(e) => setIncAmount(e.target.value)} className="border-border bg-background text-foreground" />
                     </div>
                     <div>
-                      <Label className="text-xs text-[#888]">Metode Bayar</Label>
+                      <Label className="text-xs text-muted-foreground">Metode Bayar</Label>
                       <NativeSelect
                         value={incMethod}
                         onChange={(e) => setIncMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
@@ -481,8 +481,8 @@ export default function FinancePage() {
                       />
                     </div>
                     <div>
-                      <Label className="text-xs text-[#888]">Tanggal</Label>
-                      <Input type="date" value={incDate} onChange={(e) => setIncDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                      <Label className="text-xs text-muted-foreground">Tanggal</Label>
+                      <Input type="date" value={incDate} onChange={(e) => setIncDate(e.target.value)} className="border-border bg-background text-foreground" />
                     </div>
                     <Button onClick={handleAddIncome} disabled={createPayment.isPending} className="mt-2 w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
                       {createPayment.isPending ? 'Menyimpan...' : 'Simpan Pemasukan'}
@@ -504,34 +504,34 @@ export default function FinancePage() {
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-16 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
+                <div key={i} className="h-16 animate-pulse rounded-xl border border-border bg-card" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-              <p className="text-sm text-[#555]">Tidak ada transaksi pada tanggal ini</p>
+            <div className="rounded-xl border border-border bg-card py-12 text-center">
+              <p className="text-sm text-muted-foreground/60">Tidak ada transaksi pada tanggal ini</p>
             </div>
           ) : (
             <div className="space-y-1.5">
               {filtered.slice(0, 20).map((p: any) => (
-                <div key={p.id} className="flex items-center justify-between rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-2.5">
+                <div key={p.id} className="flex items-center justify-between rounded-xl border border-border/50 bg-card px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">{p.members?.full_name ?? p.notes ?? 'Pemasukan Lainnya'}</p>
-                    <div className="flex items-center gap-2 text-[11px] text-[#888]">
+                    <p className="truncate text-sm font-medium text-foreground">{p.members?.full_name ?? p.notes ?? 'Pemasukan Lainnya'}</p>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       <span>{p.membership_type}</span>
                       <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] uppercase">{p.payment_method}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-4 text-right">
                     <div>
-                      <p className="font-heading text-lg text-[#D4FF00]">{formatRupiah(Number(p.amount))}</p>
-                      <p className="text-[10px] text-[#555]">{formatTanggal(p.paid_at)}</p>
+                      <p className="font-heading text-lg text-accent">{formatRupiah(Number(p.amount))}</p>
+                      <p className="text-[10px] text-muted-foreground/60">{formatTanggal(p.paid_at)}</p>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => { setEditData(p); setEditOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
+                      <Button variant="ghost" size="icon" onClick={() => { setEditData(p); setEditOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground">
                         <Edit2 className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setDeleteId(p.id); setDeleteOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-red-400">
+                      <Button variant="ghost" size="icon" onClick={() => { setDeleteId(p.id); setDeleteOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-red-400">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -549,16 +549,16 @@ export default function FinancePage() {
           <div className="space-y-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-white">Pengeluaran</h3>
+                <h3 className="text-sm font-semibold text-foreground">Pengeluaran</h3>
               </div>
               <div className="flex gap-2">
                 <div className="relative flex-1 sm:w-48 sm:flex-none">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
                   <Input
                     placeholder="Cari keterangan..."
                     value={searchExp}
                     onChange={(e) => setSearchExp(e.target.value)}
-                    className="border-[#2A2A2A] bg-[#1A1A1A] pl-9 text-sm text-white placeholder:text-[#555]"
+                    className="border-border bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground/60"
                   />
                 </div>
                 <NativeSelect
@@ -575,16 +575,16 @@ export default function FinancePage() {
                   triggerClassName="w-32 text-xs"
                 />
                 <Dialog open={expOpen} onOpenChange={setExpOpen}>
-                  <DialogTrigger render={<Button size="sm" className="bg-[#FF2A2A] text-xs font-bold text-black hover:bg-[#E60000]" />}>
+                  <DialogTrigger render={<Button size="sm" className="bg-primary text-xs font-bold text-black hover:bg-[#E60000]" />}>
                     <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pengeluaran
                   </DialogTrigger>
-                  <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+                  <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle className="font-heading text-xl">Catat Pengeluaran</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-3">
                       <div>
-                        <Label className="text-xs text-[#888]">Kategori</Label>
+                        <Label className="text-xs text-muted-foreground">Kategori</Label>
                         <NativeSelect
                           value={expCategory}
                           onChange={(e) => setExpCategory(e.target.value)}
@@ -598,18 +598,18 @@ export default function FinancePage() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs text-[#888]">Nominal (Rp)</Label>
-                        <Input type="number" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                        <Label className="text-xs text-muted-foreground">Nominal (Rp)</Label>
+                        <Input type="number" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="border-border bg-background text-foreground" />
                       </div>
                       <div>
-                        <Label className="text-xs text-[#888]">Keterangan</Label>
-                        <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                        <Label className="text-xs text-muted-foreground">Keterangan</Label>
+                        <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-border bg-background text-foreground" />
                       </div>
                       <div>
-                        <Label className="text-xs text-[#888]">Tanggal Pengeluaran</Label>
-                        <Input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                        <Label className="text-xs text-muted-foreground">Tanggal Pengeluaran</Label>
+                        <Input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} className="border-border bg-background text-foreground" />
                       </div>
-                      <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
+                      <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-primary font-bold text-black hover:bg-[#E60000]">
                         {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}
                       </Button>
                     </div>
@@ -621,31 +621,31 @@ export default function FinancePage() {
             {expLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-16 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
+                  <div key={i} className="h-16 animate-pulse rounded-xl border border-border bg-card" />
                 ))}
               </div>
             ) : filteredExpenses.length === 0 ? (
-              <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-                <p className="text-sm text-[#555]">Tidak ada pengeluaran pada tanggal ini</p>
+              <div className="rounded-xl border border-border bg-card py-12 text-center">
+                <p className="text-sm text-muted-foreground/60">Tidak ada pengeluaran pada tanggal ini</p>
               </div>
             ) : (
               <div className="space-y-1.5">
                 {filteredExpenses.map((e: any) => (
-                  <div key={e.id} className="flex items-center justify-between rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-2.5">
+                  <div key={e.id} className="flex items-center justify-between rounded-xl border border-border/50 bg-card px-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-white">{categoryLabels[e.category] || e.category}</p>
-                      <p className="text-[11px] text-[#888]">{e.description || '-'}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{categoryLabels[e.category] || e.category}</p>
+                      <p className="text-[11px] text-muted-foreground">{e.description || '-'}</p>
                     </div>
                     <div className="flex items-center gap-4 text-right">
                       <div>
                         <p className="font-heading text-lg text-red-400">{formatRupiah(Number(e.amount))}</p>
-                        <p className="text-[10px] text-[#555]">{formatTanggal(e.expense_date)}</p>
+                        <p className="text-[10px] text-muted-foreground/60">{formatTanggal(e.expense_date)}</p>
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setEditExpData(e); setEditExpOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-white">
+                        <Button variant="ghost" size="icon" onClick={() => { setEditExpData(e); setEditExpOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground">
                           <Edit2 className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => { setDeleteExpId(e.id); setDeleteExpOpen(true); }} className="h-7 w-7 text-[#888] hover:bg-[#2A2A2A] hover:text-red-400">
+                        <Button variant="ghost" size="icon" onClick={() => { setDeleteExpId(e.id); setDeleteExpOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-red-400">
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -660,22 +660,22 @@ export default function FinancePage() {
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+        <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">Edit Pembayaran</DialogTitle>
           </DialogHeader>
           {editData && (
             <div className="space-y-3 pt-4">
               <div>
-                <Label className="text-xs text-[#888]">Nama Member</Label>
-                <Input value={editData.members?.full_name || ''} disabled className="border-[#2A2A2A] bg-[#111] text-white opacity-50" />
+                <Label className="text-xs text-muted-foreground">Nama Member</Label>
+                <Input value={editData.members?.full_name || ''} disabled className="border-border bg-background text-foreground opacity-50" />
               </div>
               <div>
-                <Label className="text-xs text-[#888]">Nominal Pembayaran</Label>
-                <Input type="number" value={editData.amount} onChange={(e) => setEditData({ ...editData, amount: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
+                <Label className="text-xs text-muted-foreground">Nominal Pembayaran</Label>
+                <Input type="number" value={editData.amount} onChange={(e) => setEditData({ ...editData, amount: e.target.value })} className="border-border bg-background text-foreground" />
               </div>
               <div>
-                <Label className="text-xs text-[#888]">Metode Bayar</Label>
+                <Label className="text-xs text-muted-foreground">Metode Bayar</Label>
                 <NativeSelect
                   value={editData.payment_method}
                   onChange={(e) => setEditData({ ...editData, payment_method: e.target.value })}
@@ -687,12 +687,12 @@ export default function FinancePage() {
                 />
               </div>
               <div>
-                <Label className="text-xs text-[#888]">Catatan</Label>
-                <Input value={editData.notes || ''} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
+                <Label className="text-xs text-muted-foreground">Catatan</Label>
+                <Input value={editData.notes || ''} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} className="border-border bg-background text-foreground" />
               </div>
               <DialogFooter className="mt-4">
-                <Button variant="outline" onClick={() => setEditOpen(false)} className="border-[#2A2A2A] text-[#888]">Batal</Button>
-                <Button onClick={handleEditSave} disabled={updatePayment.isPending} className="bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
+                <Button variant="outline" onClick={() => setEditOpen(false)} className="border-border text-muted-foreground">Batal</Button>
+                <Button onClick={handleEditSave} disabled={updatePayment.isPending} className="bg-primary font-bold text-black hover:bg-[#E60000]">
                   {updatePayment.isPending ? 'Menyimpan...' : 'Simpan Edit'}
                 </Button>
               </DialogFooter>
@@ -703,16 +703,16 @@ export default function FinancePage() {
 
       {/* Delete Payment Dialog */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
+        <AlertDialogContent className="border-border bg-card text-foreground">
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus Data Pembayaran?</AlertDialogTitle>
-            <AlertDialogDescription className="text-[#888]">
+            <AlertDialogDescription className="text-muted-foreground">
               Perhatian: Menghapus data pembayaran akan mengurangi total pendapatan pelaporan keuangan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletePayment.isPending} onClick={() => setDeleteOpen(false)} className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
-            <AlertDialogAction disabled={deletePayment.isPending} onClick={handleDeleteConfirm} className="bg-red-500 text-white hover:bg-red-600">
+            <AlertDialogCancel disabled={deletePayment.isPending} onClick={() => setDeleteOpen(false)} className="border-border text-muted-foreground">Batal</AlertDialogCancel>
+            <AlertDialogAction disabled={deletePayment.isPending} onClick={handleDeleteConfirm} className="bg-red-500 text-foreground hover:bg-red-600">
               {deletePayment.isPending ? 'Menghapus...' : 'Ya, Hapus'}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -721,16 +721,16 @@ export default function FinancePage() {
 
       {/* Delete Expense Dialog */}
       <AlertDialog open={deleteExpOpen} onOpenChange={setDeleteExpOpen}>
-        <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
+        <AlertDialogContent className="border-border bg-card text-foreground">
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus Pengeluaran?</AlertDialogTitle>
-            <AlertDialogDescription className="text-[#888]">
+            <AlertDialogDescription className="text-muted-foreground">
               Data pengeluaran ini akan dihapus dari sistem.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteExpense.isPending} onClick={() => setDeleteExpOpen(false)} className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
-            <AlertDialogAction disabled={deleteExpense.isPending} onClick={handleDeleteExpenseConfirm} className="bg-red-500 text-white hover:bg-red-600">
+            <AlertDialogCancel disabled={deleteExpense.isPending} onClick={() => setDeleteExpOpen(false)} className="border-border text-muted-foreground">Batal</AlertDialogCancel>
+            <AlertDialogAction disabled={deleteExpense.isPending} onClick={handleDeleteExpenseConfirm} className="bg-red-500 text-foreground hover:bg-red-600">
               {deleteExpense.isPending ? 'Menghapus...' : 'Ya, Hapus'}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -739,14 +739,14 @@ export default function FinancePage() {
 
       {/* Edit Dialog Expense */}
       <Dialog open={editExpOpen} onOpenChange={setEditExpOpen}>
-        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+        <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">Edit Pengeluaran</DialogTitle>
           </DialogHeader>
           {editExpData && (
             <div className="space-y-3 pt-4">
               <div>
-                <Label className="text-xs text-[#888]">Kategori</Label>
+                <Label className="text-xs text-muted-foreground">Kategori</Label>
                 <NativeSelect
                   value={editExpData.category}
                   onChange={(e) => setEditExpData({ ...editExpData, category: e.target.value })}
@@ -760,20 +760,20 @@ export default function FinancePage() {
                 />
               </div>
               <div>
-                <Label className="text-xs text-[#888]">Nominal Pengeluaran</Label>
-                <Input type="number" value={editExpData.amount} onChange={(e) => setEditExpData({ ...editExpData, amount: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
+                <Label className="text-xs text-muted-foreground">Nominal Pengeluaran</Label>
+                <Input type="number" value={editExpData.amount} onChange={(e) => setEditExpData({ ...editExpData, amount: e.target.value })} className="border-border bg-background text-foreground" />
               </div>
               <div>
-                <Label className="text-xs text-[#888]">Keterangan</Label>
-                <Input value={editExpData.description || ''} onChange={(e) => setEditExpData({ ...editExpData, description: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
+                <Label className="text-xs text-muted-foreground">Keterangan</Label>
+                <Input value={editExpData.description || ''} onChange={(e) => setEditExpData({ ...editExpData, description: e.target.value })} className="border-border bg-background text-foreground" />
               </div>
               <div>
-                <Label className="text-xs text-[#888]">Tanggal Pengeluaran</Label>
-                <Input type="date" value={editExpData.expense_date ? editExpData.expense_date.split('T')[0] : ''} onChange={(e) => setEditExpData({ ...editExpData, expense_date: e.target.value })} className="border-[#2A2A2A] bg-[#111] text-white" />
+                <Label className="text-xs text-muted-foreground">Tanggal Pengeluaran</Label>
+                <Input type="date" value={editExpData.expense_date ? editExpData.expense_date.split('T')[0] : ''} onChange={(e) => setEditExpData({ ...editExpData, expense_date: e.target.value })} className="border-border bg-background text-foreground" />
               </div>
               <DialogFooter className="mt-4">
-                <Button variant="outline" onClick={() => setEditExpOpen(false)} className="border-[#2A2A2A] text-[#888] hover:bg-[#2A2A2A] hover:text-white">Batal</Button>
-                <Button onClick={handleEditExpenseSave} disabled={updateExpense.isPending} className="bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
+                <Button variant="outline" onClick={() => setEditExpOpen(false)} className="border-border text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground">Batal</Button>
+                <Button onClick={handleEditExpenseSave} disabled={updateExpense.isPending} className="bg-primary font-bold text-black hover:bg-[#E60000]">
                   {updateExpense.isPending ? 'Menyimpan...' : 'Simpan Edit'}
                 </Button>
               </DialogFooter>

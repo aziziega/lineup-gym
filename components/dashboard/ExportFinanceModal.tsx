@@ -136,32 +136,32 @@ export default function ExportFinanceModal({ isOpen, onOpenChange, payments, exp
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+      <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-xl">Export Laporan Keuangan</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#888] block mb-1">Dari Tanggal</label>
+              <label className="text-xs text-muted-foreground block mb-1">Dari Tanggal</label>
               <input
                 type="date"
                 value={exportStartDate}
                 onChange={(e) => setExportStartDate(e.target.value)}
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white [color-scheme:dark]"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground [color-scheme:dark]"
               />
             </div>
             <div>
-              <label className="text-xs text-[#888] block mb-1">Sampai Tanggal</label>
+              <label className="text-xs text-muted-foreground block mb-1">Sampai Tanggal</label>
               <input
                 type="date"
                 value={exportEndDate}
                 onChange={(e) => setExportEndDate(e.target.value)}
-                className="w-full rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white [color-scheme:dark]"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground [color-scheme:dark]"
               />
             </div>
           </div>
-          <p className="text-[10px] text-[#555]">
+          <p className="text-[10px] text-muted-foreground/60">
             *Laporan akan mencakup seluruh data Pemasukan, Pengeluaran, dan Ringkasan Keuangan dalam rentang waktu yang dipilih.
           </p>
           <Button

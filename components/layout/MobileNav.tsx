@@ -28,7 +28,7 @@ export default function MobileNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#2A2A2A] bg-[#111]/95 backdrop-blur-md lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur-md lg:hidden">
       <div className="flex items-center justify-around px-1 pb-[env(safe-area-inset-bottom)] pt-1">
         {navItems.map((item) => {
           const active = isActive(item.href)
@@ -39,15 +39,15 @@ export default function MobileNav() {
               className={cn(
                 'flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 text-[10px] font-medium transition-colors',
                 active
-                  ? 'text-[#FF2A2A]'
+                  ? 'text-primary'
                   : 'text-[#666] active:text-[#999]'
               )}
             >
-              <item.icon className={cn('h-5 w-5', active && 'text-[#FF2A2A]')} />
+              <item.icon className={cn('h-5 w-5', active && 'text-primary')} />
               <span>{item.label}</span>
               {/* dot indicator aktif */}
               {active && (
-                <div className="h-1 w-1 rounded-full bg-[#FF2A2A]" />
+                <div className="h-1 w-1 rounded-full bg-primary" />
               )}
             </Link>
           )

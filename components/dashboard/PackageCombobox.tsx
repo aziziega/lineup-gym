@@ -87,8 +87,8 @@ export default function PackageCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className={cn(
-          'flex w-full items-center justify-between gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white transition-colors hover:bg-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#FF2A2A]/30',
-          !value && 'text-[#555]',
+          'flex w-full items-center justify-between gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-card focus:outline-none focus:ring-2 focus:ring-[#FF2A2A]/30',
+          !value && 'text-muted-foreground/60',
           className
         )}
         render={<button type="button" />}
@@ -96,30 +96,30 @@ export default function PackageCombobox({
         <span className="truncate">
           {selectedPackage ? selectedPackage.name : placeholder}
         </span>
-        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-[#555]" />
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground/60" />
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-[--anchor-width] overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111] p-0 shadow-xl shadow-black/40"
+        className="w-[--anchor-width] overflow-hidden rounded-xl border border-border bg-background p-0 shadow-xl shadow-black/40"
         sideOffset={4}
         align="start"
       >
         {/* Search input */}
-        <div className="flex items-center gap-2 border-b border-[#2A2A2A] px-3 py-2">
-          <Search className="h-4 w-4 shrink-0 text-[#555]" />
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground/60" />
           <input
             ref={inputRef}
             placeholder="Cari paket..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 bg-transparent text-sm text-white placeholder:text-[#555] outline-none"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch('')}
-              className="text-[#555] hover:text-white transition-colors"
+              className="text-muted-foreground/60 hover:text-foreground transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -134,7 +134,7 @@ export default function PackageCombobox({
         >
           {filtered.length === 0 ? (
             <div className="py-6 text-center">
-              <p className="text-sm text-[#555]">Paket tidak ditemukan</p>
+              <p className="text-sm text-muted-foreground/60">Paket tidak ditemukan</p>
             </div>
           ) : (
             <>
@@ -153,24 +153,24 @@ export default function PackageCombobox({
                     onMouseEnter={() => setHighlightedIndex(index)}
                     className={cn(
                       'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
-                      isHighlighted && 'bg-[#1A1A1A]',
-                      isSelected && 'text-[#FF2A2A]',
-                      !isSelected && 'text-white'
+                      isHighlighted && 'bg-card',
+                      isSelected && 'text-primary',
+                      !isSelected && 'text-foreground'
                     )}
                   >
                     <Check
                       className={cn(
                         'h-4 w-4 shrink-0 transition-opacity',
                         isSelected
-                          ? 'opacity-100 text-[#FF2A2A]'
+                          ? 'opacity-100 text-primary'
                           : 'opacity-0'
                       )}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{p.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <p className="truncate text-[11px] text-[#555]">{formatRupiah(p.price)}</p>
-                        <span className="shrink-0 rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#FF2A2A]">
+                        <p className="truncate text-[11px] text-muted-foreground/60">{formatRupiah(p.price)}</p>
+                        <span className="shrink-0 rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-primary">
                           {p.category === 'pt' ? `${p.total_sessions} Sesi` : `${p.duration_days} Hari`}
                         </span>
                       </div>

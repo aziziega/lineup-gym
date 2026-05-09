@@ -101,7 +101,7 @@ export default function PackagesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-[#888]">Kelola paket membership dari sini. Perubahan langsung mempengaruhi form tambah member.</p>
+        <p className="text-xs text-muted-foreground">Kelola paket membership dari sini. Perubahan langsung mempengaruhi form tambah member.</p>
         <Button size="sm" onClick={openCreate} className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#E60000]">
           <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Paket
         </Button>
@@ -110,40 +110,40 @@ export default function PackagesPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
+            <div key={i} className="h-20 animate-pulse rounded-xl border border-border bg-card" />
           ))}
         </div>
       ) : (!memberships || memberships.length === 0) ? (
-        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-          <p className="text-sm text-[#555]">Belum ada paket membership</p>
+        <div className="rounded-xl border border-border bg-card py-12 text-center">
+          <p className="text-sm text-muted-foreground/60">Belum ada paket membership</p>
         </div>
       ) : (
         <div className="space-y-2">
           {memberships.map((pkg) => (
             <div
               key={pkg.id}
-              className={`rounded-xl border bg-[#1A1A1A] p-4 transition-colors ${
-                pkg.is_active ? 'border-[#2A2A2A]/50' : 'border-[#2A2A2A]/30 opacity-50'
+              className={`rounded-xl border bg-card p-4 transition-colors ${
+                pkg.is_active ? 'border-border/50' : 'border-border/30 opacity-50'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-heading text-xl text-white">{pkg.name}</h3>
+                    <h3 className="font-heading text-xl text-foreground">{pkg.name}</h3>
                     {!pkg.is_active && (
-                      <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#888]">Nonaktif</span>
+                      <span className="rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-muted-foreground">Nonaktif</span>
                     )}
                   </div>
-                  <p className="mt-0.5 font-heading text-2xl text-[#FF2A2A]">{formatRupiah(pkg.price)}</p>
+                  <p className="mt-0.5 font-heading text-2xl text-primary">{formatRupiah(pkg.price)}</p>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${pkg.category === 'pt' ? 'bg-blue-500/20 text-blue-400' : 'bg-[#FF2A2A]/10 text-[#FF2A2A]'}`}>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${pkg.category === 'pt' ? 'bg-blue-500/20 text-blue-400' : 'bg-primary/10 text-primary'}`}>
                       {pkg.category === 'pt' ? 'PT' : 'GYM'}
                     </span>
-                    <span className="text-xs text-[#888]">{pkg.duration_days} hari</span>
-                    {pkg.total_sessions && <span className="text-xs text-[#888]">Â· {pkg.total_sessions} sesi</span>}
+                    <span className="text-xs text-muted-foreground">{pkg.duration_days} hari</span>
+                    {pkg.total_sessions && <span className="text-xs text-muted-foreground">Â· {pkg.total_sessions} sesi</span>}
                   </div>
                   {pkg.description && (
-                    <p className="mt-1 text-xs text-[#555]">{pkg.description}</p>
+                    <p className="mt-1 text-xs text-muted-foreground/60">{pkg.description}</p>
                   )}
                 </div>
                 <div className="flex gap-1">
@@ -151,7 +151,7 @@ export default function PackagesPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() => openEdit(pkg)}
-                    className="h-8 w-8 p-0 text-[#888] hover:text-white"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
@@ -159,7 +159,7 @@ export default function PackagesPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() => handleToggle(pkg.id, pkg.is_active, pkg.name)}
-                    className={`h-8 w-8 p-0 ${pkg.is_active ? 'text-[#FF2A2A]' : 'text-[#555]'}`}
+                    className={`h-8 w-8 p-0 ${pkg.is_active ? 'text-primary' : 'text-muted-foreground/60'}`}
                   >
                     {pkg.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
                   </Button>
@@ -172,7 +172,7 @@ export default function PackagesPage() {
 
       {/* Dialog form */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+        <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">
               {editing ? 'Edit Paket' : 'Tambah Paket Baru'}
@@ -180,14 +180,27 @@ export default function PackagesPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs text-[#888]">Nama Paket *</Label>
-              <Input value={formName} onChange={(e) => setFormName(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="Contoh: Weekly" />
+              <Label className="text-xs text-muted-foreground">Nama Paket *</Label>
+              <Input 
+                value={formName} 
+                onChange={(e) => setFormName(e.target.value)} 
+                disabled={editing?.name === 'DAY'}
+                className="border-border bg-background text-foreground disabled:opacity-50" 
+                placeholder="Contoh: Weekly" 
+              />
+              {editing?.name === 'DAY' && (
+                <p className="mt-1 text-[10px] text-red-500 font-medium">
+                  * Nama paket "DAY" dikunci untuk menjaga stabilitas sistem approval visitor harian.
+                </p>
+              )}
             </div>
             <div>
-              <Label className="text-xs text-[#888]">Kategori *</Label>
+              <Label className="text-xs text-muted-foreground">Kategori *</Label>
               <NativeSelect
                 value={formCategory}
                 onChange={(e) => setFormCategory(e.target.value as 'gym' | 'pt')}
+                disabled={editing?.name === 'DAY'}
+                className="disabled:opacity-50"
                 options={[
                   { value: 'gym', label: 'Gym (Membership Biasa)' },
                   { value: 'pt', label: 'PT (Personal Trainer)' },
@@ -196,28 +209,42 @@ export default function PackagesPage() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-xs text-[#888]">Durasi (hari) *</Label>
-                <Input type="number" value={formDuration} onChange={(e) => setFormDuration(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="30" />
+                <Label className="text-xs text-muted-foreground">Durasi (hari) *</Label>
+                <Input 
+                  type="number" 
+                  value={formDuration} 
+                  onChange={(e) => setFormDuration(e.target.value)} 
+                  disabled={editing?.name === 'DAY'}
+                  className="border-border bg-background text-foreground disabled:opacity-50" 
+                  placeholder="30" 
+                />
               </div>
               {formCategory === 'pt' && (
                 <div>
-                  <Label className="text-xs text-[#888]">Total Sesi *</Label>
-                  <Input type="number" value={formTotalSessions} onChange={(e) => setFormTotalSessions(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="8" />
+                  <Label className="text-xs text-muted-foreground">Total Sesi *</Label>
+                  <Input 
+                    type="number" 
+                    value={formTotalSessions} 
+                    onChange={(e) => setFormTotalSessions(e.target.value)} 
+                    disabled={editing?.name === 'DAY'}
+                    className="border-border bg-background text-foreground disabled:opacity-50" 
+                    placeholder="8" 
+                  />
                 </div>
               )}
             </div>
             <div>
-              <Label className="text-xs text-[#888]">Harga (Rp) *</Label>
-              <Input type="number" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="250000" />
+              <Label className="text-xs text-muted-foreground">Harga (Rp) *</Label>
+              <Input type="number" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} className="border-border bg-background text-foreground" placeholder="250000" />
             </div>
             <div>
-              <Label className="text-xs text-[#888]">Deskripsi</Label>
-              <Input value={formDesc} onChange={(e) => setFormDesc(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" placeholder="Akses penuh 1 bulan" />
+              <Label className="text-xs text-muted-foreground">Deskripsi</Label>
+              <Input value={formDesc} onChange={(e) => setFormDesc(e.target.value)} className="border-border bg-background text-foreground" placeholder="Akses penuh 1 bulan" />
             </div>
             <Button
               onClick={handleSubmit}
               disabled={createMembership.isPending || updateMembership.isPending}
-              className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
+              className="w-full bg-primary font-bold text-black hover:bg-[#E60000]"
             >
               {(createMembership.isPending || updateMembership.isPending) ? 'Menyimpan...' : editing ? 'Perbarui Paket' : 'Simpan Paket'}
             </Button>

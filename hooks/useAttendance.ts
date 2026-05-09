@@ -44,15 +44,29 @@ export function useTodayAttendanceCount() {
 export function useCheckIn() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (memberId: string) => {
+    mutationFn: async ({ memberId, notes }: { memberId: string, notes?: string }) => {
       const userId = (await supabase.auth.getUser()).data.user?.id
+
+      // Check anti-spam (4 jam terakhir)
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+      const { data: recentLog } = await supabase
+        .from('attendance_logs')
+        .select('id')
+        .eq('member_id', memberId)
+        .gte('check_in_at', fourHoursAgo)
+        .limit(1)
+        .maybeSingle()
+
+      if (recentLog) {
+        throw new Error('Anda sudah Check in dalam 4 jam terakhir, Silahkan Ke meja Kasir untuk konfirmasi')
+      }
 
       const { data, error } = await supabase
         .from('attendance_logs')
         .insert({
           gym_id: GYM_ID,
           member_id: memberId,
-          checked_by: userId,
+          notes: notes || 'Admin Check-In'
         })
         .select()
         .single()

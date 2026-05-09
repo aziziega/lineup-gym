@@ -40,18 +40,18 @@ export default function Price() {
   const ptPackages = packages.filter(p => p.category === 'pt')
 
   return (
-    <section id="harga" className="bg-[#111] py-20">
+    <section id="harga" className="bg-background py-20">
       <div className="mx-auto max-w-6xl px-4">
         <div className="mb-12 text-center">
-          <p className="text-sm font-medium uppercase tracking-widest text-[#FF2A2A]">Harga Paket</p>
-          <h2 className="mt-2 font-heading text-3xl text-white sm:text-4xl">Pilih Paket Terbaik</h2>
-          <p className="mt-2 text-sm text-[#888]">Harga terjangkau, fasilitas premium</p>
+          <p className="text-sm font-medium uppercase tracking-widest text-primary">Harga Paket</p>
+          <h2 className="mt-2 font-heading text-3xl text-foreground sm:text-4xl">Pilih Paket Terbaik</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Harga terjangkau, fasilitas premium</p>
         </div>
 
         {loadingPkgs ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-48 animate-pulse rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A]" />
+              <div key={i} className="h-48 animate-pulse rounded-2xl border border-border bg-card" />
             ))}
           </div>
         ) : (

@@ -17,7 +17,7 @@ export default function RevenueChart() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+      <div className="rounded-xl border border-border bg-card p-4">
         <Skeleton className="mb-4 h-5 w-40 bg-[#2A2A2A]" />
         <Skeleton className="h-48 w-full bg-[#2A2A2A]" />
       </div>
@@ -42,9 +42,9 @@ export default function RevenueChart() {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
     return (
-      <div className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-xs">
-        <p className="text-[#888]">{label}</p>
-        <p className="font-heading text-base text-[#D4FF00]">{formatRupiah(payload[0].value)}</p>
+      <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs">
+        <p className="text-muted-foreground">{label}</p>
+        <p className="font-heading text-base text-accent">{formatRupiah(payload[0].value)}</p>
       </div>
     )
   }
@@ -60,23 +60,23 @@ export default function RevenueChart() {
 
   return (
     <>
-      <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
+      <div className="rounded-xl border border-border/50 bg-card p-4">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-white">Revenue Overview</h3>
+            <h3 className="text-sm font-semibold text-foreground">Revenue Overview</h3>
           </div>
 
-          <div className="flex gap-1 rounded-lg bg-[#111] p-0.5 self-start sm:self-auto">
+          <div className="flex gap-1 rounded-lg bg-background p-0.5 self-start sm:self-auto">
             <button
               onClick={() => setChartType('bar')}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-[#D4FF00] text-black' : 'text-muted-foreground hover:text-foreground'
                 }`}
             >
               Bar
             </button>
             <button
               onClick={() => setChartType('line')}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-[#D4FF00] text-black' : 'text-[#888] hover:text-white'
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-[#D4FF00] text-black' : 'text-muted-foreground hover:text-foreground'
                 }`}
             >
               Line
@@ -108,13 +108,13 @@ export default function RevenueChart() {
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-md bg-[#1A1A1A] border-[#2A2A2A] text-white">
+        <DialogContent className="sm:max-w-md bg-card border-border text-foreground">
           <DialogHeader>
             <DialogTitle>Kustomisasi Rentang Waktu</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCustomSubmit} className="space-y-4 py-4">
             <div className="space-y-2">
-              <label htmlFor="customMonth" className="text-sm font-medium text-[#888]">
+              <label htmlFor="customMonth" className="text-sm font-medium text-muted-foreground">
                 Jumlah Bulan
               </label>
               <div className="relative">
@@ -125,25 +125,25 @@ export default function RevenueChart() {
                   max="120"
                   value={customMonth}
                   onChange={(e) => setCustomMonth(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white placeholder:text-[#555] focus:outline-none focus:ring-1 focus:ring-[#FF2A2A]"
+                  className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-[#FF2A2A]"
                   placeholder="Contoh: 12"
                   autoFocus
                 />
               </div>
-              <p className="text-[11px] text-[#555]">Masukkan berapa bulan ke belakang yang ingin ditampilkan.</p>
+              <p className="text-[11px] text-muted-foreground/60">Masukkan berapa bulan ke belakang yang ingin ditampilkan.</p>
             </div>
-            <DialogFooter className="border-t border-[#2A2A2A] bg-transparent pt-4 sm:justify-end gap-2">
+            <DialogFooter className="border-t border-border bg-transparent pt-4 sm:justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsModalOpen(false)}
-                className="border-[#2A2A2A] bg-transparent text-white hover:bg-[#2A2A2A] hover:text-white"
+                className="border-border bg-transparent text-foreground hover:bg-[#2A2A2A] hover:text-foreground"
               >
                 Batal
               </Button>
               <Button
                 type="submit"
-                className="bg-[#FF2A2A] text-black hover:bg-[#FF2A2A]/90"
+                className="bg-primary text-black hover:bg-primary/90"
               >
                 Terapkan
               </Button>

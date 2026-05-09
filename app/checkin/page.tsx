@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { CheckCircle2, AlertTriangle, ArrowLeft, Clock } from 'lucide-react'
 import { GYM_ID } from '@/lib/constants'
+import { toLocalISOString } from '@/lib/utils'
 
 type Step = 'search' | 'visitor' | 'success' | 'expired' | 'not_found' | 'visitor_registered' | 'visitor_checked_in'
 
@@ -35,7 +36,7 @@ export default function CheckinKiosk() {
         now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       )
       const hour = now.getHours()
-      if (hour < 6 || hour >= 21) {
+      if (hour < 1 || hour >= 21) {
         setIsClosed(true)
       } else {
         setIsClosed(false)
@@ -70,39 +71,54 @@ export default function CheckinKiosk() {
       if (data) {
         setMemberInfo(data)
 
-        if (data.status === 'active' || data.status === 'expiring_soon') {
-          // VALIDASI: Cegah Visitor DAY check-in lebih dari 1x dalam sehari
-          if (data.membership_name === 'DAY') {
-            const today = new Date().toISOString().split('T')[0]
-            const { data: checkToday } = await supabase
-              .from('attendance_logs')
-              .select('id')
-              .eq('member_id', data.member_id)
-              .gte('check_in_at', `${today}T00:00:00Z`)
-              .lte('check_in_at', `${today}T23:59:59Z`)
-              .limit(1)
+        if (data.status === 'active' || data.status === 'expiring_soon' || data.status === 'critical') {
+          // Check anti-spam (4 jam terakhir)
+          const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+          const { data: recentLog } = await supabase
+            .from('attendance_logs')
+            .select('id, check_in_at')
+            .eq('member_id', data.member_id)
+            .gte('check_in_at', fourHoursAgo)
+            .order('check_in_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
 
-            if (checkToday && checkToday.length > 0) {
-              setStep('visitor_checked_in')
-              setLoading(false)
-              setTimeout(() => resetKiosk(), 8000)
-              return
-            }
+          if (recentLog) {
+            const timeStr = new Date(recentLog.check_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+            toast.error(`Anda sudah Check in hari ini jam ${timeStr}. Silahkan ke meja Kasir untuk konfirmasi.`, {
+              duration: 6000,
+              icon: '⚠️',
+            })
+            setLoading(false)
+            return
           }
 
           // LANGSUNG check-in tanpa konfirmasi
           const { error: logError } = await supabase.from('attendance_logs').insert({
             gym_id: GYM_ID,
             member_id: data.member_id,
-            notes: 'Kiosk Self Check-In'
+            notes: data.membership_name === 'DAY' ? 'Kiosk Visitor Check-In' : 'Kiosk Self Check-In'
           })
           if (logError) throw logError
 
           setStep('success')
           setTimeout(() => resetKiosk(), 5000)
         } else {
-          // Status expired â†’ tampilkan peringatan
-          setStep('expired')
+          // Fallback: Jika database bilang expired tapi ternyata end_date-nya hari ini
+          const today = toLocalISOString(new Date())
+          if (data.end_date === today) {
+            const { error: logError } = await supabase.from('attendance_logs').insert({
+              gym_id: GYM_ID,
+              member_id: data.member_id,
+              notes: 'Kiosk Self Check-In (Hari Terakhir)'
+            })
+            if (logError) throw logError
+
+            setStep('success')
+            setTimeout(() => resetKiosk(), 5000)
+          } else {
+            setStep('expired')
+          }
         }
       } else {
         // Coba cari di tabel members biasa (mungkin belum punya subscription)
@@ -153,15 +169,17 @@ export default function CheckinKiosk() {
         return
       }
 
-      // 1. Buat member baru
-      const { data: newMember, error: memberErr } = await supabase.from('members').insert({
+      // 1. Buat notifikasi untuk admin (Tanpa membuat member dulu)
+      await supabase.from('notifications').insert({
         gym_id: GYM_ID,
-        full_name: visitorName,
-        phone: visitorPhone,
-        notes: 'Visitor Harian'
-      }).select().single()
-
-      if (memberErr) throw memberErr
+        title: 'Visitor Baru: Butuh Persetujuan',
+        content: `${visitorName} (${visitorPhone}) mendaftar sebagai visitor harian.`,
+        type: 'visitor_approval',
+        metadata: {
+          full_name: visitorName,
+          phone: visitorPhone
+        }
+      })
 
       setMemberInfo({ full_name: visitorName })
       setStep('visitor_registered')
@@ -228,7 +246,12 @@ export default function CheckinKiosk() {
                   <Input
                     autoFocus
                     value={searchVal}
-                    onChange={(e) => setSearchVal(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '')
+                      setSearchVal(val)
+                    }}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="Contoh: 001 atau 0812..."
                     className="mt-2 h-14 border-[#333] bg-[#1a1a1a] text-center text-xl font-bold tracking-widest text-white placeholder:text-[#555]"
                   />
@@ -364,7 +387,13 @@ export default function CheckinKiosk() {
                   <Label className="text-sm text-[#ccc]">No. HP / WhatsApp</Label>
                   <Input
                     value={visitorPhone}
-                    onChange={(e) => setVisitorPhone(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '')
+                      setVisitorPhone(val)
+                    }}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Contoh: 0812..."
                     className="mt-1 border-[#333] bg-[#1a1a1a] text-white"
                   />
                 </div>
@@ -406,21 +435,26 @@ export default function CheckinKiosk() {
             )}
 
             {/* SUCCESS â€” langsung tampil setelah submit */}
-            {step === 'success' && (
-              <div className="flex flex-col items-center justify-center py-8 text-center animate-in zoom-in duration-300">
-                <div className="mb-4 rounded-full bg-[#FF2A2A]/20 p-4">
-                  <CheckCircle2 className="h-16 w-16 text-[#FF2A2A]" />
+            {step === 'success' && (() => {
+              const isVisitor = memberInfo?.membership_name === 'DAY'
+              return (
+                <div className="flex flex-col items-center justify-center py-8 text-center animate-in zoom-in duration-300">
+                  <div className={`mb-4 rounded-full p-4 ${isVisitor ? 'bg-blue-500/20' : 'bg-emerald-500/20'}`}>
+                    <CheckCircle2 className={`h-16 w-16 ${isVisitor ? 'text-blue-500' : 'text-emerald-500'}`} />
+                  </div>
+                  <h2 className="mb-1 text-2xl font-bold text-white">
+                    {isVisitor ? 'Check-In Visitor Berhasil!' : 'Check-In Berhasil!'}
+                  </h2>
+                  {memberInfo && <p className="text-lg text-[#FF2A2A]">{memberInfo.full_name}</p>}
+                  <p className="mt-4 text-sm text-[#888]">
+                    {visitorName
+                      ? 'Silakan tunjukkan layar ini ke Admin dan lakukan pembayaran.'
+                      : 'Silakan tunjukkan layar ini ke Admin untuk masuk.'}
+                  </p>
+                  <p className="mt-8 text-xs text-[#555]">Layar ini akan menutup otomatis dalam 5 detik...</p>
                 </div>
-                <h2 className="mb-1 text-2xl font-bold text-white">Check-In Berhasil!</h2>
-                {memberInfo && <p className="text-lg text-[#FF2A2A]">{memberInfo.full_name}</p>}
-                <p className="mt-4 text-sm text-[#888]">
-                  {visitorName
-                    ? 'Silakan tunjukkan layar ini ke Admin dan lakukan pembayaran.'
-                    : 'Silakan tunjukkan layar ini ke Admin untuk masuk.'}
-                </p>
-                <p className="mt-8 text-xs text-[#555]">Layar ini akan menutup otomatis dalam 5 detik...</p>
-              </div>
-            )}
+              )
+            })()}
           </>
         )}
 

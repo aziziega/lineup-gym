@@ -110,11 +110,11 @@ export default function OverviewPage() {
     <div className="space-y-5">
       {/* Greeting */}
       <div>
-        <h1 className="font-heading text-2xl text-white lg:text-3xl">
+        <h1 className="font-heading text-2xl text-foreground lg:text-3xl">
           {greeting}, {adminName}👋
 
         </h1>
-        <p className="text-xs text-[#888]">{new Intl.DateTimeFormat('id-ID', { dateStyle: 'full' }).format(new Date())}</p>
+        <p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat('id-ID', { dateStyle: 'full' }).format(new Date())}</p>
       </div>
 
       {/* 4 Metric Cards â€” 2 kolom di mobile, 4 di desktop */}
@@ -160,10 +160,10 @@ export default function OverviewPage() {
         <TodayPTSchedule />
 
         {/* 5 Member Terbaru — tanpa scroll */}
-        <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
-          <h3 className="mb-3 text-sm font-semibold text-white">Member Terbaru</h3>
+        <div className="rounded-xl border border-border/50 bg-card p-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">Member Terbaru</h3>
           {(!recentMembers || recentMembers.length === 0) ? (
-            <p className="py-6 text-center text-sm text-[#555]">Belum ada member</p>
+            <p className="py-6 text-center text-sm text-muted-foreground/60">Belum ada member</p>
           ) : (
             <div className="space-y-2">
               {recentMembers.map((m) => {
@@ -176,14 +176,14 @@ export default function OverviewPage() {
                 return (
                   <div
                     key={m.id}
-                    className="flex items-center gap-3 rounded-lg border border-[#2A2A2A]/50 bg-[#111] px-3 py-2.5"
+                    className="flex items-center gap-3 rounded-lg border border-border/50 bg-background px-3 py-2.5"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#D4FF00]/10 text-xs font-bold text-[#D4FF00]">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#D4FF00]/10 text-xs font-bold text-accent">
                       {initials}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white">{m.full_name}</p>
-                      <p className="text-[11px] text-[#888]">{formatTanggal(m.created_at)}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{m.full_name}</p>
+                      <p className="text-[11px] text-muted-foreground">{formatTanggal(m.created_at)}</p>
                     </div>
                   </div>
                 )

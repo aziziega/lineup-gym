@@ -29,24 +29,24 @@ export default function NativeSelect({
         value={value || ''}
         onChange={onChange}
         className={cn(
-          'flex w-full cursor-pointer appearance-none items-center rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 pr-8 text-sm text-white transition-colors outline-none hover:bg-[#1A1A1A] focus:ring-2 focus:ring-[#FF2A2A]/30',
-          !value && 'text-[#555]',
+          'flex w-full cursor-pointer appearance-none items-center rounded-lg border border-border bg-background px-3 py-2 pr-8 text-sm text-foreground transition-colors outline-none hover:bg-card focus:ring-2 focus:ring-[#FF2A2A]/30',
+          !value && 'text-muted-foreground/60',
           triggerClassName
         )}
         {...props}
       >
         {placeholder && (
-          <option value="" disabled className="bg-[#111] text-[#555]">
+          <option value="" disabled className="bg-background text-muted-foreground/60">
             {placeholder}
           </option>
         )}
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value} className="bg-[#111] text-white">
+          <option key={opt.value} value={opt.value} className="bg-background text-foreground">
             {opt.label}
           </option>
         ))}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
     </div>
   )
 }

@@ -4,15 +4,54 @@
 
 @layer base {
   :root {
-    /* Gym Industrial Dark Theme */
+    /* Gym Industrial Light Theme */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 100% 58%; /* Merah #FF2A2A */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 73 100% 50%; /* Kuning #D4FF00 */
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 100% 58%;
+    --radius: 0.75rem;
+
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+
+    --sidebar: 0 0% 98%;
+    --sidebar-foreground: 0 0% 10%;
+    --sidebar-primary: 0 100% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 92%;
+    --sidebar-accent-foreground: 0 100% 58%;
+    --sidebar-border: 0 0% 89.8%;
+    --sidebar-ring: 0 100% 58%;
+  }
+
+  .dark {
+    /* Gym Industrial Dark Theme (Original) */
     --background: 0 0% 4%;
     --foreground: 0 0% 94%;
     --card: 0 0% 10%;
     --card-foreground: 0 0% 94%;
     --popover: 0 0% 10%;
     --popover-foreground: 0 0% 94%;
-    --primary: 73 100% 50%;
-    --primary-foreground: 0 0% 4%;
+    --primary: 0 100% 58%; /* Merah #FF2A2A (Dominan) */
+    --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 13%;
     --secondary-foreground: 0 0% 94%;
     --muted: 0 0% 16%;
@@ -22,7 +61,7 @@
     --destructive: 0 100% 61%;
     --border: 0 0% 16%;
     --input: 0 0% 16%;
-    --ring: 73 100% 50%;
+    --ring: 0 100% 58%;
 
     --chart-1: 73 100% 50%;
     --chart-2: 24 100% 60%;
@@ -30,16 +69,14 @@
     --chart-4: 0 0% 60%;
     --chart-5: 0 0% 80%;
 
-    --radius: 0.75rem;
-
     --sidebar: 0 0% 7%;
     --sidebar-foreground: 0 0% 94%;
-    --sidebar-primary: 73 100% 50%;
-    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-primary: 0 100% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 10%;
-    --sidebar-accent-foreground: 73 100% 50%;
+    --sidebar-accent-foreground: 0 100% 58%;
     --sidebar-border: 0 0% 16%;
-    --sidebar-ring: 73 100% 50%;
+    --sidebar-ring: 0 100% 58%;
   }
 
   * {
@@ -70,4 +107,30 @@
 
 .animate-marquee:hover {
   animation-play-state: paused;
+}
+
+/* Custom Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 10px;
+  border: 1px solid #111;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #222 transparent;
 }

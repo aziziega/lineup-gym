@@ -24,14 +24,34 @@ export function useMembersWithSubscription() {
   return useQuery({
     queryKey: ['members-with-subscription'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: members, error } = await supabase
         .from('active_subscriptions_view')
         .select('*')
         .eq('gym_id', GYM_ID)
       if (error) throw error
-      return data as ActiveSubscriptionView[]
+
+      if (!members || members.length === 0) return []
+
+      // OPTIMASI: Ambil SEMUA hitungan absensi dalam 1x query saja
+      const { data: attendanceCounts, error: attError } = await supabase
+        .from('attendance_logs')
+        .select('member_id')
+      
+      if (attError) throw attError
+
+      const countMap: Record<string, number> = {}
+      attendanceCounts.forEach((log: any) => {
+        countMap[log.member_id] = (countMap[log.member_id] || 0) + 1
+      })
+
+      const membersWithVisits = members.map((m: any) => ({
+        ...m,
+        attendance_count: countMap[m.member_id] || 0
+      }))
+
+      return membersWithVisits as ActiveSubscriptionView[]
     },
-    refetchInterval: 10000, // Auto-refresh tiap 10 detik agar visitor baru langsung muncul
+    refetchInterval: 30000, 
   })
 }
 

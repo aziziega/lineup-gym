@@ -127,34 +127,34 @@ export default function SchedulePage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Dumbbell className="h-5 w-5 text-[#FF2A2A]" />
-        <h2 className="font-heading text-lg text-white">Jadwal Personal Trainer</h2>
+        <Dumbbell className="h-5 w-5 text-primary" />
+        <h2 className="font-heading text-lg text-foreground">Jadwal Personal Trainer</h2>
       </div>
 
       {/* Stats bar */}
       <div className="flex gap-2">
-        <div className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-1.5">
-          <span className="text-[11px] text-[#888]">Minggu ini:</span>
-          <span className="font-heading text-sm text-[#D4FF00]">{weekSessionCount} sesi</span>
+        <div className="flex items-center gap-1.5 rounded-lg border border-border/50 bg-card px-3 py-1.5">
+          <span className="text-[11px] text-muted-foreground">Minggu ini:</span>
+          <span className="font-heading text-sm text-accent">{weekSessionCount} sesi</span>
         </div>
-        <div className="flex items-center gap-1.5 rounded-lg border border-[#2A2A2A]/50 bg-[#1A1A1A] px-3 py-1.5">
-          <span className="text-[11px] text-[#888]">Selesai:</span>
+        <div className="flex items-center gap-1.5 rounded-lg border border-border/50 bg-card px-3 py-1.5">
+          <span className="text-[11px] text-muted-foreground">Selesai:</span>
           <span className="font-heading text-sm text-green-400">{completedCount}/{weekSessionCount}</span>
         </div>
       </div>
 
       {/* Week navigation */}
       <div className="flex items-center justify-between">
-        <Button size="sm" variant="ghost" onClick={() => setWeekOffset(w => w - 1)} className="text-[#888]">
+        <Button size="sm" variant="ghost" onClick={() => setWeekOffset(w => w - 1)} className="text-muted-foreground">
           <ChevronLeft className="h-4 w-4 mr-1" /> Sebelumnya
         </Button>
         <div className="text-center">
-          <p className="text-sm font-semibold text-white">{weekLabel}</p>
+          <p className="text-sm font-semibold text-foreground">{weekLabel}</p>
           {weekOffset !== 0 && (
-            <button onClick={() => setWeekOffset(0)} className="text-[10px] text-[#FF2A2A] hover:underline">Minggu Ini</button>
+            <button onClick={() => setWeekOffset(0)} className="text-[10px] text-primary hover:underline">Minggu Ini</button>
           )}
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setWeekOffset(w => w + 1)} className="text-[#888]">
+        <Button size="sm" variant="ghost" onClick={() => setWeekOffset(w => w + 1)} className="text-muted-foreground">
           Selanjutnya <ChevronRight className="h-4 w-4 ml-1" />
         </Button>
       </div>
@@ -166,33 +166,33 @@ export default function SchedulePage() {
 
       {/* 7-day grid */}
       {isLoading ? (
-        <div className="grid grid-cols-7 gap-1">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-32 animate-pulse rounded-lg bg-[#1A1A1A] border border-[#2A2A2A]" />)}</div>
+        <div className="grid grid-cols-7 gap-1">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-32 animate-pulse rounded-lg bg-card border border-border" />)}</div>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
           {weekDates.map((date, idx) => {
             const daySessions = (sessions || []).filter(s => s.session_date === date).sort((a, b) => a.session_time.localeCompare(b.session_time))
             const isToday = date === todayStr
             return (
-              <div key={date} className={`rounded-xl border p-2 min-h-[140px] ${isToday ? 'border-[#D4FF00]/50 bg-[#1A1A1A]' : 'border-[#2A2A2A]/50 bg-[#111]'}`}>
+              <div key={date} className={`rounded-xl border p-2 min-h-[140px] ${isToday ? 'border-[#D4FF00]/50 bg-card' : 'border-border/50 bg-background'}`}>
                 {/* Day header */}
-                <div className={`mb-2 pb-1.5 border-b ${isToday ? 'border-[#D4FF00]/30' : 'border-[#2A2A2A]/50'}`}>
-                  <p className={`text-[10px] font-bold uppercase ${isToday ? 'text-[#D4FF00]' : 'text-[#888]'}`}>{dayLabels[daysOfWeek[idx]]}</p>
-                  <p className={`text-xs ${isToday ? 'text-[#D4FF00]' : 'text-[#555]'}`}>{formatDate(date)}</p>
+                <div className={`mb-2 pb-1.5 border-b ${isToday ? 'border-[#D4FF00]/30' : 'border-border/50'}`}>
+                  <p className={`text-[10px] font-bold uppercase ${isToday ? 'text-accent' : 'text-muted-foreground'}`}>{dayLabels[daysOfWeek[idx]]}</p>
+                  <p className={`text-xs ${isToday ? 'text-accent' : 'text-muted-foreground/60'}`}>{formatDate(date)}</p>
                 </div>
 
                 {/* Sessions */}
                 <div className="space-y-1.5">
                   {daySessions.map(s => (
-                    <div key={s.id} className={`rounded-lg p-1.5 text-[10px] transition-all ${s.is_completed ? 'bg-green-500/10 border border-green-500/20' : 'bg-[#1A1A1A] border border-[#2A2A2A]/30 hover:border-[#FF2A2A]/30'}`}>
+                    <div key={s.id} className={`rounded-lg p-1.5 text-[10px] transition-all ${s.is_completed ? 'bg-green-500/10 border border-green-500/20' : 'bg-card border border-border/30 hover:border-[#FF2A2A]/30'}`}>
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
-                          <p className={`font-semibold truncate ${s.is_completed ? 'text-green-400' : 'text-white'}`}>{s.member_name}</p>
-                          <p className={`${s.is_completed ? 'text-green-400/50' : 'text-[#888]'}`}>{s.session_time?.slice(0, 5)}</p>
+                          <p className={`font-semibold truncate ${s.is_completed ? 'text-green-400' : 'text-foreground'}`}>{s.member_name}</p>
+                          <p className={`${s.is_completed ? 'text-green-400/50' : 'text-muted-foreground'}`}>{s.session_time?.slice(0, 5)}</p>
                         </div>
                         <div className="flex shrink-0 gap-0.5">
                           {!s.is_completed ? (
                             <>
-                              <button onClick={() => handleComplete(s)} className="rounded p-0.5 text-[#D4FF00] hover:bg-[#D4FF00]/10" title="Tandai Selesai">
+                              <button onClick={() => handleComplete(s)} className="rounded p-0.5 text-accent hover:bg-[#D4FF00]/10" title="Tandai Selesai">
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                               </button>
                               <button onClick={() => handleDelete(s.id)} className="rounded p-0.5 text-red-400 hover:bg-red-500/10" title="Hapus">
@@ -219,7 +219,7 @@ export default function SchedulePage() {
                 </div>
 
                 {/* Quick add for this day */}
-                <button onClick={() => { setAddDate(date); setAddOpen(true) }} className="mt-1.5 flex w-full items-center justify-center rounded-md border border-dashed border-[#2A2A2A]/50 py-1 text-[10px] text-[#555] hover:border-[#FF2A2A]/30 hover:text-[#FF2A2A] transition-colors">
+                <button onClick={() => { setAddDate(date); setAddOpen(true) }} className="mt-1.5 flex w-full items-center justify-center rounded-md border border-dashed border-border/50 py-1 text-[10px] text-muted-foreground/60 hover:border-[#FF2A2A]/30 hover:text-primary transition-colors">
                   <Plus className="h-3 w-3 mr-0.5" /> Tambah
                 </button>
               </div>
@@ -230,11 +230,11 @@ export default function SchedulePage() {
 
       {/* Add PT Session Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-sm">
+        <DialogContent className="border-border bg-card text-foreground sm:max-w-sm">
           <DialogHeader><DialogTitle className="font-heading text-xl">Jadwalkan Sesi PT</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs text-[#888]">Member (PT Aktif)</Label>
+              <Label className="text-xs text-muted-foreground">Member (PT Aktif)</Label>
               {ptMemberOptions.length > 0 ? (
                 <MemberCombobox
                   members={ptMemberOptions}
@@ -245,7 +245,7 @@ export default function SchedulePage() {
                   emptyMessage="Tidak ada member PT yang cocok"
                 />
               ) : (
-                <p className="text-xs text-[#555] mt-1">Tidak ada member dengan PT aktif</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Tidak ada member dengan PT aktif</p>
               )}
               {selectedPtMember && selectedPtMember.pt_remaining_sessions !== null && selectedPtMember.pt_remaining_sessions <= 0 && (
                 <p className="mt-1 text-xs text-amber-400 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Sesi PT sudah habis!</p>
@@ -253,12 +253,12 @@ export default function SchedulePage() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-xs text-[#888]">Tanggal</Label>
-                <Input type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                <Label className="text-xs text-muted-foreground">Tanggal</Label>
+                <Input type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} className="border-border bg-background text-foreground" />
               </div>
               <div>
-                <Label className="text-xs text-[#888]">Jam</Label>
-                <Input type="time" value={addTime} onChange={(e) => setAddTime(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                <Label className="text-xs text-muted-foreground">Jam</Label>
+                <Input type="time" value={addTime} onChange={(e) => setAddTime(e.target.value)} className="border-border bg-background text-foreground" />
               </div>
             </div>
 
@@ -285,7 +285,7 @@ export default function SchedulePage() {
               return null
             })()}
 
-            <Button onClick={handleAddSession} disabled={createSession.isPending || !addMemberId} className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]">
+            <Button onClick={handleAddSession} disabled={createSession.isPending || !addMemberId} className="w-full bg-primary font-bold text-black hover:bg-[#E60000]">
               {createSession.isPending ? 'Menyimpan...' : 'Jadwalkan Sesi'}
             </Button>
           </div>

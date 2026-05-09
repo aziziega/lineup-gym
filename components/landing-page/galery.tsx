@@ -14,9 +14,9 @@ export default function Galery() {
     <section id="galeri" className="py-20">
       <div className="mx-auto max-w-6xl px-4">
         <div className="mb-12 text-center">
-          <p className="text-sm font-medium uppercase tracking-widest text-[#FF2A2A]">Galeri</p>
-          <h2 className="mt-2 font-heading text-3xl text-white sm:text-4xl">Suasana Lineup Gym</h2>
-          <p className="mt-2 text-sm text-[#888]">Intip suasana latihan di gym kami</p>
+          <p className="text-sm font-medium uppercase tracking-widest text-primary">Galeri</p>
+          <h2 className="mt-2 font-heading text-3xl text-foreground sm:text-4xl">Suasana Lineup Gym</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Intip suasana latihan di gym kami</p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -36,7 +36,7 @@ export default function Galery() {
                 className="object-cover transition-transform duration-700 group-hover:scale-110"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-              <p className="absolute bottom-3 left-3 text-sm font-medium text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+              <p className="absolute bottom-3 left-3 text-sm font-medium text-foreground opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {img.alt}
               </p>
             </motion.div>

@@ -20,20 +20,20 @@ export default function Facility() {
     <section id="fasilitas" className="py-20">
       <div className="mx-auto max-w-6xl px-4">
         <div className="mb-12 text-center">
-          <p className="text-sm font-medium uppercase tracking-widest text-[#FF2A2A]">Fasilitas</p>
-          <h2 className="mt-2 font-heading text-3xl text-white sm:text-4xl">Kenapa Pilih Lineup Gym?</h2>
-          <p className="mt-2 text-sm text-[#888]">Fasilitas lengkap untuk mendukung latihan maksimal kamu</p>
+          <p className="text-sm font-medium uppercase tracking-widest text-primary">Fasilitas</p>
+          <h2 className="mt-2 font-heading text-3xl text-foreground sm:text-4xl">Kenapa Pilih Lineup Gym?</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Fasilitas lengkap untuk mendukung latihan maksimal kamu</p>
         </div>
 
         <StaggerContainer className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {FACILITIES.map((f, i) => (
             <StaggerItem key={i}>
-              <div className="group h-full rounded-xl border border-[#1A1A1A] bg-[#111] p-5 transition-all hover:border-[#FF2A2A]/30 hover:bg-[#1A1A1A]">
-                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-[#FF2A2A]/10 text-[#FF2A2A] transition-colors group-hover:bg-[#FF2A2A]/20">
+              <div className="group h-full rounded-xl border border-[#1A1A1A] bg-background p-5 transition-all hover:border-[#FF2A2A]/30 hover:bg-card">
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
                   <f.icon className="h-5 w-5" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">{f.title}</h3>
-                <p className="mt-0.5 text-[11px] text-[#888]">{f.desc}</p>
+                <h3 className="text-sm font-semibold text-foreground">{f.title}</h3>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{f.desc}</p>
               </div>
             </StaggerItem>
           ))}

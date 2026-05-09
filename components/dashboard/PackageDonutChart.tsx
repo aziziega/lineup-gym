@@ -11,7 +11,7 @@ export default function PackageDonutChart() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+      <div className="rounded-xl border border-border bg-card p-4">
         <Skeleton className="mb-4 h-5 w-40 bg-[#2A2A2A]" />
         <Skeleton className="mx-auto h-40 w-40 rounded-full bg-[#2A2A2A]" />
       </div>
@@ -33,8 +33,8 @@ export default function PackageDonutChart() {
 
   if (chartData.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
-        <p className="text-sm text-[#555]">Belum ada data member</p>
+      <div className="flex h-full flex-col items-center justify-center rounded-xl border border-border bg-card p-4">
+        <p className="text-sm text-muted-foreground/60">Belum ada data member</p>
       </div>
     )
   }
@@ -42,16 +42,16 @@ export default function PackageDonutChart() {
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null
     return (
-      <div className="rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-xs">
-        <p className="text-[#888]">{payload[0].name}</p>
-        <p className="font-heading text-base text-white">{payload[0].value} member</p>
+      <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs">
+        <p className="text-muted-foreground">{payload[0].name}</p>
+        <p className="font-heading text-base text-foreground">{payload[0].value} member</p>
       </div>
     )
   }
 
   return (
-    <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
-      <h3 className="mb-4 text-sm font-semibold text-white">Distribusi Paket</h3>
+    <div className="rounded-xl border border-border/50 bg-card p-4">
+      <h3 className="mb-4 text-sm font-semibold text-foreground">Distribusi Paket</h3>
 
       <div className="flex flex-col items-center gap-4 sm:flex-row">
         <div className="h-40 w-40 shrink-0">
@@ -84,8 +84,8 @@ export default function PackageDonutChart() {
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: COLORS[idx % COLORS.length] }}
               />
-              <span className="text-[#888]">{entry.name}</span>
-              <span className="font-semibold text-white">{entry.value}</span>
+              <span className="text-muted-foreground">{entry.name}</span>
+              <span className="font-semibold text-foreground">{entry.value}</span>
             </div>
           ))}
         </div>

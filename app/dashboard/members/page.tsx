@@ -8,9 +8,9 @@ import { useMembersWithSubscription, useCreateMember, useDeleteMember, useUpdate
 import { useActiveMemberships } from '@/hooks/useMemberships'
 import { useCheckIn } from '@/hooks/useAttendance'
 import { useRenewSubscription } from '@/hooks/useSubscriptions'
-import { formatRupiah, formatTanggal, hitungEndDate, generateReceiptWALink, type ReceiptData } from '@/lib/utils'
+import { formatRupiah, formatTanggal, hitungEndDate, toLocalISOString, generateReceiptWALink, calculateDaysRemaining, cn, type ReceiptData } from '@/lib/utils'
 import StatusBadge from '@/components/members/StatusBadge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import NativeSelect from '@/components/dashboard/NativeSelect'
 import PackageCombobox from '@/components/dashboard/PackageCombobox'
-import { Search, Plus, Download, Edit2, RotateCcw, Trash2, ShieldAlert, CheckCircle2, MessageSquare } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, CheckCircle2, X, Download, RotateCcw, ShieldAlert, Loader2, ArrowLeft, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { GYM_ID } from '@/lib/constants'
 import type { ActiveSubscriptionView, Membership } from '@/lib/types'
@@ -77,6 +77,17 @@ function MembersContent() {
 
   // Dialog states
   const [addOpen, setAddOpen] = useState(false)
+
+  // Auto-open modal if ?add=true is in URL
+  useEffect(() => {
+    if (searchParams.get('add') === 'true') {
+      setAddOpen(true)
+      // Bersihkan URL agar tidak terbuka lagi saat refresh
+      const url = new URL(window.location.href)
+      url.searchParams.delete('add')
+      window.history.replaceState({}, '', url.pathname + url.search)
+    }
+  }, [searchParams])
   const [editOpen, setEditOpen] = useState(false)
   const [editMemberData, setEditMemberData] = useState<ActiveSubscriptionView | null>(null)
   const [renewOpen, setRenewOpen] = useState(false)
@@ -92,14 +103,31 @@ function MembersContent() {
   const [formPayMethod, setFormPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
   const [formStartDate, setFormStartDate] = useState(new Date().toLocaleDateString('sv-SE'))
 
-  // Pastikan tanggal mulai selalu update ke "hari ini" saat modal dibuka
+  // Hitung nomor member berikutnya secara otomatis
+  const nextMemberNo = useMemo(() => {
+    if (!members || members.length === 0) return '1'
+    
+    // Ambil semua nomor member, bersihkan karakter non-angka, konversi ke integer
+    const nos = members
+      .map(m => {
+        const onlyDigits = (m.member_no || '').replace(/[^0-9]/g, '')
+        return onlyDigits ? parseInt(onlyDigits, 10) : 0
+      })
+      .filter(n => n > 0)
+    
+    const max = nos.length > 0 ? Math.max(...nos) : 0
+    // Kembalikan nomor berikutnya tanpa padding nol (misal 1, 2, 457)
+    return String(max + 1)
+  }, [members])
+
+  // Pastikan tanggal mulai selalu update ke "hari ini" & No Member terisi otomatis saat modal dibuka
   useEffect(() => {
     if (addOpen) {
       setFormStartDate(new Date().toLocaleDateString('sv-SE'))
+      setFormMemberNo(nextMemberNo)
     }
-  }, [addOpen])
+  }, [addOpen, nextMemberNo])
   const [formNotes, setFormNotes] = useState('')
-  const [approvingId, setApprovingId] = useState<string | null>(null)
 
   // Receipt dialog
   const [receiptOpen, setReceiptOpen] = useState(false)
@@ -110,6 +138,10 @@ function MembersContent() {
   const [renewPtMembershipId, setRenewPtMembershipId] = useState('')
   const [renewMemberNo, setRenewMemberNo] = useState('')
   const [renewPayMethod, setRenewPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
+  const [renewStartDate, setRenewStartDate] = useState(new Date().toISOString().split('T')[0])
+
+  const [cancelPTOpen, setCancelPTOpen] = useState(false)
+  const [cancelPTData, setCancelPTData] = useState<{ memberId: string; ptSubId: string; memberName: string } | null>(null)
 
   const gymPackages = useMemo(() => memberships?.filter(m => m.category === 'gym') || [], [memberships])
   const ptPackages = useMemo(() => memberships?.filter(m => m.category === 'pt') || [], [memberships])
@@ -122,7 +154,14 @@ function MembersContent() {
       list = list.filter((m) => m.full_name.toLowerCase().includes(s) || m.phone.includes(s) || (m.member_no && m.member_no.toLowerCase().includes(s)))
     }
     if (statusFilter !== 'all') {
-      list = list.filter((m) => m.status === statusFilter)
+      list = list.filter((m) => {
+        const localDays = calculateDaysRemaining(m.end_date)
+        if (statusFilter === 'active') return localDays !== null && localDays > 7
+        if (statusFilter === 'expiring_soon') return localDays !== null && localDays >= 4 && localDays <= 7
+        if (statusFilter === 'critical') return localDays !== null && localDays >= 0 && localDays <= 3
+        if (statusFilter === 'expired') return localDays !== null && localDays < 0
+        return m.status === statusFilter
+      })
     }
     
     // Filter Tipe Membership vs Visitor
@@ -184,12 +223,12 @@ function MembersContent() {
         subscription: formMembership ? {
           membership_id: formMembership,
           start_date: formStartDate,
-          end_date: hitungEndDate(formStartDate, selectedPkg?.duration_days ?? 0).toISOString().split('T')[0],
+          end_date: toLocalISOString(hitungEndDate(formStartDate, selectedPkg?.duration_days ?? 0)),
         } : undefined,
         ptSubscription: formPtMembership && selectedPtPkg ? {
           membership_id: formPtMembership,
           start_date: formStartDate,
-          end_date: hitungEndDate(formStartDate, selectedPtPkg.duration_days).toISOString().split('T')[0],
+          end_date: toLocalISOString(hitungEndDate(formStartDate, selectedPtPkg.duration_days)),
           remaining_sessions: selectedPtPkg.total_sessions,
         } : undefined,
         payment: formMembership && selectedPkg ? {
@@ -214,7 +253,7 @@ function MembersContent() {
           memberName: formName,
           memberPhone: formPhone,
           gymPackageName: selectedPkg?.name,
-          gymEndDate: selectedPkg ? hitungEndDate(formStartDate, selectedPkg.duration_days).toISOString().split('T')[0] : undefined,
+          gymEndDate: selectedPkg ? toLocalISOString(hitungEndDate(formStartDate, selectedPkg.duration_days)) : undefined,
           ptPackageName: selectedPtPkg?.name,
           ptSessions: selectedPtPkg?.total_sessions ?? undefined,
           totalAmount,
@@ -241,8 +280,8 @@ function MembersContent() {
     
     const pkg = renewMembershipId ? memberships?.find((m) => m.id === renewMembershipId) : null
     
-    const startDate = new Date().toISOString().split('T')[0]
-    const endDate = pkg ? hitungEndDate(startDate, pkg.duration_days).toISOString().split('T')[0] : ''
+    const startDate = renewStartDate
+    const endDate = pkg ? toLocalISOString(hitungEndDate(startDate, pkg.duration_days)) : ''
 
     try {
       // Update member_no & notes
@@ -276,7 +315,7 @@ function MembersContent() {
       const ptPaymentData = ptPkg ? {
         membershipId: ptPkg.id,
         startDate,
-        endDate: hitungEndDate(startDate, ptPkg.duration_days).toISOString().split('T')[0],
+        endDate: toLocalISOString(hitungEndDate(startDate, ptPkg.duration_days)),
         amount: ptPkg.price,
         membershipType: ptPkg.name,
         totalSessions: ptPkg.total_sessions || 0,
@@ -336,6 +375,7 @@ function MembersContent() {
     }
 
     try {
+      // 1. Update basic member info
       await updateMember.mutateAsync({
         id: editMemberData.member_id,
         data: {
@@ -346,9 +386,85 @@ function MembersContent() {
           notes: formNotes || null,
         }
       })
-      toast.success('Member berhasil diupdate')
+
+      // 2. Override Subscription (Bypass Payment)
+      const startDate = formStartDate || toLocalISOString(new Date())
+      const subPromises = []
+      
+      // Persiapkan Update Gym Package
+      if (formMembership) {
+          const gymPkg = gymPackages.find(p => p.id === formMembership)
+          if (gymPkg) {
+             const endDate = toLocalISOString(hitungEndDate(startDate, gymPkg.duration_days))
+             
+             if (editMemberData.subscription_id) {
+                subPromises.push(
+                  supabase.from('subscriptions').update({
+                    membership_id: gymPkg.id,
+                    start_date: startDate,
+                    end_date: endDate,
+                    status: 'active'
+                  }).eq('id', editMemberData.subscription_id)
+                )
+             } else {
+                subPromises.push(
+                  supabase.from('subscriptions').insert({
+                    member_id: editMemberData.member_id,
+                    membership_id: gymPkg.id,
+                    start_date: startDate,
+                    end_date: endDate,
+                    status: 'active'
+                  })
+                )
+             }
+          }
+      }
+
+      // Persiapkan Update PT Package
+      if (formPtMembership) {
+          const ptPkg = ptPackages.find(p => p.id === formPtMembership)
+          if (ptPkg) {
+             const endDate = toLocalISOString(hitungEndDate(startDate, ptPkg.duration_days))
+             
+             if (editMemberData.pt_subscription_id) {
+                subPromises.push(
+                  supabase.from('subscriptions').update({
+                    membership_id: ptPkg.id,
+                    start_date: startDate,
+                    end_date: endDate,
+                    remaining_sessions: ptPkg.total_sessions,
+                    status: 'active'
+                  }).eq('id', editMemberData.pt_subscription_id)
+                )
+             } else {
+                subPromises.push(
+                  supabase.from('subscriptions').insert({
+                    member_id: editMemberData.member_id,
+                    membership_id: ptPkg.id,
+                    start_date: startDate,
+                    end_date: endDate,
+                    remaining_sessions: ptPkg.total_sessions,
+                    status: 'active'
+                  })
+                )
+             }
+          }
+      }
+
+      // Jalankan semua update paket secara paralel agar cepat
+      const results = await Promise.all(subPromises)
+      for (const res of results) {
+        if (res.error) throw new Error(`Gagal update paket: ${res.error.message}`)
+      }
+
+      toast.success('Member dan Paket berhasil diperbarui!')
       setEditOpen(false)
       resetForm()
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
+        queryClient.invalidateQueries({ queryKey: ['expiry'] }),
+        queryClient.invalidateQueries({ queryKey: ['critical-count'] })
+      ])
     } catch (err: any) {
       console.error('Update member error:', err)
       const msg = err?.message || String(err)
@@ -357,6 +473,60 @@ function MembersContent() {
       } else {
         toast.error(`Gagal mengupdate member: ${msg}`)
       }
+    }
+  }
+
+  // Fitur Batalkan PT & Hapus Uangnya (Sudah Pakai Modal)
+  const handleCancelPT = async () => {
+    if (!cancelPTData) return
+    const { memberId, ptSubId, memberName } = cancelPTData
+
+    try {
+      // 1. Cari transaksi pembayaran terakhir dari member ini yang kemungkinan besar adalah PT
+      // Kita cari berdasarkan member_id dan urutan terbaru
+      const { data: latestPayment, error: searchError } = await supabase
+        .from('payments')
+        .select('id, notes, membership_type, amount')
+        .eq('member_id', memberId)
+        .order('paid_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (searchError) throw searchError
+
+      const promises = []
+      
+      // Hapus paket PT-nya
+      promises.push(supabase.from('subscriptions').delete().eq('id', ptSubId))
+      
+      // Hapus uangnya jika ketemu transaksinya
+      // Kita cek juga apakah nominalnya cocok atau notes-nya mengandung PT untuk keamanan
+      if (latestPayment) {
+        console.log('Menghapus transaksi:', latestPayment)
+        promises.push(supabase.from('payments').delete().eq('id', latestPayment.id))
+      }
+
+      await Promise.all(promises)
+      
+      // PAKSA REFRESH SEMUA DATA KEUANGAN
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
+        queryClient.invalidateQueries({ queryKey: ['payments'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenue-monthly'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenue-current-month'] }),
+        queryClient.invalidateQueries({ queryKey: ['overview'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenue-chart'] }), // Jika ada chart
+      ])
+      
+      setCancelPTOpen(false)
+      if (latestPayment) {
+        toast.success(`Paket PT ${memberName} dibatalkan & uang senilai ${formatRupiah(latestPayment.amount)} telah dihapus dari laporan.`)
+      } else {
+        toast.success(`Paket PT ${memberName} telah dihapus (Tidak ada data transaksi keuangan yang ditemukan).`)
+      }
+    } catch (error: any) {
+      console.error(error)
+      toast.error('Gagal membatalkan PT: ' + error.message)
     }
   }
 
@@ -370,96 +540,11 @@ function MembersContent() {
     }
   }
 
-  const handleApproveVisitor = async (m: any) => {
-    setApprovingId(m.member_id)
-    try {
-      // Ambil paket DAY secara dinamis dari database
-      let { data: pkgData } = await supabase
-        .from('memberships')
-        .select('id, price')
-        .eq('name', 'DAY')
-        .limit(1)
-        .single()
-      
-      if (!pkgData) {
-        const { data: fallbackPkg } = await supabase
-          .from('memberships')
-          .select('id, price')
-          .ilike('name', '%DAY%')
-          .limit(1)
-          .single()
-        pkgData = fallbackPkg
-      }
 
-      if (!pkgData) {
-        const { data: absoluteFallback } = await supabase
-          .from('memberships')
-          .select('id, price')
-          .limit(1)
-          .single()
-        pkgData = absoluteFallback
-      }
-
-      const DAY_PACKAGE_ID = pkgData?.id || '6f53dd6e-74fd-4b75-a852-23d9ec00a77e'
-      const pkgPrice = pkgData?.price || 15000
-
-      const startDate = new Date().toISOString().split('T')[0]
-      const endDate = hitungEndDate(startDate, 1).toISOString().split('T')[0]
-
-      // 1. Absen (Check-In)
-      const { error: attErr } = await supabase.from('attendance_logs').insert({
-        gym_id: GYM_ID,
-        member_id: m.member_id,
-        notes: 'Visitor Check-In (Admin Approved)'
-      })
-      if (attErr) throw attErr
-      
-      // 2. Tambah Subscription (Paket DAY 1 Hari)
-      const { error: subErr } = await supabase.from('subscriptions').insert({
-        member_id: m.member_id,
-        membership_id: DAY_PACKAGE_ID,
-        start_date: startDate,
-        end_date: endDate,
-        status: 'active'
-      })
-      if (subErr) throw subErr
-
-      // 3. Catat Keuangan (Revenue)
-      const { error: payErr } = await supabase.from('payments').insert({
-        gym_id: GYM_ID,
-        member_id: m.member_id,
-        amount: pkgPrice,
-        payment_method: 'cash',
-        membership_type: 'DAY',
-        notes: 'Pembayaran Visitor Harian (Daily Pass)'
-      })
-      if (payErr) throw payErr
-      
-      // 4. Ubah notes agar tidak muncul lagi sebagai pending
-      const { error: updErr } = await supabase
-        .from('members')
-        .update({ notes: 'Visitor Harian (Selesai)' })
-        .eq('id', m.member_id)
-      
-      if (updErr) throw updErr
-      
-      // Invalidate semua query terkait agar dashboard update
-      queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
-      queryClient.invalidateQueries({ queryKey: ['payments'] })
-      queryClient.invalidateQueries({ queryKey: ['overview'] })
-      
-      toast.success(`${m.full_name} berhasil disetujui! Paket DAY & Pembayaran ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(pkgPrice)} tercatat.`)
-    } catch (err) {
-      toast.error('Gagal menyetujui visitor')
-      console.error(err)
-    } finally {
-      setApprovingId(null)
-    }
-  }
 
   const exportExcel = () => {
     const rows = [
-      ['No. Member', 'Nama', 'Telepon', 'Paket', 'Mulai', 'Expired', 'Status'],
+      ['Nomer Member', 'Nama', 'Telepon', 'Paket', 'Mulai', 'Expired', 'Status'],
       ...(filtered || []).map((m) => [
         m.member_no ?? '',
         m.full_name,
@@ -523,19 +608,19 @@ function MembersContent() {
     <div className="space-y-4">
       {/* Header manajemen member */}
       <div className="flex flex-col gap-1">
-        <h1 className="font-heading text-2xl uppercase text-white sm:text-3xl">Manajemen Member</h1>
-        <p className="text-sm text-[#888]">Kelola data member reguler dan pengunjung harian</p>
+        <h1 className="font-heading text-2xl uppercase text-foreground sm:text-3xl">Manajemen Member</h1>
+        <p className="text-sm text-muted-foreground">Kelola data member reguler dan pengunjung harian</p>
       </div>
 
       {/* Mobile header: search + actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555]" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
           <Input
             placeholder="Cari nama atau HP..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="border-[#2A2A2A] bg-[#1A1A1A] pl-9 text-sm text-white placeholder:text-[#555]"
+            className="border-border bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground/60"
           />
         </div>
         <div className="flex gap-2">
@@ -552,8 +637,8 @@ function MembersContent() {
               onClick={() => { setStatusFilter(opt.value); setPage(1); }}
               className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border ${
                 statusFilter === opt.value
-                  ? 'bg-[#FF2A2A] text-white border-[#FF2A2A]'
-                  : 'bg-[#1A1A1A] text-[#888] hover:bg-[#2A2A2A] hover:text-white border-[#2A2A2A]'
+                  ? 'bg-primary text-foreground border-[#FF2A2A]'
+                  : 'bg-card text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground border-border'
               }`}
             >
               {opt.label}
@@ -561,38 +646,46 @@ function MembersContent() {
           ))}
         </div>
 
-          <Button size="sm" variant="outline" onClick={exportExcel} className="border-[#2A2A2A] text-xs text-[#888]">
+          <Button size="sm" variant="outline" onClick={exportExcel} className="border-border text-xs text-muted-foreground">
             <Download className="mr-1 h-3.5 w-3.5" /> Excel
           </Button>
 
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <Dialog 
+            open={addOpen} 
+            modal={true}
+            disablePointerDismissal={true}
+            onOpenChange={(open, details) => {
+              if (details.reason === 'outside-press' || details.reason === 'escape-key') return
+              setAddOpen(open)
+            }}
+          >
             <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#E60000]" />}>
               <Plus className="mr-1 h-3.5 w-3.5" /> Tambah
             </DialogTrigger>
-            <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+            <DialogContent className="max-h-[90dvh] overflow-y-auto border-border bg-card text-foreground sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="font-heading text-xl">Tambah Member Baru</DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
                 <div>
-                  <Label className="text-xs text-[#888]">Nama Lengkap *</Label>
-                  <Input value={formName} onChange={(e) => setFormName(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">Nama Lengkap *</Label>
+                  <Input value={formName} onChange={(e) => setFormName(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">No. HP *</Label>
-                  <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">No. HP *</Label>
+                  <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">No. Member (Opsional)</Label>
-                  <Input value={formMemberNo} onChange={(e) => setFormMemberNo(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">No. Member (Opsional)</Label>
+                  <Input value={formMemberNo} onChange={(e) => setFormMemberNo(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">Kontak Darurat</Label>
-                  <Input value={formEmergency} onChange={(e) => setFormEmergency(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">Kontak Darurat</Label>
+                  <Input value={formEmergency} onChange={(e) => setFormEmergency(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-[#888]">Paket Gym (Wajib)</Label>
+                    <Label className="text-xs text-muted-foreground">Paket Gym (Wajib)</Label>
                     <PackageCombobox
                       packages={gymPackages}
                       value={formMembership}
@@ -600,13 +693,13 @@ function MembersContent() {
                       placeholder="Pilih paket gym"
                     />
                     {selectedPkg && (
-                      <p className="mt-1 text-[10px] text-[#FF2A2A]">
+                      <p className="mt-1 text-[10px] text-primary">
                         Aktif sampai: {formatTanggal(hitungEndDate(formStartDate, selectedPkg.duration_days).toISOString())}
                       </p>
                     )}
                   </div>
                   <div>
-                    <Label className="text-xs text-[#888]">Paket PT (Opsional)</Label>
+                    <Label className="text-xs text-muted-foreground">Paket PT (Opsional)</Label>
                     <PackageCombobox
                       packages={ptPackages}
                       value={formPtMembership}
@@ -614,7 +707,7 @@ function MembersContent() {
                       placeholder="Pilih paket PT"
                     />
                     {formPtMembership && ptPackages.find(p => p.id === formPtMembership) && (
-                      <p className="mt-1 text-[10px] text-[#FF2A2A]">
+                      <p className="mt-1 text-[10px] text-primary">
                         Sesi: {ptPackages.find(p => p.id === formPtMembership)?.total_sessions} Sesi
                       </p>
                     )}
@@ -622,10 +715,10 @@ function MembersContent() {
                 </div>
 
                 {(formMembership || formPtMembership) && (
-                  <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3">
-                    <div className="mb-3 flex items-center justify-between border-b border-[#2A2A2A] pb-2 text-sm">
-                      <span className="text-[#888]">Total Tagihan:</span>
-                      <span className="font-heading text-lg text-[#D4FF00]">
+                  <div className="rounded-lg border border-border bg-background p-3">
+                    <div className="mb-3 flex items-center justify-between border-b border-border pb-2 text-sm">
+                      <span className="text-muted-foreground">Total Tagihan:</span>
+                      <span className="font-heading text-lg text-accent">
                         {formatRupiah(
                           (selectedPkg?.price || 0) +
                           (ptPackages.find(p => p.id === formPtMembership)?.price || 0)
@@ -633,7 +726,7 @@ function MembersContent() {
                       </span>
                     </div>
                     <div>
-                      <Label className="text-xs text-[#888]">Metode Bayar</Label>
+                      <Label className="text-xs text-muted-foreground">Metode Bayar</Label>
                       <NativeSelect
                         value={formPayMethod}
                         onChange={(e) => setFormPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
@@ -647,17 +740,17 @@ function MembersContent() {
                   </div>
                 )}
                 <div>
-                  <Label className="text-xs text-[#888]">Tanggal Mulai</Label>
-                  <Input type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">Tanggal Mulai</Label>
+                  <Input type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">Catatan</Label>
-                  <Input value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">Catatan</Label>
+                  <Input value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <Button
                   onClick={handleAddMember}
                   disabled={createMember.isPending}
-                  className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
+                  className="w-full bg-primary font-bold text-black hover:bg-[#E60000]"
                 >
                   {createMember.isPending ? 'Menyimpan...' : 'Simpan Member'}
                 </Button>
@@ -665,37 +758,73 @@ function MembersContent() {
             </DialogContent>
           </Dialog>
 
-          {/* Edit Member Dialog */}
-          <Dialog open={editOpen} onOpenChange={setEditOpen}>
-            <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+          <Dialog 
+            open={editOpen} 
+            modal={true}
+            disablePointerDismissal={true}
+            onOpenChange={(open, details) => {
+              if (details.reason === 'outside-press' || details.reason === 'escape-key') return
+              setEditOpen(open)
+            }}
+          >
+            <DialogContent className="max-h-[90dvh] overflow-y-auto border-border bg-card text-foreground sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="font-heading text-xl">Edit Profil Member</DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
                 <div>
-                  <Label className="text-xs text-[#888]">Nama Lengkap *</Label>
-                  <Input value={formName} onChange={(e) => setFormName(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">Nama Lengkap *</Label>
+                  <Input value={formName} onChange={(e) => setFormName(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">No. HP *</Label>
-                  <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">No. HP *</Label>
+                  <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">No. Member (Opsional)</Label>
-                  <Input value={formMemberNo} onChange={(e) => setFormMemberNo(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">No. Member (Opsional)</Label>
+                  <Input value={formMemberNo} onChange={(e) => setFormMemberNo(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">Kontak Darurat</Label>
-                  <Input value={formEmergency} onChange={(e) => setFormEmergency(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">Kontak Darurat</Label>
+                  <Input value={formEmergency} onChange={(e) => setFormEmergency(e.target.value)} className="border-border bg-background text-foreground" />
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Ubah Paket Gym</Label>
+                    <PackageCombobox
+                      packages={gymPackages}
+                      value={formMembership}
+                      onValueChange={setFormMembership}
+                      placeholder="Pilih paket gym"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Ubah Paket PT</Label>
+                    <PackageCombobox
+                      packages={ptPackages}
+                      value={formPtMembership}
+                      onValueChange={setFormPtMembership}
+                      placeholder="Pilih paket PT"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">Catatan</Label>
-                  <Input value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="border-[#2A2A2A] bg-[#111] text-white" />
+                  <Label className="text-xs text-muted-foreground">Tanggal Mulai (Jika paket diubah)</Label>
+                  <Input type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} className="border-border bg-background text-foreground" />
+                </div>
+                <div className="p-2 border border-red-500/20 bg-red-500/5 rounded-lg">
+                  <p className="text-[10px] text-red-400 font-medium">
+                    PERHATIAN: Mengubah paket di sini murni untuk koreksi data awal. Transaksi ini TIDAK AKAN ditambahkan ke Laporan Keuangan (Income Rp0).
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Catatan</Label>
+                  <Input value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
                 <Button
                   onClick={handleUpdateMember}
                   disabled={updateMember.isPending}
-                  className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
+                  className="w-full bg-primary font-bold text-black hover:bg-[#E60000]"
                 >
                   {updateMember.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
                 </Button>
@@ -709,12 +838,12 @@ function MembersContent() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl border border-[#2A2A2A] bg-[#1A1A1A]" />
+            <div key={i} className="h-24 animate-pulse rounded-xl border border-border bg-card" />
           ))}
         </div>
       ) : paginated.length === 0 ? (
-        <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] py-12 text-center">
-          <p className="text-sm text-[#555]">Tidak ada data member</p>
+        <div className="rounded-xl border border-border bg-card py-12 text-center">
+          <p className="text-sm text-muted-foreground/60">Tidak ada data member</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -723,32 +852,42 @@ function MembersContent() {
             const num = (page - 1) * PER_PAGE + idx + 1
 
             return (
-              <div key={m.member_id} className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-3">
+              <div key={m.member_id} className="rounded-xl border border-border/50 bg-card p-3">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#D4FF00]/10 font-heading text-lg text-[#D4FF00]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#D4FF00]/10 font-heading text-lg text-accent">
                     {initials}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-white">
+                        <p className="truncate text-sm font-semibold text-foreground">
                           {num}. {m.full_name} 
-                          {m.member_no && <span className="ml-1 text-xs text-[#888]">#{m.member_no}</span>}
+                          {m.member_no && <span className="ml-1 text-xs text-muted-foreground">#{m.member_no}</span>}
                         </p>
-                        <p className="text-[11px] text-[#888]">{m.phone}</p>
+                        <p className="text-[11px] text-muted-foreground">{m.phone}</p>
                       </div>
-                      <StatusBadge status={m.status} />
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#555]">
-                      <span>{m.membership_name}</span>
-                      <span>Exp: {formatTanggal(m.end_date)}</span>
-                      <span>Sisa {m.days_remaining} hari</span>
-                    </div>
+                        <StatusBadge 
+                          status={(() => {
+                            const localDays = calculateDaysRemaining(m.end_date)
+                            if (localDays === null) return m.status;
+                            if (localDays < 0) return 'expired';
+                            if (localDays <= 3) return 'critical';
+                            if (localDays <= 7) return 'expiring_soon';
+                            return 'active';
+                          })()} 
+                        />
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
+                        <span>{m.membership_name}</span>
+                        <span>Exp: {formatTanggal(m.end_date)}</span>
+                        <span>Sisa {calculateDaysRemaining(m.end_date)} hari</span>
+                        <span className="text-primary font-bold">Kunjungan: {m.attendance_count}x</span>
+                      </div>
                     {m.pt_membership_name && (
                       <div className="mt-1 flex items-center gap-1.5">
                         <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
                           m.pt_remaining_sessions === null || m.pt_remaining_sessions === undefined
-                            ? 'bg-[#555]/20 text-[#888]'
+                            ? 'bg-[#555]/20 text-muted-foreground'
                             : m.pt_remaining_sessions <= 0
                               ? 'bg-red-500/15 text-red-400'
                               : m.pt_remaining_sessions <= 2
@@ -756,103 +895,43 @@ function MembersContent() {
                                 : 'bg-emerald-500/15 text-emerald-400'
                         }`}>
                           🏋️ {m.pt_membership_name} · {m.pt_remaining_sessions ?? 0}/{m.pt_total_sessions ?? 0} sesi
+                          
+                          {/* Tombol Batal PT */}
+                          {m.pt_subscription_id && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCancelPTData({ memberId: m.member_id, ptSubId: m.pt_subscription_id!, memberName: m.full_name });
+                                setCancelPTOpen(true);
+                              }}
+                              className="ml-1 hover:text-red-500 transition-colors"
+                              title="Batalkan Paket PT & Hapus Uangnya"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Actions */}
-                {m.notes === 'Visitor Harian' && m.status === 'inactive' ? (
-                  <div className="mt-2 flex gap-1.5 border-t border-[#2A2A2A]/50 pt-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleApproveVisitor(m)}
-                      disabled={approvingId === m.member_id}
-                      className="h-7 flex-1 text-[11px] bg-[#FF2A2A]/10 text-[#FF2A2A] hover:bg-[#FF2A2A]/20"
-                    >
-                      <CheckCircle2 className="mr-1 h-3 w-3" /> {approvingId === m.member_id ? 'Loading...' : 'Izinkan & Absen'}
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger render={<Button size="sm" variant="ghost" className="h-7 flex-1 text-[11px] text-red-400 hover:bg-red-500/10" />}>
-                        <Trash2 className="mr-1 h-3 w-3" /> Tolak & Hapus
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Tolak & Hapus {m.full_name}?</AlertDialogTitle>
-                          <AlertDialogDescription className="text-[#888]">
-                            Data visitor ini akan dihapus dari sistem.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(m.member_id, m.full_name)} className="bg-red-500 text-white hover:bg-red-600">
-                            Hapus
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                ) : m.notes?.toLowerCase().includes('visitor') && m.status === 'inactive' ? (
-                  /* Visitor yang sudah di-approve (DAY aktif) — tampilkan Edit, Perpanjang, Hapus */
-                  <div className="mt-2 flex gap-1.5 border-t border-[#2A2A2A]/50 pt-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setEditMemberData(m)
-                        setFormName(m.full_name)
-                        setFormPhone(m.phone)
-                        setFormMemberNo(m.member_no || '')
-                        setFormEmergency(m.emergency_contact || '')
-                        setFormNotes(m.notes || '')
-                        setEditOpen(true)
-                      }}
-                      className="h-7 flex-1 text-[11px] text-blue-400 hover:bg-blue-500/10"
-                    >
-                      <Edit2 className="mr-1 h-3 w-3" /> Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => { setRenewMember(m); setRenewMemberNo(m.member_no || ''); setRenewPtMembershipId(''); setRenewOpen(true) }}
-                      className="h-7 flex-1 text-[11px] text-[#FF6B35] hover:bg-[#FF6B35]/10"
-                    >
-                      <RotateCcw className="mr-1 h-3 w-3" /> Perpanjang
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger render={<Button size="sm" variant="ghost" className="h-7 text-[11px] text-red-400 hover:bg-red-500/10" />}>
-                        <Trash2 className="h-3 w-3" />
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Hapus {m.full_name}?</AlertDialogTitle>
-                          <AlertDialogDescription className="text-[#888]">
-                            Data visitor ini akan dihapus dari sistem.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(m.member_id, m.full_name)} className="bg-red-500 text-white hover:bg-red-600">
-                            Hapus
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                ) : (
-                  <div className="mt-2 flex gap-1.5 border-t border-[#2A2A2A]/50 pt-2">
-                    <Button
+                <div className="mt-2 flex gap-1.5 border-t border-border/50 pt-2">
+                  <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => {
+                      const mGymId = gymPackages.find(p => p.name.toUpperCase().trim() === (m.membership_name || '').toUpperCase().trim())?.id || ''
+                      const mPtId = ptPackages.find(p => p.name.toUpperCase().trim() === (m.pt_membership_name || '').toUpperCase().trim())?.id || ''
                       setEditMemberData(m)
                       setFormName(m.full_name)
                       setFormPhone(m.phone)
                       setFormMemberNo(m.member_no || '')
                       setFormEmergency(m.emergency_contact || '')
                       setFormNotes(m.notes || '')
+                      setFormMembership(mGymId)
+                      setFormPtMembership(mPtId)
+                      setFormStartDate(m.start_date || toLocalISOString(new Date()))
                       setEditOpen(true)
                     }}
                     className="h-7 flex-1 text-[11px] text-blue-400 hover:bg-blue-500/10"
@@ -868,21 +947,21 @@ function MembersContent() {
                     <RotateCcw className="mr-1 h-3 w-3" /> Perpanjang
                   </Button>
                   <AlertDialog>
-                    <AlertDialogTrigger render={<Button size="sm" variant="ghost" className="h-7 text-[11px] text-red-400 hover:bg-red-500/10" />}>
-                      <Trash2 className="h-3 w-3" />
+                    <AlertDialogTrigger className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), "h-7 flex-1 text-[11px] text-red-400 hover:bg-red-500/10")}>
+                      <Trash2 className="mr-1 h-3 w-3" /> Hapus
                     </AlertDialogTrigger>
-                    <AlertDialogContent className="border-[#2A2A2A] bg-[#1A1A1A] text-white">
+                    <AlertDialogContent className="border-border bg-card text-foreground">
                       <AlertDialogHeader>
                         <AlertDialogTitle>Hapus {m.full_name}?</AlertDialogTitle>
-                        <AlertDialogDescription className="text-[#888]">
+                        <AlertDialogDescription className="text-muted-foreground">
                           Data member tidak bisa dikembalikan setelah dihapus.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel className="border-[#2A2A2A] text-[#888]">Batal</AlertDialogCancel>
+                        <AlertDialogCancel className="border-border text-muted-foreground">Batal</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => handleDelete(m.member_id, m.full_name)}
-                          className="bg-red-500 text-white hover:bg-red-600"
+                          className="bg-red-500 text-foreground hover:bg-red-600"
                         >
                           Hapus
                         </AlertDialogAction>
@@ -890,7 +969,6 @@ function MembersContent() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
-                )}
               </div>
             )
           })}
@@ -905,11 +983,11 @@ function MembersContent() {
             variant="outline"
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
-            className="border-[#2A2A2A] text-xs text-[#888]"
+            className="border-border text-xs text-muted-foreground"
           >
             Sebelumnya
           </Button>
-          <span className="text-xs text-[#888]">
+          <span className="text-xs text-muted-foreground">
             {page} / {totalPages}
           </span>
           <Button
@@ -917,16 +995,28 @@ function MembersContent() {
             variant="outline"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
-            className="border-[#2A2A2A] text-xs text-[#888]"
+            className="border-border text-xs text-muted-foreground"
           >
             Selanjutnya
           </Button>
         </div>
       )}
 
-      {/* Renew Dialog */}
-      <Dialog open={renewOpen} onOpenChange={(open) => { setRenewOpen(open); if (!open) { setRenewPtMembershipId(''); setRenewMembershipId(''); } }}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+      <Dialog 
+        open={renewOpen} 
+        modal={true}
+        disablePointerDismissal={true}
+        onOpenChange={(open, details) => { 
+          if (details.reason === 'outside-press' || details.reason === 'escape-key') return
+          setRenewOpen(open)
+          if (!open) { 
+            setRenewPtMembershipId(''); 
+            setRenewMembershipId(''); 
+            setRenewStartDate(new Date().toISOString().split('T')[0]);
+          } 
+        }}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto border-border bg-card text-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">Perpanjang Membership</DialogTitle>
           </DialogHeader>
@@ -937,21 +1027,31 @@ function MembersContent() {
 
             return (
             <div className="space-y-3">
-              <p className="text-sm text-[#888]">Member: <span className="text-white">{renewMember.full_name}</span></p>
+              <p className="text-sm text-muted-foreground">Member: <span className="text-foreground">{renewMember.full_name}</span></p>
               
               <div>
-                <Label className="text-xs text-[#888]">No. Member (Baru/Opsional)</Label>
+                <Label className="text-xs text-muted-foreground">No. Member (Baru/Opsional)</Label>
                 <Input
                   value={renewMemberNo}
                   onChange={(e) => setRenewMemberNo(e.target.value)}
                   placeholder="Misal: 001"
-                  className="border-[#2A2A2A] bg-[#111] text-white mt-1"
+                  className="border-border bg-background text-foreground mt-1"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground">Tanggal Mulai</Label>
+                <Input
+                  type="date"
+                  value={renewStartDate}
+                  onChange={(e) => setRenewStartDate(e.target.value)}
+                  className="border-border bg-background text-foreground mt-1"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs text-[#888]">Paket Gym (Opsional)</Label>
+                  <Label className="text-xs text-muted-foreground">Paket Gym (Opsional)</Label>
                   <PackageCombobox
                     packages={gymPackages}
                     value={renewMembershipId}
@@ -959,13 +1059,13 @@ function MembersContent() {
                     placeholder="Pilih paket gym"
                   />
                   {renewGymPkg && (
-                    <p className="mt-1 text-[10px] text-[#D4FF00]">
-                      Aktif sampai: {formatTanggal(hitungEndDate(new Date().toISOString().split('T')[0], renewGymPkg.duration_days).toISOString())}
+                    <p className="mt-1 text-[10px] text-accent">
+                      Aktif sampai: {formatTanggal(hitungEndDate(renewStartDate, renewGymPkg.duration_days).toISOString())}
                     </p>
                   )}
                 </div>
                 <div>
-                  <Label className="text-xs text-[#888]">Paket PT (Opsional)</Label>
+                  <Label className="text-xs text-muted-foreground">Paket PT (Opsional)</Label>
                   <PackageCombobox
                     packages={ptPackages}
                     value={renewPtMembershipId}
@@ -973,7 +1073,7 @@ function MembersContent() {
                     placeholder="Pilih paket PT"
                   />
                   {renewPtPkg && (
-                    <p className="mt-1 text-[10px] text-[#D4FF00]">
+                    <p className="mt-1 text-[10px] text-accent">
                       {renewPtPkg.total_sessions} Sesi PT
                     </p>
                   )}
@@ -981,15 +1081,15 @@ function MembersContent() {
               </div>
 
               {(renewMembershipId || renewPtMembershipId) && (
-                <div className="rounded-lg border border-[#2A2A2A] bg-[#111] p-3">
-                  <div className="mb-3 flex items-center justify-between border-b border-[#2A2A2A] pb-2 text-sm">
-                    <span className="text-[#888]">Total Tagihan:</span>
-                    <span className="font-heading text-lg text-[#D4FF00]">
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <div className="mb-3 flex items-center justify-between border-b border-border pb-2 text-sm">
+                    <span className="text-muted-foreground">Total Tagihan:</span>
+                    <span className="font-heading text-lg text-accent">
                       {formatRupiah(totalAmount)}
                     </span>
                   </div>
                   <div>
-                    <Label className="text-xs text-[#888]">Metode Bayar</Label>
+                    <Label className="text-xs text-muted-foreground">Metode Bayar</Label>
                     <NativeSelect
                       value={renewPayMethod}
                       onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
@@ -1006,7 +1106,7 @@ function MembersContent() {
               <Button
                 onClick={handleRenew}
                 disabled={renewSub.isPending || (!renewMembershipId && !renewPtMembershipId)}
-                className="w-full bg-[#FF2A2A] font-bold text-black hover:bg-[#E60000]"
+                className="w-full bg-primary font-bold text-black hover:bg-[#E60000]"
               >
                 {renewSub.isPending ? 'Memproses...' : 'Perpanjang & Bayar'}
               </Button>
@@ -1016,66 +1116,73 @@ function MembersContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Receipt / Kwitansi Dialog */}
-      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto border-[#2A2A2A] bg-[#1A1A1A] text-white sm:max-w-md">
+      <Dialog 
+        open={receiptOpen} 
+        modal={true}
+        disablePointerDismissal={true}
+        onOpenChange={(open, details) => {
+          if (details.reason === 'outside-press' || details.reason === 'escape-key') return
+          setReceiptOpen(open)
+        }}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto border-border bg-card text-foreground sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-xl">Kwitansi Pembayaran</DialogTitle>
           </DialogHeader>
           {receiptData && (
             <div className="space-y-4">
               {/* Receipt preview */}
-              <div className="rounded-xl border border-[#2A2A2A] bg-[#111] p-4 space-y-3">
+              <div className="rounded-xl border border-border bg-background p-4 space-y-3">
                 <div className="text-center border-b border-dashed border-[#333] pb-3">
-                  <p className="font-heading text-sm font-bold text-[#FF2A2A]">LINEUP GYM PRAMBANAN</p>
-                  <p className="text-[10px] text-[#555]">Be Strong Be Healthy!</p>
+                  <p className="font-heading text-sm font-bold text-primary">LINEUP GYM PRAMBANAN</p>
+                  <p className="text-[10px] text-muted-foreground/60">Be Strong Be Healthy!</p>
                 </div>
 
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-[#888]">Member</span>
-                    <span className="text-white font-medium">{receiptData.memberName}</span>
+                    <span className="text-muted-foreground">Member</span>
+                    <span className="text-foreground font-medium">{receiptData.memberName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#888]">Jenis</span>
-                    <span className="text-white">{receiptData.transactionType === 'new' ? 'Pendaftaran Baru' : 'Perpanjangan'}</span>
+                    <span className="text-muted-foreground">Jenis</span>
+                    <span className="text-foreground">{receiptData.transactionType === 'new' ? 'Pendaftaran Baru' : 'Perpanjangan'}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-dashed border-[#333] pt-2 space-y-1.5 text-xs">
                   {receiptData.gymPackageName && (
                     <div className="flex justify-between">
-                      <span className="text-[#888]">Paket Gym</span>
-                      <span className="text-white">{receiptData.gymPackageName}</span>
+                      <span className="text-muted-foreground">Paket Gym</span>
+                      <span className="text-foreground">{receiptData.gymPackageName}</span>
                     </div>
                   )}
                   {receiptData.gymEndDate && (
                     <div className="flex justify-between">
-                      <span className="text-[#888]">Berlaku s/d</span>
-                      <span className="text-[#D4FF00] font-medium">{formatTanggal(receiptData.gymEndDate)}</span>
+                      <span className="text-muted-foreground">Berlaku s/d</span>
+                      <span className="text-accent font-medium">{formatTanggal(receiptData.gymEndDate)}</span>
                     </div>
                   )}
                   {receiptData.ptPackageName && (
                     <div className="flex justify-between">
-                      <span className="text-[#888]">Paket PT</span>
-                      <span className="text-white">{receiptData.ptPackageName}{receiptData.ptSessions ? ` (${receiptData.ptSessions} Sesi)` : ''}</span>
+                      <span className="text-muted-foreground">Paket PT</span>
+                      <span className="text-foreground">{receiptData.ptPackageName}{receiptData.ptSessions ? ` (${receiptData.ptSessions} Sesi)` : ''}</span>
                     </div>
                   )}
                 </div>
 
                 <div className="border-t border-dashed border-[#333] pt-2 space-y-1.5 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-[#888]">Metode Bayar</span>
-                    <span className="text-white capitalize">{receiptData.paymentMethod}</span>
+                    <span className="text-muted-foreground">Metode Bayar</span>
+                    <span className="text-foreground capitalize">{receiptData.paymentMethod}</span>
                   </div>
                   <div className="flex justify-between text-sm font-bold">
-                    <span className="text-[#888]">Total</span>
-                    <span className="text-[#D4FF00] font-heading text-base">{formatRupiah(receiptData.totalAmount)}</span>
+                    <span className="text-muted-foreground">Total</span>
+                    <span className="text-accent font-heading text-base">{formatRupiah(receiptData.totalAmount)}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-dashed border-[#333] pt-2 text-center">
-                  <p className="text-[10px] text-[#555]">{formatTanggal(new Date())} — Terima kasih!</p>
+                  <p className="text-[10px] text-muted-foreground/60">{formatTanggal(new Date())} — Terima kasih!</p>
                 </div>
               </div>
 
@@ -1084,7 +1191,7 @@ function MembersContent() {
                 <Button
                   variant="outline"
                   onClick={() => setReceiptOpen(false)}
-                  className="flex-1 border-[#2A2A2A] text-[#888] hover:bg-[#2A2A2A] hover:text-white"
+                  className="flex-1 border-border text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground"
                 >
                   Lewati
                 </Button>
@@ -1094,7 +1201,7 @@ function MembersContent() {
                     window.open(url, '_blank')
                     setReceiptOpen(false)
                   }}
-                  className="flex-1 bg-[#25D366] font-bold text-white hover:bg-[#1DA851]"
+                  className="flex-1 bg-[#25D366] font-bold text-foreground hover:bg-[#1DA851]"
                 >
                   <MessageSquare className="mr-1.5 h-4 w-4" /> Kirim ke WA
                 </Button>
@@ -1103,13 +1210,38 @@ function MembersContent() {
           )}
         </DialogContent>
       </Dialog>
+      {/* Modal Konfirmasi Batal PT */}
+      <AlertDialog open={cancelPTOpen} onOpenChange={setCancelPTOpen}>
+        <AlertDialogContent className="border-border bg-card text-foreground">
+          <AlertDialogHeader>
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 mb-4 mx-auto">
+              <ShieldAlert className="h-6 w-6 text-red-500" />
+            </div>
+            <AlertDialogTitle className="text-center">Batalkan Paket PT?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-muted-foreground">
+              Yakin ingin membatalkan paket PT untuk <span className="font-bold text-foreground">{cancelPTData?.memberName}</span>? 
+              <br/><br/>
+              Tindakan ini akan <span className="text-red-400 font-medium">menghapus paket PT</span> dan <span className="text-red-400 font-medium">MENGURANGI pendapatan</span> di Laporan Keuangan secara otomatis.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-muted-foreground">Kembali</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelPT}
+              className="bg-red-500 text-white hover:bg-red-600 font-bold"
+            >
+              Ya, Batalkan PT & Uangnya
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
 
 export default function MembersPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-[#888]">Memuat data member...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Memuat data member...</div>}>
       <MembersContent />
     </Suspense>
   )

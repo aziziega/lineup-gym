@@ -20,7 +20,7 @@ export default function DashboardLayout({
   }, [pathname])
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#0A0A0A]">
+    <div className="flex min-h-[100dvh] flex-col bg-background">
       {/* Desktop sidebar — hidden di mobile */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-60">
         <Sidebar />

@@ -15,7 +15,7 @@ interface MetricCardProps {
 }
 
 const accentColors = {
-  neon: 'text-[#D4FF00]',
+  neon: 'text-accent',
   orange: 'text-[#FF6B35]',
   red: 'text-[#FF3B3B]',
   muted: 'text-[#F0F0F0]',
@@ -32,7 +32,7 @@ export default function MetricCard({
 }: MetricCardProps) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+      <div className="rounded-xl border border-border bg-card p-4">
         <Skeleton className="mb-3 h-4 w-20 bg-[#2A2A2A]" />
         <Skeleton className="mb-1 h-10 w-24 bg-[#2A2A2A]" />
         <Skeleton className="h-3 w-16 bg-[#2A2A2A]" />
@@ -41,13 +41,13 @@ export default function MetricCard({
   }
 
   return (
-    <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4 transition-colors hover:border-[#2A2A2A]">
+    <div className="rounded-xl border border-border/50 bg-card p-4 transition-colors hover:border-border">
       {/* Label + Icon */}
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-[#888]">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
-        <Icon className="h-4 w-4 text-[#555]" />
+        <Icon className="h-4 w-4 text-muted-foreground/60" />
       </div>
 
       {/* Angka besar */}
@@ -57,7 +57,7 @@ export default function MetricCard({
 
       {/* Trend */}
       {trend && (
-        <p className={cn('mt-1 text-xs', trendUp ? 'text-[#FF2A2A]' : 'text-[#FF6B35]')}>
+        <p className={cn('mt-1 text-xs', trendUp ? 'text-primary' : 'text-[#FF6B35]')}>
           {trendUp ? 'â†‘' : 'â†“'} {trend}
         </p>
       )}

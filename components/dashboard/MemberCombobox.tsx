@@ -100,8 +100,8 @@ export default function MemberCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className={cn(
-          'flex w-full items-center justify-between gap-1.5 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-white transition-colors hover:bg-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#FF2A2A]/30',
-          !value && 'text-[#555]',
+          'flex w-full items-center justify-between gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-card focus:outline-none focus:ring-2 focus:ring-[#FF2A2A]/30',
+          !value && 'text-muted-foreground/60',
           className
         )}
         render={<button type="button" />}
@@ -109,30 +109,30 @@ export default function MemberCombobox({
         <span className="truncate">
           {selectedMember ? selectedMember.full_name : placeholder}
         </span>
-        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-[#555]" />
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground/60" />
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-[--anchor-width] overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#111] p-0 shadow-xl shadow-black/40"
+        className="w-[--anchor-width] overflow-hidden rounded-xl border border-border bg-background p-0 shadow-xl shadow-black/40"
         sideOffset={4}
         align="start"
       >
         {/* Search input */}
-        <div className="flex items-center gap-2 border-b border-[#2A2A2A] px-3 py-2">
-          <Search className="h-4 w-4 shrink-0 text-[#555]" />
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground/60" />
           <input
             ref={inputRef}
             placeholder="Cari nama member..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 bg-transparent text-sm text-white placeholder:text-[#555] outline-none"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch('')}
-              className="text-[#555] hover:text-white transition-colors"
+              className="text-muted-foreground/60 hover:text-foreground transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -147,7 +147,7 @@ export default function MemberCombobox({
         >
           {filtered.length === 0 ? (
             <div className="py-6 text-center">
-              <p className="text-sm text-[#555]">{emptyMessage || 'Member tidak ditemukan'}</p>
+              <p className="text-sm text-muted-foreground/60">{emptyMessage || 'Member tidak ditemukan'}</p>
               {!emptyMessage && <p className="mt-1 text-xs text-[#444]">Coba kata kunci lain</p>}
             </div>
           ) : (
@@ -172,16 +172,16 @@ export default function MemberCombobox({
                     onMouseEnter={() => setHighlightedIndex(index)}
                     className={cn(
                       'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
-                      isHighlighted && 'bg-[#1A1A1A]',
-                      isSelected && 'text-[#FF2A2A]',
-                      !isSelected && 'text-white'
+                      isHighlighted && 'bg-card',
+                      isSelected && 'text-primary',
+                      !isSelected && 'text-foreground'
                     )}
                   >
                     <Check
                       className={cn(
                         'h-4 w-4 shrink-0 transition-opacity',
                         isSelected
-                          ? 'opacity-100 text-[#FF2A2A]'
+                          ? 'opacity-100 text-primary'
                           : 'opacity-0'
                       )}
                     />
@@ -189,10 +189,10 @@ export default function MemberCombobox({
                       <p className="truncate font-medium">{m.full_name}</p>
                       <div className="flex items-center gap-1.5">
                         {m.phone && (
-                          <p className="truncate text-[11px] text-[#555]">{m.phone}</p>
+                          <p className="truncate text-[11px] text-muted-foreground/60">{m.phone}</p>
                         )}
                         {statusMap?.get(m.id) && (
-                          <span className="shrink-0 rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-[#FF2A2A]">
+                          <span className="shrink-0 rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-primary">
                             {statusMap.get(m.id)}
                           </span>
                         )}
@@ -207,7 +207,7 @@ export default function MemberCombobox({
 
         {/* Quick count footer */}
         {members.length > 10 && (
-          <div className="border-t border-[#2A2A2A] px-3 py-1.5">
+          <div className="border-t border-border px-3 py-1.5">
             <p className="text-[10px] text-[#444]">
               Total {members.length} member Â· Ketik untuk mencari
             </p>

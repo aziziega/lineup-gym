@@ -9,19 +9,19 @@ interface StatusBadgeProps {
 const statusConfig = {
   active: {
     label: 'Aktif',
-    className: 'bg-[#FF2A2A]/10 text-[#FF2A2A] border-[#FF2A2A]/30',
+    className: 'bg-green-500/10 text-green-500 border-green-500/30',
   },
   expiring_soon: {
     label: 'Segera',
-    className: 'bg-[#FF6B35]/10 text-[#FF6B35] border-[#FF6B35]/30',
+    className: 'bg-amber-400/10 text-amber-400 border-amber-400/30',
   },
   critical: {
     label: 'Kritis',
-    className: 'bg-[#FF0000]/15 text-[#FF3333] border-[#FF3333]/30 animate-pulse-critical',
+    className: 'bg-orange-500/15 text-orange-500 border-orange-500/30 animate-pulse-critical',
   },
   expired: {
     label: 'Expired',
-    className: 'bg-[#FF3B3B]/10 text-[#FF4444] border-[#FF4444]/30',
+    className: 'bg-red-500/10 text-red-500 border-red-500/30',
   },
 }
 
@@ -30,7 +30,7 @@ export default function StatusBadge({ status }: { status?: string }) {
 
   if (!config) {
     return (
-      <span className="inline-flex items-center rounded-full border border-[#2A2A2A] bg-[#2A2A2A]/50 px-2.5 py-0.5 text-[11px] font-semibold text-[#888]">
+      <span className="inline-flex items-center rounded-full border border-border bg-[#2A2A2A]/50 px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
         {status ? status : 'Tidak Aktif'}
       </span>
     )

@@ -30,6 +30,7 @@ export interface Member {
   emergency_contact: string | null;
   photo_url: string | null;
   notes: string | null;
+  last_contacted_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -113,6 +114,7 @@ export interface ActiveSubscriptionView {
   emergency_contact: string | null;
   notes: string | null;
   photo_url: string | null;
+  last_contacted_at?: string | null;
   
   // Gym Info
   membership_name: string | null;
@@ -131,6 +133,7 @@ export interface ActiveSubscriptionView {
   pt_remaining_sessions: number | null;
   pt_total_sessions: number | null;
   pt_status: 'active' | 'expired' | 'inactive';
+  attendance_count?: number;
 }
 
 export interface Expense {

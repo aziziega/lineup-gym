@@ -21,7 +21,7 @@ export default function TodayPTSchedule() {
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] p-4">
+      <div className="rounded-xl border border-border bg-card p-4">
         <Skeleton className="mb-4 h-5 w-40 bg-[#2A2A2A]" />
         {[1, 2, 3].map((i) => (
           <Skeleton key={i} className="mb-2 h-14 w-full bg-[#2A2A2A]" />
@@ -31,11 +31,11 @@ export default function TodayPTSchedule() {
   }
 
   return (
-    <div className="rounded-xl border border-[#2A2A2A]/50 bg-[#1A1A1A] p-4">
-      <h3 className="mb-3 text-sm font-semibold text-white">Jadwal PT Hari Ini</h3>
+    <div className="rounded-xl border border-border/50 bg-card p-4">
+      <h3 className="mb-3 text-sm font-semibold text-foreground">Jadwal PT Hari Ini</h3>
 
       {!data || data.length === 0 ? (
-        <p className="py-6 text-center text-sm text-[#555]">Tidak ada jadwal PT hari ini</p>
+        <p className="py-6 text-center text-sm text-muted-foreground/60">Tidak ada jadwal PT hari ini</p>
       ) : (
         <div className="space-y-2">
           {data.map((session) => (
@@ -43,15 +43,15 @@ export default function TodayPTSchedule() {
               key={session.id}
               className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${
                 session.is_completed
-                  ? 'border-[#2A2A2A]/30 bg-[#1A1A1A] opacity-60'
-                  : 'border-[#2A2A2A]/50 bg-[#111]'
+                  ? 'border-border/30 bg-card opacity-60'
+                  : 'border-border/50 bg-background'
               }`}
             >
               <div className="min-w-0 flex-1">
-                <p className={`truncate text-sm font-medium ${session.is_completed ? 'line-through text-[#888]' : 'text-white'}`}>
+                <p className={`truncate text-sm font-medium ${session.is_completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                   {session.member_name}
                 </p>
-                <div className={`mt-0.5 flex items-center gap-3 text-[11px] ${session.is_completed ? 'text-[#555]' : 'text-[#888]'}`}>
+                <div className={`mt-0.5 flex items-center gap-3 text-[11px] ${session.is_completed ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
                     {session.session_time.slice(0, 5)} WIB
@@ -64,11 +64,11 @@ export default function TodayPTSchedule() {
                     Selesai
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded bg-[#FF2A2A]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#FF2A2A]">
+                  <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                     <User className="h-3 w-3" /> PT
                   </span>
                 )}
-                <span className={`text-[10px] ${session.is_completed ? 'text-[#555]' : 'text-[#888]'}`}>
+                <span className={`text-[10px] ${session.is_completed ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
                   Sesi {((session.total_sessions || 0) - (session.remaining_sessions || 0)) + 1}/{session.total_sessions}
                 </span>
               </div>

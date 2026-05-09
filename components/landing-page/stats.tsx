@@ -8,9 +8,9 @@ export default function Stats() {
         { value: '400+', label: 'Member Terdaftar' },
         { value: '06.00-21.00 WIB', label: 'Jam Operasional' },
       ].map(s => (
-        <div key={s.label} className="rounded-xl border border-[#1A1A1A] bg-[#111]/70 px-3 py-4 backdrop-blur-sm">
-          <p className="font-heading text-2xl text-[#FF2A2A] sm:text-3xl">{s.value}</p>
-          <p className="text-[11px] text-[#888] sm:text-xs">{s.label}</p>
+        <div key={s.label} className="rounded-xl border border-[#1A1A1A] bg-background/70 px-3 py-4 backdrop-blur-sm">
+          <p className="font-heading text-2xl text-primary sm:text-3xl">{s.value}</p>
+          <p className="text-[11px] text-muted-foreground sm:text-xs">{s.label}</p>
         </div>
       ))}
     </div>

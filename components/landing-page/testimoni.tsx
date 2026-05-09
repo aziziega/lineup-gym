@@ -46,9 +46,9 @@ export default function Testimoni() {
   return (
     <section className="bg-[#0A0A0A] py-20 overflow-hidden">
       <div className="max-w-6xl mx-auto px-4 mb-12 text-center">
-        <p className="text-sm font-medium uppercase tracking-widest text-[#FF2A2A]">Testimoni</p>
-        <h2 className="mt-2 font-heading text-3xl text-white sm:text-4xl">Apa Kata Mereka?</h2>
-        <p className="mt-2 text-sm text-[#888]">Review jujur dari member setia Lineup Gym</p>
+        <p className="text-sm font-medium uppercase tracking-widest text-primary">Testimoni</p>
+        <h2 className="mt-2 font-heading text-3xl text-foreground sm:text-4xl">Apa Kata Mereka?</h2>
+        <p className="mt-2 text-sm text-muted-foreground">Review jujur dari member setia Lineup Gym</p>
       </div>
 
       {/* Testimonials Marquee */}
@@ -57,17 +57,17 @@ export default function Testimoni() {
           {[...TESTIMONIALS, ...TESTIMONIALS].map((t, i) => (
             <div 
               key={i} 
-              className="w-[350px] flex-shrink-0 rounded-2xl border border-[#1A1A1A] bg-[#111] p-6 transition-all hover:border-[#FF2A2A]/30 whitespace-normal"
+              className="w-[350px] flex-shrink-0 rounded-2xl border border-[#1A1A1A] bg-background p-6 transition-all hover:border-[#FF2A2A]/30 whitespace-normal"
             >
               <div className="mb-4 flex items-center gap-3">
                 <div className="relative h-11 w-11 overflow-hidden rounded-full border border-[#FF2A2A]/20">
                   <Image src={t.photo} alt={t.name} fill className="object-cover" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">{t.name}</h4>
+                  <h4 className="text-sm font-bold text-foreground">{t.name}</h4>
                   <div className="flex gap-0.5">
                     {[...Array(t.stars)].map((_, idx) => (
-                      <Star key={idx} className="h-3 w-3 fill-[#D4FF00] text-[#D4FF00]" />
+                      <Star key={idx} className="h-3 w-3 fill-[#D4FF00] text-accent" />
                     ))}
                   </div>
                 </div>

@@ -13,7 +13,7 @@ export function useExpiry() {
         .from('active_subscriptions_view')
         .select('*')
         .eq('gym_id', GYM_ID)
-        .lte('days_remaining', 30)
+        .or('days_remaining.lte.30,pt_remaining_sessions.eq.0')
         .order('days_remaining', { ascending: true })
       if (error) throw error
       return data as ActiveSubscriptionView[]
@@ -27,9 +27,9 @@ export function useExpiryStats() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('active_subscriptions_view')
-        .select('days_remaining')
+        .select('*')
         .eq('gym_id', GYM_ID)
-        .lte('days_remaining', 30)
+        .or('days_remaining.lte.30,pt_remaining_sessions.eq.0')
       if (error) throw error
 
       const list = data || []
