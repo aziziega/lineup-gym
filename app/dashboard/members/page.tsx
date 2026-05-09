@@ -143,6 +143,9 @@ function MembersContent() {
   const [cancelPTOpen, setCancelPTOpen] = useState(false)
   const [cancelPTData, setCancelPTData] = useState<{ memberId: string; ptSubId: string; memberName: string } | null>(null)
 
+  const [cancelRenewOpen, setCancelRenewOpen] = useState(false)
+  const [cancelRenewData, setCancelRenewData] = useState<{ memberId: string; subId: string; memberName: string } | null>(null)
+
   const gymPackages = useMemo(() => memberships?.filter(m => m.category === 'gym') || [], [memberships])
   const ptPackages = useMemo(() => memberships?.filter(m => m.category === 'pt') || [], [memberships])
 
@@ -185,11 +188,21 @@ function MembersContent() {
       list = list.filter((m) => !!m.pt_membership_name)
     }
     
-    // Urutkan: Paling atas untuk yang baru absen/pending (status inactive)
+    // Urutkan: 
     list.sort((a, b) => {
+      // 1. Paling atas untuk yang baru absen/pending (status inactive)
       const aPending = (a.notes?.toLowerCase().includes('visitor') && a.status === 'inactive') ? 1 : 0
       const bPending = (b.notes?.toLowerCase().includes('visitor') && b.status === 'inactive') ? 1 : 0
-      return bPending - aPending
+      if (aPending !== bPending) return bPending - aPending
+
+      // 2. Urutkan berdasarkan Nomor Member secara Numerik (1, 2, 3...)
+      const numA = parseInt((a.member_no || '').replace(/[^0-9]/g, ''), 10) || 0
+      const numB = parseInt((b.member_no || '').replace(/[^0-9]/g, ''), 10) || 0
+      
+      if (numA !== numB) return numA - numB
+      
+      // Fallback: Nama
+      return a.full_name.localeCompare(b.full_name)
     })
     
     return list
@@ -527,6 +540,66 @@ function MembersContent() {
     } catch (error: any) {
       console.error(error)
       toast.error('Gagal membatalkan PT: ' + error.message)
+    }
+  }
+
+  // Fitur Batalkan Perpanjangan (Rollback Tanggal & Uang)
+  const handleCancelRenewal = async () => {
+    if (!cancelRenewData) return
+    const { memberId, subId, memberName } = cancelRenewData
+
+    try {
+      // 1. Cari transaksi pembayaran terakhir (Non-PT) dari member ini
+      const { data: latestPayment } = await supabase
+        .from('payments')
+        .select('id, amount')
+        .eq('member_id', memberId)
+        .not('membership_type', 'ilike', '%PT%') // Cari yang bukan PT
+        .order('paid_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      // 2. Cari subscription lama yang statusnya 'expired' untuk diaktifkan kembali
+      const { data: prevSub } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('member_id', memberId)
+        .eq('status', 'expired')
+        .order('end_date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const promises = []
+      
+      // Hapus subscription yang baru (pembatalan perpanjangan)
+      promises.push(supabase.from('subscriptions').delete().eq('id', subId))
+      
+      // Aktifkan kembali subscription lama jika ada
+      if (prevSub) {
+        promises.push(supabase.from('subscriptions').update({ status: 'active' }).eq('id', prevSub.id))
+      }
+      
+      // Hapus uangnya jika ketemu transaksinya
+      if (latestPayment) {
+        promises.push(supabase.from('payments').delete().eq('id', latestPayment.id))
+      }
+
+      await Promise.all(promises)
+      
+      // Refresh semua data
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
+        queryClient.invalidateQueries({ queryKey: ['payments'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenue-monthly'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenue-current-month'] }),
+        queryClient.invalidateQueries({ queryKey: ['overview'] }),
+      ])
+      
+      setCancelRenewOpen(false)
+      toast.success(`Perpanjangan ${memberName} dibatalkan. Status kembali ke sebelumnya & uang telah dihapus.`)
+    } catch (error: any) {
+      console.error(error)
+      toast.error('Gagal membatalkan perpanjangan: ' + error.message)
     }
   }
 
@@ -879,7 +952,9 @@ function MembersContent() {
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
                         <span>{m.membership_name}</span>
-                        <span>Exp: {formatTanggal(m.end_date)}</span>
+                        <span className="flex items-center gap-1">
+                          Exp: {formatTanggal(m.end_date)}
+                        </span>
                         <span>Sisa {calculateDaysRemaining(m.end_date)} hari</span>
                         <span className="text-primary font-bold">Kunjungan: {m.attendance_count}x</span>
                       </div>
@@ -946,6 +1021,21 @@ function MembersContent() {
                   >
                     <RotateCcw className="mr-1 h-3 w-3" /> Perpanjang
                   </Button>
+
+                  {/* Tombol Batal Perpanjangan (Hanya Muncul Jika Aktif) */}
+                  {m.status === 'active' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setCancelRenewData({ memberId: m.member_id, subId: m.subscription_id!, memberName: m.full_name });
+                        setCancelRenewOpen(true);
+                      }}
+                      className="h-7 flex-1 text-[11px] text-orange-400 hover:bg-orange-500/10 hover:text-orange-300"
+                    >
+                      <RotateCcw className="mr-1 h-3 w-3" /> Batal
+                    </Button>
+                  )}
                   <AlertDialog>
                     <AlertDialogTrigger className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), "h-7 flex-1 text-[11px] text-red-400 hover:bg-red-500/10")}>
                       <Trash2 className="mr-1 h-3 w-3" /> Hapus
@@ -1210,6 +1300,32 @@ function MembersContent() {
           )}
         </DialogContent>
       </Dialog>
+      {/* Modal Konfirmasi Batal Perpanjangan */}
+      <AlertDialog open={cancelRenewOpen} onOpenChange={setCancelRenewOpen}>
+        <AlertDialogContent className="border-border bg-card text-foreground">
+          <AlertDialogHeader>
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/10 mb-4 mx-auto">
+              <RotateCcw className="h-6 w-6 text-orange-500" />
+            </div>
+            <AlertDialogTitle className="text-center">Batalkan Perpanjangan?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-muted-foreground">
+              Yakin ingin membatalkan perpanjangan terakhir untuk <span className="font-bold text-foreground">{cancelRenewData?.memberName}</span>? 
+              <br/><br/>
+              Sistem akan <span className="text-orange-400 font-medium">mengembalikan tanggal expired ke aslinya</span> dan <span className="text-red-400 font-medium">MENGHAPUS pendapatan</span> terkait dari laporan keuangan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-muted-foreground">Kembali</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelRenewal}
+              className="bg-orange-500 text-white hover:bg-orange-600 font-bold"
+            >
+              Ya, Batalkan & Kembalikan Status
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Modal Konfirmasi Batal PT */}
       <AlertDialog open={cancelPTOpen} onOpenChange={setCancelPTOpen}>
         <AlertDialogContent className="border-border bg-card text-foreground">
