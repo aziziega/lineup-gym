@@ -64,6 +64,11 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
 1. **Automated WhatsApp Reminder via Fonnte API**
    - **Alasan ditunda:** Belum ada API Key dan proses integrasi pihak ketiga butuh waktu khusus.
    - **Status Saat Ini:** Admin masih menggunakan tombol "Kirim WA Manual" dari halaman Expiry yang mengandalkan template `wa.me`.
+   - **Risiko Fitur "Auto-Reminder" (Sedang) ⚠️**:
+     Fitur pengingat otomatis (H-3 Expired) punya risiko blokir nomor jika dikirim secara masif. Tips agar AMAN:
+     - **Simpan Nomor**: Minta member simpan nomor WA Gym saat mereka daftar.
+     - **Delay**: Beri jeda 10-30 detik antar pesan, jangan sekaligus.
+     - **Gunakan Nama**: Pesan harus personal (contoh: "Halo Kak Budi...").
     
 2. **Digital Assessment & Progress Tracking**
    - **Target V2:** Menu baru di profil member untuk mencatat perkembangan fisik bulanan (Berat Badan, Lingkar Perut, Body Fat, dan Target).
@@ -90,9 +95,9 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
    - **Status Saat Ini:** Menggunakan Opsi Semi-Auto (generate link `wa.me` dengan teks kwitansi) yang sudah berjalan di V1.
    - **Target V2:** Server secara otomatis mengirim WA ke member tanpa admin perlu klik — begitu pembayaran selesai, kwitansi terkirim langsung.
 
-
 9. **Pendaftaran Member Full-Digital (Paperless)**
-    - **Target V2:** Menggantikan formulir kertas manual dengan sistem pendaftaran langsung di tablet/website. Member bisa input data diri lengkap (termasuk Tempat & Tanggal Lahir).
+    - **Target V2:** Menggantikan formulir kertas manual dengan sistem pendaftaran mandiri via QR Code di meja admin. Member input data diri via HP masing-masing.
+    - **Sinergi:** Fitur ini menjadi pintu masuk utama untuk alur pembayaran otomatis (Payment Gateway).
     - **Fitur Khusus:** Notifikasi otomatis dan pemberian diskon perpanjangan otomatis bagi member yang sedang berulang tahun.
 
 10. **Security Hardening (Supabase RPC for Critical Logic)**
@@ -100,7 +105,12 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
     - **Requirement:** Memindahkan logika krusial seperti pembuatan pembayaran (payment) dan approval visitor ke fungsi database (PostgreSQL RPC).
     - **Mekanisme:** Database akan menghitung sendiri harga paket dan tanggal aktif berdasarkan data internal, bukan berdasarkan kiriman angka dari browser.
 
-11. **Modul Keuangan Mendalam (Intelligence Dashboard)**
+11. **Integrasi Payment Gateway (Otomatisasi Aktivasi)**
+    - **Target V2:** Mewujudkan impian Owner untuk sistem "Autopilot". Member otomatis aktif tanpa campur tangan admin.
+    - **Alur Kerja:** Member isi Form Paperless -> Pilih Paket -> Bayar via QRIS/VA (Midtrans/Xendit) -> Sistem terima webhook -> Member Aktif & Kwitansi Terkirim Otomatis.
+    - **Keunggulan:** Bebas antrian, akurasi keuangan 100%, dan admin bisa lebih fokus ke pelayanan member (Hospitality) daripada input data.
+
+12. **Modul Keuangan Mendalam (Intelligence Dashboard)**
     - **Tujuan:** Memberikan wawasan strategis bagi Owner untuk pengambilan keputusan bisnis.
     - **Requirement:**
         - **Dashboard P&L (Laba/Rugi):** Visualisasi otomatis pendapatan bersih (Pemasukan - Pengeluaran Operasional).
@@ -108,7 +118,31 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
         - **Peak Time Analysis:** Grafik waktu/hari tersibuk untuk optimasi penggunaan AC/Listrik atau jadwal staff.
         - **Expense Categorization:** Pengelompokan biaya operasional (Gaji, Listrik, Maintenance) untuk melihat kebocoran dana.
 
+13. **WhatsApp Bot Assistant (Cek Status Mandiri)**
+    - **Target V2:** Member bisa chat ke WA Gym untuk cek sisa hari/sesi mereka secara instan.
+    - **Cara Pakai:** Member chat "Cek Status" -> Bot membalas otomatis dengan format lengkap:
+        - *Nama & No Member*
+        - *Paket Membership yang Aktif*
+        - *Tanggal Mulai & Tanggal Expired*
+        - *Sisa Hari Aktif*
+        - *Sisa Sesi PT (Jika ada)*
+        - *Total Kunjungan (Absensi)*
+    - **Keunggulan:** Member merasa dilayani 24 jam tanpa mengganggu waktu Admin. Keamanan tinggi karena data hanya dikirim ke nomor HP pemilik data.
 
+14. **Data Protection & Auto-Backup Strategy (Disaster Recovery)**
+    - **Target V2:** Menjamin data member & keuangan tidak hilang jika terjadi kendala pada database.
+    - **Mekanisme Hybrid:**
+        - **Daily Full Backup**: Setiap malam sistem membackup seluruh database ke file `.sql` privat.
+        - **Real-time Google Sheets Sync**: Setiap transaksi baru otomatis tercatat di Google Sheets sebagai cadangan yang bisa dibaca owner kapan saja.
+    - **Manfaat:** Memberikan ketenangan (Peace of Mind) bagi Owner bahwa data bisnisnya aman 100%.
+
+15. **Advanced Business Intelligence (BI) Dashboard**
+    - **Tujuan:** Analisis mendalam untuk strategi pertumbuhan gym.
+    - **Fitur Utama:**
+        - **Retention & Churn Analysis:** Melacak berapa persen member yang loyal vs yang berhenti.
+        - **Heatmap Check-in:** Analisis jam sibuk untuk optimasi penggunaan AC/Listrik.
+        - **Financial Forecasting:** Proyeksi pendapatan bulan depan berdasarkan data expired.
+        - **Loyalty Ranking:** Peringkat member paling setia berdasarkan kehadiran dan ketepatan bayar.
 
 ---
 
@@ -128,6 +162,16 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
 - Butuh auto-backup (peace of mind)
 - API request mendekati limit
 - Butuh custom domain untuk Supabase (vanity URL)
+
+### 🛡️ Panduan Keamanan WhatsApp (Mitigasi Risiko Ban)
+Penting untuk diperhatikan saat mengaktifkan fitur otomatisasi WhatsApp di V2:
+1. **Prioritas Keamanan**: Fitur "WA Bot Assistant" adalah yang paling aman (risiko ban 0%) karena member yang memulai chat duluan.
+2. **Risiko Auto-Reminder**: Fitur pengingat expired (H-3) memiliki risiko "Ban" jika dikirim secara masif.
+3. **Tips Mitigasi**:
+   - **Edukasi Member**: Minta member untuk menyimpan (save) nomor WA Gym agar tidak dianggap spam oleh sistem WhatsApp.
+   - **Human-Like Delay**: Pesan otomatis harus dikirim dengan jeda (30-60 detik) antar member, jangan sekaligus dalam 1 detik.
+   - **Personalized Text**: Gunakan nama member di awal pesan (misal: "Halo Kak [Nama]...") agar teks tidak identik 100% untuk setiap orang.
+   - **Reputation Warming**: Mulailah dengan fitur Bot Chatting terlebih dahulu untuk membangun reputasi nomor di mata WhatsApp.
 
 ### Deploy ke Vercel
 - Push repository ke GitHub

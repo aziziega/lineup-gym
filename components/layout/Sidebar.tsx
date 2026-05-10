@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { useState } from 'react'
 import {
   LayoutDashboard,
   UserCheck,
@@ -22,6 +23,8 @@ import {
   ArrowUpCircle,
   CheckCircle2,
   FileSpreadsheet,
+  Globe,
+  BarChart3,
 } from 'lucide-react'
 import { GYM_INFO } from '@/lib/constants'
 import { useQuery } from '@tanstack/react-query'
@@ -33,6 +36,7 @@ interface NavItem {
   icon: any
   subItems?: { label: string; href: string }[]
   isUpgrade?: boolean
+  isPro?: boolean
 }
 
 interface NavGroup {
@@ -61,6 +65,13 @@ const navGroups: NavGroup[] = [
       { label: 'Jadwal PT', href: '/dashboard/schedule', icon: CalendarDays },
       { label: 'Keuangan', href: '/dashboard/finance', icon: Wallet },
       { label: 'Expiry', href: '/dashboard/expiry', icon: Bell },
+    ]
+  },
+  {
+    title: 'BISNIS',
+    items: [
+      { label: 'Halaman Publik', href: '/dashboard/formulir', icon: Globe, isPro: true },
+      { label: 'Analisis Lengkap', href: '/dashboard/analysis', icon: BarChart3, isPro: true },
     ]
   },
   {
@@ -121,6 +132,14 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
                 >
                   <item.icon className={cn('h-[18px] w-[18px]', active && 'text-primary')} />
                   <span>{item.label}</span>
+                  
+                  {/* Badge V2 untuk Fitur Masa Depan */}
+                  {item.isPro && (
+                    <span className="ml-auto flex items-center justify-center rounded bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-500">
+                      V2
+                    </span>
+                  )}
+
                   {/* Badge merah untuk Expiry */}
                   {item.href.startsWith('/dashboard/expiry') && criticalCount && criticalCount > 0 && (
                     <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-foreground">
@@ -161,67 +180,7 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
   )
 }
 
-function UpgradeModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-background border border-border shadow-2xl">
-        <div className="absolute top-0 right-0 p-4 z-10">
-          <button onClick={onClose} className="rounded-full bg-background/40 p-2 text-foreground/70 hover:bg-background/60 hover:text-foreground transition-colors">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Header Image/Pattern Area */}
-        <div className="h-32 bg-gradient-to-br from-[#FF2A2A]/20 to-[#9D00FF]/20 relative overflow-hidden flex items-center justify-center">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-          <ArrowUpCircle className="h-16 w-16 text-foreground drop-shadow-lg" />
-        </div>
-
-        <div className="p-6 space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-bold text-foreground tracking-tight">Upgrade ke Dashboard V2</h2>
-            <p className="text-sm text-muted-foreground">Tingkatkan performa gym Anda dengan fitur eksklusif di versi terbaru.</p>
-          </div>
-
-          <div className="space-y-3">
-            {[
-              "Integrasi Kirim Notifikasi WhatsApp Otomatis",
-              "Pendaftaran Member Full-Digital (Paperless)",
-              "Integrasi Barcode/QR Check-In Setiap Member",
-              "Promo Otomatis setiap Member Ulang Tahun",
-              "Catatan Progress & Latihan Member (Mobile/Desktop)",
-              "Multi-Coach PT Support",
-              "Domain lineupgym.com atau lineupgym.fitness",
-              "Akun Khusus Staff (Keamanan Data)"
-            ].map((feature, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-accent shrink-0" />
-                <span className="text-sm text-gray-200">{feature}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="pt-4 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center mb-3">Hubungi Developer untuk konsultasi dan upgrade:</p>
-            <a
-              href="https://wa.me/6282153608914"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-3 bg-primary hover:bg-primary/90 text-foreground font-medium rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <Phone className="h-4 w-4" />
-              0821-5360-8914 (Azizi)
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-import { useState } from 'react'
+import { UpgradeModal } from './UpgradeModal'
 
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter()
