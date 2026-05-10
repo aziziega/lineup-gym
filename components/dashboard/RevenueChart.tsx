@@ -24,17 +24,22 @@ export default function RevenueChart() {
     )
   }
 
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const currentYear = new Date().getFullYear()
+  // Ambil 6 bulan terakhir secara dinamis
+  const chartData = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date()
+    d.setMonth(d.getMonth() - (5 - i))
+    const monthLabel = d.toLocaleString('id-ID', { month: 'short' })
+    const monthYear = d.getFullYear()
+    const monthIndex = d.getMonth()
 
-  const chartData = months.map((monthName, index) => {
-    const record = (data || []).find((d: any) => {
-      if (!d.month) return false
-      const dateObj = new Date(d.month)
-      return dateObj.getFullYear() === currentYear && dateObj.getMonth() === index
+    const record = (data || []).find((r: any) => {
+      if (!r.month) return false
+      const recordDate = new Date(r.month)
+      return recordDate.getFullYear() === monthYear && recordDate.getMonth() === monthIndex
     })
+
     return {
-      name: monthName,
+      name: monthLabel,
       revenue: record ? Number(record.total) : 0,
     }
   })

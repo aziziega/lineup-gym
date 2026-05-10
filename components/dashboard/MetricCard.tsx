@@ -12,6 +12,7 @@ interface MetricCardProps {
   trendUp?: boolean
   accent?: 'neon' | 'orange' | 'red' | 'muted'
   loading?: boolean
+  description?: string
 }
 
 const accentColors = {
@@ -29,6 +30,7 @@ export default function MetricCard({
   trendUp,
   accent = 'neon',
   loading,
+  description,
 }: MetricCardProps) {
   if (loading) {
     return (
@@ -55,12 +57,16 @@ export default function MetricCard({
         {value}
       </p>
 
-      {/* Trend */}
-      {trend && (
+      {/* Trend or Description */}
+      {trend ? (
         <p className={cn('mt-1 text-xs', trendUp ? 'text-primary' : 'text-[#FF6B35]')}>
-          {trendUp ? 'â†‘' : 'â†“'} {trend}
+          {trendUp ? '↑' : '↓'} {trend}
         </p>
-      )}
+      ) : description ? (
+        <p className="mt-1 text-[11px] text-muted-foreground font-medium">
+          {description}
+        </p>
+      ) : null}
     </div>
   )
 }

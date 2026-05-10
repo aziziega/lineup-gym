@@ -52,10 +52,9 @@ const navGroups: NavGroup[] = [
       { label: 'Check-In', href: '/dashboard/checkin', icon: UserCheck },
       {
         label: 'Member',
-        href: '/dashboard/members',
+        href: '/dashboard/members?type=regular',
         icon: Users,
         subItems: [
-          { label: 'Semua Tipe', href: '/dashboard/members?type=all' },
           { label: 'Member Reguler', href: '/dashboard/members?type=regular' },
           { label: 'Member PT', href: '/dashboard/members?type=pt' },
           { label: 'Pengunjung Harian', href: '/dashboard/members?type=visitor' },

@@ -61,18 +61,29 @@ export default function OverviewPage() {
   })
 
   // Metric: Check-In Hari Ini
-  const { data: checkInCount, isLoading: loadingCheckIn } = useQuery({
+  const { data: checkInStats, isLoading: loadingCheckIn } = useQuery({
     queryKey: ['overview', 'checkin-today'],
     queryFn: async () => {
       const today = new Date().toLocaleDateString('sv-SE')
-      const { count, error } = await supabase
+      const start = new Date(today)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(today)
+      end.setHours(23, 59, 59, 999)
+
+      const { data, error } = await supabase
         .from('attendance_logs')
-        .select('*', { count: 'exact', head: true })
+        .select('notes')
         .eq('gym_id', GYM_ID)
-        .gte('check_in_at', `${today}T00:00:00`)
-        .lte('check_in_at', `${today}T23:59:59`)
+        .gte('check_in_at', start.toISOString())
+        .lte('check_in_at', end.toISOString())
+
       if (error) throw error
-      return count ?? 0
+      
+      const total = data?.length || 0
+      const visitors = data?.filter(l => l.notes?.toLowerCase().includes('visitor')).length || 0
+      const regular = total - visitors
+
+      return { total, visitors, regular }
     },
   })
 
@@ -135,10 +146,13 @@ export default function OverviewPage() {
         />
         <MetricCard
           label="Check-In Hari Ini"
-          value={checkInCount ?? 0}
+          value={checkInStats?.total ?? 0}
           icon={UserCheck}
           loading={loadingCheckIn}
           accent="muted"
+          description={
+            checkInStats ? `${checkInStats.regular} Member · ${checkInStats.visitors} Visitor` : undefined
+          }
         />
         <MetricCard
           label="Expiry 7 Hari"
