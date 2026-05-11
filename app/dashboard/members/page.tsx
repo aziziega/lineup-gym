@@ -170,19 +170,19 @@ function MembersContent() {
     // Filter Tipe Membership vs Visitor
     if (typeFilter === 'visitor') {
       list = list.filter((m) => {
-        // Visitor = belum punya subscription, paket DAY, atau notes masih visitor
+        // Visitor = paket VISITOR, atau catatan visitor harian, atau tidak punya paket gym
+        const isDayPkg = m.membership_name?.toUpperCase() === 'VISITOR'
         const isVisitorNotes = m.notes?.toLowerCase().includes('visitor')
-        const isDayPkg = m.membership_name === 'VISITOR'
-        const noSubscription = !m.membership_name
-        return isVisitorNotes || isDayPkg || noSubscription
+        const noGymSub = !m.membership_name
+        return isDayPkg || isVisitorNotes || noGymSub
       })
     } else if (typeFilter === 'regular') {
       list = list.filter((m) => {
-        // Regular = punya subscription selain DAY DAN bukan visitor pending
-        const isVisitorPending = m.notes === 'Visitor Harian' && m.status === 'inactive'
-        const isDayOnly = m.membership_name === 'VISITOR' || !m.membership_name
-        const isVisitorNotes = m.notes?.toLowerCase().includes('visitor') && isDayOnly
-        return !isVisitorPending && !isVisitorNotes && m.membership_name
+        // Regular = Punya paket gym aktif DAN paketnya BUKAN 'VISITOR'
+        const hasGymSub = !!m.membership_name
+        const isNotDayPkg = m.membership_name?.toUpperCase() !== 'VISITOR'
+        const isNotVisitorNotes = !m.notes?.toLowerCase().includes('visitor')
+        return hasGymSub && isNotDayPkg && isNotVisitorNotes
       })
     } else if (typeFilter === 'pt') {
       list = list.filter((m) => !!m.pt_membership_name)
