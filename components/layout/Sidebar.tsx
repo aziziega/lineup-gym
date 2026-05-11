@@ -241,7 +241,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
                 onClick={() => setIsUpgradeModalOpen(true)}
                 className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary hover:bg-primary/20 transition-colors"
               >
-                UPDATE KE V2
+                UPGRADE KE V2
               </button>
             </div>
             <p className="text-[9px] text-sidebar-foreground/20 uppercase tracking-tighter font-medium">
