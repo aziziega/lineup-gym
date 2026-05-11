@@ -172,7 +172,7 @@ function MembersContent() {
       list = list.filter((m) => {
         // Visitor = belum punya subscription, paket DAY, atau notes masih visitor
         const isVisitorNotes = m.notes?.toLowerCase().includes('visitor')
-        const isDayPkg = m.membership_name === 'DAY'
+        const isDayPkg = m.membership_name === 'VISITOR'
         const noSubscription = !m.membership_name
         return isVisitorNotes || isDayPkg || noSubscription
       })
@@ -180,7 +180,7 @@ function MembersContent() {
       list = list.filter((m) => {
         // Regular = punya subscription selain DAY DAN bukan visitor pending
         const isVisitorPending = m.notes === 'Visitor Harian' && m.status === 'inactive'
-        const isDayOnly = m.membership_name === 'DAY' || !m.membership_name
+        const isDayOnly = m.membership_name === 'VISITOR' || !m.membership_name
         const isVisitorNotes = m.notes?.toLowerCase().includes('visitor') && isDayOnly
         return !isVisitorPending && !isVisitorNotes && m.membership_name
       })
@@ -298,7 +298,7 @@ function MembersContent() {
 
     try {
       // Update member_no & notes
-      const isNotDay = pkg ? pkg.name !== 'DAY' : true
+      const isNotDay = pkg ? pkg.name !== 'VISITOR' : true
       const updateData: any = {
         member_no: renewMemberNo?.trim() || null,
       }

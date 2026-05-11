@@ -1,14 +1,14 @@
 'use client'
 
-import { Dumbbell, Droplets, Lock, Bath, Wind, Shield, Sparkles, Clock } from 'lucide-react'
+import { Dumbbell, Droplets, Lock, Bath, Wind, Shield, Sparkles, Clock, Wifi } from 'lucide-react'
 
 const FACILITIES = [
   { icon: Clock, title: 'Buka Setiap Hari', desc: '06:00 - 21:00 WIB' },
   { icon: Dumbbell, title: 'Alat Gym Modern & Impor', desc: 'Lengkap + Free Weight area' },
   { icon: Sparkles, title: 'Bersih & Terawat', desc: 'Kebersihan selalu terjaga' },
   { icon: Shield, title: 'Harga Terjangkau', desc: 'Mulai dari paket harian' },
-  { icon: Bath, title: '2 Kamar Mandi', desc: 'Terpisah pria & wanita' },
-  { icon: Lock, title: 'Locker Aman', desc: 'Simpan barang dengan tenang' },
+  { icon: Lock, title: 'Ruang Ganti & Locker', desc: 'Kamar mandi & tempat simpan aman' },
+  { icon: Wifi, title: 'Free WiFi High Speed', desc: 'Akses internet gratis' },
   { icon: Droplets, title: 'Refill Minum Gratis', desc: 'Dispenser air tersedia' },
   { icon: Wind, title: 'Mushola', desc: 'Tempat ibadah nyaman' },
 ]

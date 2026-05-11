@@ -184,13 +184,13 @@ export default function PackagesPage() {
               <Input 
                 value={formName} 
                 onChange={(e) => setFormName(e.target.value)} 
-                disabled={editing?.name === 'DAY'}
+                disabled={editing?.name === 'VISITOR'}
                 className="border-border bg-background text-foreground disabled:opacity-50" 
                 placeholder="Contoh: Weekly" 
               />
-              {editing?.name === 'DAY' && (
+              {editing?.name === 'VISITOR' && (
                 <p className="mt-1 text-[10px] text-red-500 font-medium">
-                  * Nama paket "DAY" dikunci untuk menjaga stabilitas sistem approval visitor harian.
+                  * Nama paket "VISITOR" dikunci untuk menjaga stabilitas sistem approval visitor harian.
                 </p>
               )}
             </div>
@@ -199,7 +199,7 @@ export default function PackagesPage() {
               <NativeSelect
                 value={formCategory}
                 onChange={(e) => setFormCategory(e.target.value as 'gym' | 'pt')}
-                disabled={editing?.name === 'DAY'}
+                disabled={editing?.name === 'VISITOR'}
                 className="disabled:opacity-50"
                 options={[
                   { value: 'gym', label: 'Gym (Membership Biasa)' },
@@ -214,7 +214,7 @@ export default function PackagesPage() {
                   type="number" 
                   value={formDuration} 
                   onChange={(e) => setFormDuration(e.target.value)} 
-                  disabled={editing?.name === 'DAY'}
+                  disabled={editing?.name === 'VISITOR'}
                   className="border-border bg-background text-foreground disabled:opacity-50" 
                   placeholder="30" 
                 />
@@ -226,7 +226,7 @@ export default function PackagesPage() {
                     type="number" 
                     value={formTotalSessions} 
                     onChange={(e) => setFormTotalSessions(e.target.value)} 
-                    disabled={editing?.name === 'DAY'}
+                    disabled={editing?.name === 'VISITOR'}
                     className="border-border bg-background text-foreground disabled:opacity-50" 
                     placeholder="8" 
                   />

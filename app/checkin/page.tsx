@@ -97,7 +97,7 @@ export default function CheckinKiosk() {
           const { error: logError } = await supabase.from('attendance_logs').insert({
             gym_id: GYM_ID,
             member_id: data.member_id,
-            notes: data.membership_name === 'DAY' ? 'Kiosk Visitor Check-In' : 'Kiosk Self Check-In'
+            notes: data.membership_name === 'VISITOR' ? 'Kiosk Visitor Check-In' : 'Kiosk Self Check-In'
           })
           if (logError) throw logError
 
@@ -436,7 +436,7 @@ export default function CheckinKiosk() {
 
             {/* SUCCESS â€” langsung tampil setelah submit */}
             {step === 'success' && (() => {
-              const isVisitor = memberInfo?.membership_name === 'DAY'
+              const isVisitor = memberInfo?.membership_name === 'VISITOR'
               return (
                 <div className="flex flex-col items-center justify-center py-8 text-center animate-in zoom-in duration-300">
                   <div className={`mb-4 rounded-full p-4 ${isVisitor ? 'bg-blue-500/20' : 'bg-emerald-500/20'}`}>

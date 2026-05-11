@@ -60,11 +60,11 @@ export default function ExpiryPage() {
 
     // 1. Filter Kategori
     if (activeTab === 'regular') {
-      list = list.filter(m => m.membership_name && m.membership_name !== 'DAY')
+      list = list.filter(m => m.membership_name && m.membership_name !== 'VISITOR')
     } else if (activeTab === 'pt') {
       list = list.filter(m => !!m.pt_subscription_id)
     } else if (activeTab === 'visitor') {
-      list = list.filter(m => m.membership_name === 'DAY')
+      list = list.filter(m => m.membership_name === 'VISITOR')
     }
 
     // 2. Filter Status

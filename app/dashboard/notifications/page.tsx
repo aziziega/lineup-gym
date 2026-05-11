@@ -128,7 +128,7 @@ export default function NotificationsPage() {
       let { data: pkgData, error: pkgError } = await supabase
         .from('memberships')
         .select('id, price')
-        .ilike('name', 'DAY')
+        .ilike('name', 'VISITOR')
         .limit(1)
         .single()
       
@@ -136,13 +136,13 @@ export default function NotificationsPage() {
         const { data: fallbackPkg } = await supabase
           .from('memberships')
           .select('id, price')
-          .ilike('name', '%DAY%')
+          .ilike('name', '%VISITOR%')
           .limit(1)
           .single()
         pkgData = fallbackPkg
       }
 
-      if (!pkgData) throw new Error('Paket DAY tidak ditemukan')
+      if (!pkgData) throw new Error('Paket VISITOR tidak ditemukan')
 
       const pkgId = pkgData.id
       const pkgPrice = pkgData.price
@@ -165,7 +165,7 @@ export default function NotificationsPage() {
         member_id: currentMemberId,
         amount: pkgPrice,
         payment_method: 'cash',
-        membership_type: 'DAY',
+        membership_type: 'VISITOR',
         paid_at: startDate,
         notes: 'Auto-payment: Approval Visitor Harian'
       })
@@ -189,7 +189,7 @@ export default function NotificationsPage() {
         style: 'currency', currency: 'IDR', minimumFractionDigits: 0
       }).format(pkgPrice)
 
-      toast.success(`${currentMemberName} berhasil disetujui! Paket DAY & Pembayaran ${formattedPrice} tercatat.`)
+      toast.success(`${currentMemberName} berhasil disetujui! Paket VISITOR & Pembayaran ${formattedPrice} tercatat.`)
     } catch (err: any) {
       console.error('ERROR APPROVING VISITOR:', err)
       toast.error(`Gagal menyetujui: ${err.message || 'Terjadi kesalahan'}`)
