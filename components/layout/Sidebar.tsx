@@ -234,9 +234,19 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               <span className="text-foreground">GYM</span>
             </h1>
           </div>
-          <div className="flex items-center gap-1">
-            <Star className="h-3 w-3 fill-accent text-accent" />
-            <span className="text-xs text-sidebar-foreground/60">{GYM_INFO.RATING} · Prambanan</span>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-sidebar-foreground/30 tracking-wider">DASHBOARD V1.1</span>
+              <button 
+                onClick={() => setIsUpgradeModalOpen(true)}
+                className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary hover:bg-primary/20 transition-colors"
+              >
+                UPDATE KE V2
+              </button>
+            </div>
+            <p className="text-[9px] text-sidebar-foreground/20 uppercase tracking-tighter font-medium">
+              LAST UPDATE: 11 MEI, 08:34 WIB
+            </p>
           </div>
         </div>
         {/* Tombol close hanya di mobile */}
