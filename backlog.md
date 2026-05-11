@@ -26,6 +26,19 @@ Fitur-fitur utama penyokong operasional gym yang sudah beroperasi 100% di dalam 
    - Pesan kontekstual berdasarkan status (aktif, hari ini, sudah expired).
    - Emoji dihapus karena menyebabkan karakter `?` di WhatsApp.
    - Menggunakan *bold text* (`*...*`) yang didukung WhatsApp formatting.
+6. **Dynamic Gym Gallery & Landing Page (V1.1)**
+   - Integrasi Supabase Storage untuk manajemen foto suasana gym.
+   - Landing page otomatis mengambil foto terbaru dari dashboard admin.
+7. **Data Normalization & Precise Analytics (V1.1)**
+   - Normalisasi huruf (Casing) pada nama paket untuk mencegah duplikasi di grafik.
+   - Perbaikan logika filter member (Visitor vs Reguler vs PT) agar data 100% akurat.
+8. **High-Precision Expiry Dashboard (V1.1)**
+   - Perhitungan masa aktif secara lokal di browser untuk akurasi timezone.
+   - Kategori prioritas baru: Expired Hari Ini, Kritis (≤ 3 hari), dan Segera (≤ 7 hari).
+9. **UI/UX Stabilization (V1.1)**
+   - Implementasi `forwardRef` pada komponen Button untuk stabilitas modal.
+   - Optimasi Sidebar: Shortcut langsung ke Member Reguler & Penghapusan menu redundan.
+   - Sistem Versioning & Last Update timestamp di Sidebar.
 
 ---
 
@@ -55,6 +68,24 @@ Sistem *workaround* jenius dari owner tanpa perlu mengubah kode database:
 - **Status:** SEMUA tabel saat ini RLS dinonaktifkan (CRITICAL di Supabase dashboard).
 - **Wajib sebelum deploy ke production** agar data tidak bisa diakses publik.
 - **Target:** Minimal policy `authenticated` untuk semua tabel.
+
+---
+
+---
+
+## 📋 PERSYARATAN UPGRADE V2 (Requirement Checklist)
+Sebelum mengaktifkan fitur V2, Owner Gym wajib menyiapkan infrastruktur berikut:
+
+1. **API Gateway (WhatsApp)**: 
+   - Akun **Fonnte** atau **Wablas** dengan paket berlangganan aktif.
+   - API Key untuk pengiriman pesan otomatis (Reminders & Struk).
+2. **Payment Gateway**:
+   - Akun **Midtrans** atau **Xendit** (sudah aktivasi identitas/bisnis).
+   - Server Key & Client Key untuk memproses pembayaran QRIS/VA secara otomatis.
+3. **Public Domain & Hosting**:
+   - Domain kustom (misal: `dashboard.lineupgym.com`) untuk menerima *Webhooks* dari Payment Gateway.
+4. **Data Security (Optional but Recommended)**:
+   - Upgrade Supabase ke **Pro Tier ($25/mo)** untuk fitur *Auto-Backup* harian dan kapasitas penyimpanan foto yang lebih besar.
 
 ---
 

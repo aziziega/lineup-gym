@@ -30,12 +30,12 @@ export function UpgradeModal({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
             {[
               "WhatsApp Bot Assistant 24 Jam",
-              "Pendaftaran Member Digital (Autopilot)",
+              "Perpanjang Membership Mandiri",
+              "Pembayaran Otomatis (QRIS/VA)",
+              "Formulir Digital (Paperless)",
               "Analisis Laba/Rugi & Proyeksi",
               "Absensi Barcode/QR Modern",
               "Auto Backup Data (Anti-Hilang)",
-              "Multi-Coach & Komisi Otomatis",
-              "Progress Tracking (Foto & Grafik)",
               "Custom Domain & Branding Gym"
             ].map((feature, i) => (
               <div key={i} className="flex items-center gap-3">
