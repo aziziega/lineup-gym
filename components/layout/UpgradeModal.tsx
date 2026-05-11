@@ -30,9 +30,9 @@ export function UpgradeModal({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
             {[
               "WhatsApp Bot Assistant 24 Jam",
-              "Perpanjang Membership Mandiri",
-              "Pembayaran Otomatis (QRIS/VA)",
-              "Formulir Digital (Paperless)",
+              "Perpanjang Membership Otomatis",
+              "Pembayaran Mandiri (QRIS/VA)",
+              "Registrasi Online",
               "Analisis Laba/Rugi & Proyeksi",
               "Absensi Barcode/QR Modern",
               "Auto Backup Data (Anti-Hilang)",

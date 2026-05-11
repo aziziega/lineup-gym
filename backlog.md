@@ -175,6 +175,16 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
         - **Financial Forecasting:** Proyeksi pendapatan bulan depan berdasarkan data expired.
         - **Loyalty Ranking:** Peringkat member paling setia berdasarkan kehadiran dan ketepatan bayar.
 
+16. **Full Automation Ecosystem (Self-Service & Auto-Payment)**
+    - **Target V2:** Mengurangi beban kerja admin hingga 90% dalam hal administrasi rutin.
+    - **Mekanisme:**
+        - **Self-Registration**: Calon member scan QR di depan gym dan isi data diri mandiri.
+        - **Direct Payment (QRIS)**: Integrasi payment gateway (Midtrans/Xendit). Member bayar, status di dashboard langsung "Active" tanpa input manual.
+        - **Self-Renewal**: Member yang expired mendapat link WhatsApp, klik bayar, dan masa aktif bertambah otomatis.
+    - **Analisis Risiko & Mitigasi:**
+        - **Risiko**: Webhook payment delay atau member salah pilih paket.
+        - **Mitigasi**: Sistem tetap mengirim "Notifikasi Approval" ke Admin sebagai kontrol akhir (Double-Check) sebelum data benar-benar di-commit ke database.
+
 ---
 
 ## 📝 CATATAN TEKNIS
