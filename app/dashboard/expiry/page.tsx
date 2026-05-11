@@ -199,8 +199,8 @@ export default function ExpiryPage() {
       {/* Metric Cards */}
       <div className="grid grid-cols-3 gap-3">
         <MetricCard label="Expired Hari Ini" value={stats?.todayCount ?? 0} icon={CalendarX} accent="red" />
-        <MetricCard label="Exp ≤ 7 Hari" value={stats?.weekCount ?? 0} icon={AlertTriangle} accent="orange" />
-        <MetricCard label="Exp ≤ 30 Hari" value={stats?.monthCount ?? 0} icon={Clock} accent="muted" />
+        <MetricCard label="Kritis ≤ 3 Hari" value={stats?.criticalCount ?? 0} icon={AlertTriangle} accent="orange" />
+        <MetricCard label="Segera ≤ 7 Hari" value={stats?.soonCount ?? 0} icon={Clock} accent="yellow" />
       </div>
 
       {/* Filter Tabs (Category) */}
