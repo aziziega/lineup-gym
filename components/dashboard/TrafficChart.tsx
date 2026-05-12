@@ -46,8 +46,11 @@ export default function TrafficChart() {
       for (let i = 6; i >= 0; i--) {
         const d = new Date()
         d.setDate(d.getDate() - i)
+        // Gunakan toLocaleDateString('sv-SE') agar konsisten dengan waktu lokal (WIB)
+        const dateStr = d.toLocaleDateString('sv-SE')
+        
         last7Days.push({
-          date: d.toISOString().split('T')[0],
+          date: dateStr,
           dayName: daysShort[d.getDay()],
           count: 0,
           isToday: i === 0

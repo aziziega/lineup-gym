@@ -245,7 +245,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               </button>
             </div>
             <p className="text-[9px] text-sidebar-foreground/20 uppercase tracking-tighter font-medium">
-              LAST UPDATE: 12 MEI, 22:20 WIB
+              LAST UPDATE: 13 MEI, 05:38 WIB
             </p>
           </div>
         </div>
