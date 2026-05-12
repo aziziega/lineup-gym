@@ -181,6 +181,7 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
         - **Self-Registration**: Calon member scan QR di depan gym dan isi data diri mandiri.
         - **Direct Payment (QRIS)**: Integrasi payment gateway (Midtrans/Xendit). Member bayar, status di dashboard langsung "Active" tanpa input manual.
         - **Self-Renewal**: Member yang expired mendapat link WhatsApp, klik bayar, dan masa aktif bertambah otomatis.
+        - **Visitor Fast Pass**: Pengunjung harian lama cukup scan QR di pintu, masukkan No. WA, bayar QRIS, dan otomatis terabsen tanpa perlu ke meja admin.
     - **Analisis Risiko & Mitigasi:**
         - **Risiko**: Webhook payment delay atau member salah pilih paket.
         - **Mitigasi**: Sistem tetap mengirim "Notifikasi Approval" ke Admin sebagai kontrol akhir (Double-Check) sebelum data benar-benar di-commit ke database.

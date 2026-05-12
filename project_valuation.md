@@ -14,7 +14,7 @@ Dokumen ini disusun sebagai instrumen negosiasi profesional untuk menetapkan nil
 | Plan | Biaya | Cakupan Layanan |
 | :--- | :--- | :--- |
 | **Standard (V1.1)** | **Rp 450.000 / bln** | Dashboard Admin, Keuangan, Database Member, Cloud Hosting & Support. |
-| **Professional (V2)** | **Rp 850.000 / bln** | Semua Fitur V1 + WhatsApp Gateway + Auto Reminder + Form Digital (Pendaftaran Online) + Pembayaran Otomatis (QRIS/Transfer). |
+| **Professional (V2)** | **Rp 850.000 / bln** | Semua Fitur V1 + WhatsApp CRM + Auto Reminder + Registrasi & Pembayaran Mandiri + Self-Service Visitor Check-in. |
 
 ### Opsi B: Full Buyout (Kepemilikan Penuh)
 *Cocok untuk investasi jangka panjang (Capex) tanpa biaya langganan software.*
