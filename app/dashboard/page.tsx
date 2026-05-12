@@ -7,7 +7,7 @@ import { formatRupiah, formatTanggal } from '@/lib/utils'
 import { Users, Wallet, UserCheck, Bell } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import MetricCard from '@/components/dashboard/MetricCard'
-import RevenueChart from '@/components/dashboard/RevenueChart'
+import TrafficChart from '@/components/dashboard/TrafficChart'
 import PackageDonutChart from '@/components/dashboard/PackageDonutChart'
 import TodayPTSchedule from '@/components/dashboard/TodayPTSchedule'
 
@@ -42,21 +42,23 @@ export default function OverviewPage() {
     },
   })
 
-  // Metric: Revenue Bulan Ini
-  const { data: revenue, isLoading: loadingRevenue } = useQuery({
-    queryKey: ['overview', 'revenue-month'],
+  // Metric: Total Kunjungan Bulan Ini
+  const { data: monthlyTraffic, isLoading: loadingTraffic } = useQuery({
+    queryKey: ['overview', 'traffic-month'],
     queryFn: async () => {
       const now = new Date()
       const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
-      const { data, error } = await supabase
-        .from('payments')
-        .select('amount')
+      
+      const { count, error } = await supabase
+        .from('attendance_logs')
+        .select('*', { count: 'exact', head: true })
         .eq('gym_id', GYM_ID)
-        .gte('paid_at', start)
-        .lte('paid_at', end)
+        .gte('check_in_at', start)
+        .lte('check_in_at', end)
+
       if (error) throw error
-      return (data || []).reduce((s, p) => s + Number(p.amount), 0)
+      return count ?? 0
     },
   })
 
@@ -138,11 +140,12 @@ export default function OverviewPage() {
           accent="neon"
         />
         <MetricCard
-          label="Revenue Bulan Ini"
-          value={revenue ? formatRupiah(revenue) : 'Rp 0'}
+          label="Total Kunjungan (Bulan Ini)"
+          value={`${monthlyTraffic ?? 0} Orang`}
           icon={Wallet}
-          loading={loadingRevenue}
+          loading={loadingTraffic}
           accent="neon"
+          description="Total kehadiran member & visitor"
         />
         <MetricCard
           label="Check-In Hari Ini"
@@ -165,7 +168,7 @@ export default function OverviewPage() {
 
       {/* Charts — stacked di mobile, side by side di desktop */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <RevenueChart />
+        <TrafficChart />
         <PackageDonutChart />
       </div>
 

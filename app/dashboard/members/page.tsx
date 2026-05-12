@@ -170,19 +170,15 @@ function MembersContent() {
     // Filter Tipe Membership vs Visitor
     if (typeFilter === 'visitor') {
       list = list.filter((m) => {
-        // Visitor = paket VISITOR, atau catatan visitor harian, atau tidak punya paket gym
         const isDayPkg = m.membership_name?.toUpperCase() === 'VISITOR'
         const isVisitorNotes = m.notes?.toLowerCase().includes('visitor')
-        const noGymSub = !m.membership_name
-        return isDayPkg || isVisitorNotes || noGymSub
+        return isDayPkg || isVisitorNotes
       })
     } else if (typeFilter === 'regular') {
       list = list.filter((m) => {
-        // Regular = Punya paket gym aktif DAN paketnya BUKAN 'VISITOR'
-        const hasGymSub = !!m.membership_name
-        const isNotDayPkg = m.membership_name?.toUpperCase() !== 'VISITOR'
-        const isNotVisitorNotes = !m.notes?.toLowerCase().includes('visitor')
-        return hasGymSub && isNotDayPkg && isNotVisitorNotes
+        const isDayPkg = m.membership_name?.toUpperCase() === 'VISITOR'
+        const isVisitorNotes = m.notes?.toLowerCase().includes('visitor')
+        return !isDayPkg && !isVisitorNotes
       })
     } else if (typeFilter === 'pt') {
       list = list.filter((m) => !!m.pt_membership_name)
@@ -287,23 +283,33 @@ function MembersContent() {
       }
     }
   }
-
   const handleRenew = async () => {
     if (!renewMember || (!renewMembershipId && !renewPtMembershipId)) return
     
     const pkg = renewMembershipId ? memberships?.find((m) => m.id === renewMembershipId) : null
     
+    // Jika paketnya VISITOR, paksa end_date ke akhir hari ini (23:59:59)
+    const isVisitorPkg = pkg?.name.toUpperCase() === 'VISITOR'
     const startDate = renewStartDate
-    const endDate = pkg ? toLocalISOString(hitungEndDate(startDate, pkg.duration_days)) : ''
+    let endDate = pkg ? toLocalISOString(hitungEndDate(startDate, pkg.duration_days)) : ''
+    
+    if (isVisitorPkg) {
+      const today = new Date(startDate)
+      today.setHours(23, 59, 59, 999)
+      endDate = today.toISOString()
+    }
 
     try {
       // Update member_no & notes
-      const isNotDay = pkg ? pkg.name !== 'VISITOR' : true
       const updateData: any = {
         member_no: renewMemberNo?.trim() || null,
       }
       
-      if (isNotDay && renewMember.notes?.toLowerCase().includes('visitor')) {
+      // Jika bayar paket VISITOR, pastikan notes-nya tertulis visitor
+      if (isVisitorPkg) {
+        updateData.notes = 'visitor'
+      } else if (renewMember.notes?.toLowerCase().includes('visitor')) {
+        // Jika tadinya visitor tapi sekarang bayar paket regular, hapus notes visitor-nya
         updateData.notes = 'Membership Regular'
       }
 
@@ -314,12 +320,13 @@ function MembersContent() {
       
       if (updErr) throw updErr
 
-      // Jika visitor pending sedang diperpanjang, otomatis buat attendance log (Check-In)
-      if (renewMember.notes?.toLowerCase().includes('visitor') && renewMember.status === 'inactive') {
+      // OTOMATIS ABSEN (Check-In) untuk paket VISITOR
+      // Atau jika dia visitor lama yang sedang diaktifkan kembali
+      if (isVisitorPkg || (renewMember.notes?.toLowerCase().includes('visitor') && renewMember.status === 'inactive')) {
         await supabase.from('attendance_logs').insert({
           gym_id: GYM_ID,
           member_id: renewMember.member_id,
-          notes: `Visitor Extended to ${pkg ? pkg.name : 'PT Package'} (Check-In)`
+          notes: isVisitorPkg ? 'Visitor Check-In (Auto via Renewal)' : 'Visitor Extended (Check-In)'
         })
       }
 
@@ -680,9 +687,27 @@ function MembersContent() {
   return (
     <div className="space-y-4">
       {/* Header manajemen member */}
-      <div className="flex flex-col gap-1">
-        <h1 className="font-heading text-2xl uppercase text-foreground sm:text-3xl">Manajemen Member</h1>
-        <p className="text-sm text-muted-foreground">Kelola data member reguler dan pengunjung harian</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-2xl uppercase text-foreground sm:text-3xl">Manajemen Member</h1>
+          <p className="text-sm text-muted-foreground">Kelola data member reguler dan pengunjung harian</p>
+        </div>
+
+        {/* Legend Warna (Tampilan Baru) */}
+        <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-xl border border-border/50 bg-card/50 p-3">
+          {[
+            { label: 'Aktif (>7hr)', color: 'bg-[#00FF85]' },
+            { label: 'Segera (4-7hr)', color: 'bg-[#D4FF00]' },
+            { label: 'Kritis (1-3hr)', color: 'bg-[#FFB800]' },
+            { label: 'Hari Terakhir', color: 'bg-[#FF6B35]' },
+            { label: 'Lewat Hari', color: 'bg-[#FF2A2A]' },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${item.color} shadow-[0_0_5px_currentColor]`} />
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">{item.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Mobile header: search + actions */}
@@ -955,8 +980,18 @@ function MembersContent() {
                         <span className="flex items-center gap-1">
                           Exp: {formatTanggal(m.end_date)}
                         </span>
-                        <span>Sisa {calculateDaysRemaining(m.end_date)} hari</span>
-                        <span className="text-primary font-bold">Kunjungan: {m.attendance_count}x</span>
+                        <span>
+                          {(() => {
+                            const days = calculateDaysRemaining(m.end_date)
+                            if (days === null) return 'No Active Package'
+                            if (days === 0) return <span className="text-[#FF6B35] font-bold">Hari Terakhir</span>
+                            if (days < 0) return <span className="text-[#FF2A2A] font-bold">Lewat {Math.abs(days)} Hari</span>
+                            if (days <= 3) return <span className="text-[#FFB800] font-bold">Sisa {days} hari</span>
+                            if (days <= 7) return <span className="text-[#D4FF00] font-bold">Sisa {days} hari</span>
+                            return <span className="text-[#00FF85]">Sisa {days} hari</span>
+                          })()}
+                        </span>
+                        <span className="text-[#00E5FF] font-bold">Kunjungan: {m.attendance_count}x</span>
                       </div>
                     {m.pt_membership_name && (
                       <div className="mt-1 flex items-center gap-1.5">

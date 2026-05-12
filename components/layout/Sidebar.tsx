@@ -236,7 +236,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-sidebar-foreground/30 tracking-wider">DASHBOARD V1.1</span>
+              <span className="text-[10px] font-bold text-sidebar-foreground/30 tracking-wider">DASHBOARD V1.2</span>
               <button 
                 onClick={() => setIsUpgradeModalOpen(true)}
                 className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary hover:bg-primary/20 transition-colors"
@@ -245,7 +245,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               </button>
             </div>
             <p className="text-[9px] text-sidebar-foreground/20 uppercase tracking-tighter font-medium">
-              LAST UPDATE: 11 MEI, 08:34 WIB
+              LAST UPDATE: 12 MEI, 22:20 WIB
             </p>
           </div>
         </div>

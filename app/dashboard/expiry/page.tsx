@@ -3,7 +3,8 @@
 import { useExpiry, useExpiryStats } from '@/hooks/useExpiry'
 import { useActiveMemberships } from '@/hooks/useMemberships'
 import { useRenewSubscription } from '@/hooks/useSubscriptions'
-import { formatRupiah, formatTanggal, generateWALink, hitungEndDate, toLocalISOString } from '@/lib/utils'
+import { formatRupiah, formatTanggal, generateWALink, generateReceiptWALink, hitungEndDate, toLocalISOString } from '@/lib/utils'
+import type { ReceiptData } from '@/lib/utils'
 import MetricCard from '@/components/dashboard/MetricCard'
 import StatusBadge from '@/components/members/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -23,11 +24,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { AlertTriangle, Clock, CalendarX, MessageCircle, RotateCcw, Send } from 'lucide-react'
+import { AlertTriangle, Clock, CalendarX, MessageCircle, RotateCcw, Send, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
+import { GYM_ID } from '@/lib/constants'
 import type { ActiveSubscriptionView } from '@/lib/types'
 
 export default function ExpiryPage() {
@@ -47,6 +49,8 @@ export default function ExpiryPage() {
   const [renewPayMethod, setRenewPayMethod] = useState<'cash' | 'transfer' | 'qris'>('cash')
   const [renewStartDate, setRenewStartDate] = useState(new Date().toISOString().split('T')[0])
   const [page, setPage] = useState(1)
+  const [receiptOpen, setReceiptOpen] = useState(false)
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
   const PER_PAGE = 10
 
   const queryClient = useQueryClient()
@@ -72,13 +76,13 @@ export default function ExpiryPage() {
       list = list.filter(m => {
         const isPtExpired = m.pt_subscription_id && m.pt_remaining_sessions === 0
         const isGymExpired = m.membership_name && m.days_remaining !== null && m.days_remaining <= 0
-        
+
         // Jika sedang di tab PT, fokus ke status PT
         if (activeTab === 'pt') {
           if (statusFilter === 'expired') return isPtExpired
           if (statusFilter === 'critical') return (m.pt_remaining_sessions !== null && m.pt_remaining_sessions > 0 && m.pt_remaining_sessions <= 2)
           if (statusFilter === 'active') return (m.pt_remaining_sessions !== null && m.pt_remaining_sessions > 2)
-          return true 
+          return true
         }
 
         if (statusFilter === 'expired') return isGymExpired || isPtExpired
@@ -92,9 +96,9 @@ export default function ExpiryPage() {
     // 3. Search
     if (search) {
       const s = search.toLowerCase()
-      list = list.filter(m => 
-        m.full_name.toLowerCase().includes(s) || 
-        m.phone.includes(s) || 
+      list = list.filter(m =>
+        m.full_name.toLowerCase().includes(s) ||
+        m.phone.includes(s) ||
         m.member_no?.toLowerCase().includes(s)
       )
     }
@@ -115,7 +119,7 @@ export default function ExpiryPage() {
     }
 
     const isGymExpired = m.membership_name && m.days_remaining !== null && m.days_remaining < 0
-    
+
     if (isGymExpired) return 'expired'
     if (m.days_remaining !== null && m.days_remaining <= 3) return 'critical'
     if (m.days_remaining !== null && m.days_remaining <= 7) return 'expiring_soon'
@@ -129,7 +133,7 @@ export default function ExpiryPage() {
         .from('members')
         .update({ last_contacted_at: now })
         .eq('id', memberId)
-      
+
       if (error) throw error
       queryClient.invalidateQueries({ queryKey: ['expiry'] })
     } catch (err) {
@@ -141,11 +145,46 @@ export default function ExpiryPage() {
     if (!renewMember || (!renewMembershipId && !renewPtMembershipId)) return
 
     const pkg = renewMembershipId ? memberships?.find((m) => m.id === renewMembershipId) : null
-
+    
+    // Jika paketnya VISITOR, paksa end_date ke akhir hari ini (23:59:59)
+    const isVisitorPkg = pkg?.name.toUpperCase() === 'VISITOR'
     const startDate = renewStartDate
-    const endDate = pkg ? toLocalISOString(hitungEndDate(startDate, pkg.duration_days)) : ''
+    let endDate = pkg ? toLocalISOString(hitungEndDate(startDate, pkg.duration_days)) : ''
+    
+    if (isVisitorPkg) {
+      const today = new Date(startDate)
+      today.setHours(23, 59, 59, 999)
+      endDate = today.toISOString()
+    }
 
     try {
+      // Update member_no & notes
+      const updateData: any = {
+        member_no: renewMemberNo?.trim() || null,
+      }
+      
+      if (isVisitorPkg) {
+        updateData.notes = 'visitor'
+      } else if (renewMember.notes?.toLowerCase().includes('visitor')) {
+        updateData.notes = 'Membership Regular'
+      }
+
+      const { error: updErr } = await supabase
+        .from('members')
+        .update(updateData)
+        .eq('id', renewMember.member_id)
+      
+      if (updErr) throw updErr
+
+      // OTOMATIS ABSEN (Check-In) untuk paket VISITOR
+      if (isVisitorPkg || (renewMember.notes?.toLowerCase().includes('visitor') && renewMember.status === 'inactive')) {
+        await supabase.from('attendance_logs').insert({
+          gym_id: GYM_ID,
+          member_id: renewMember.member_id,
+          notes: isVisitorPkg ? 'Visitor Check-In (Auto via Expiry Page)' : 'Visitor Extended (Check-In)'
+        })
+      }
+
       // Build PT payment jika ada
       const ptPkg = renewPtMembershipId ? memberships?.find(m => m.id === renewPtMembershipId) : null
       const ptPaymentData = ptPkg ? {
@@ -167,13 +206,33 @@ export default function ExpiryPage() {
         membershipType: pkg?.name,
         ptPayment: ptPaymentData,
       })
+      
       toast.success(`Membership ${renewMember.full_name} berhasil diperpanjang!`)
+
+      // Prepare receipt data
+      const totalAmount = (pkg?.price || 0) + (ptPkg?.price || 0)
+      if (totalAmount > 0) {
+        setReceiptData({
+          memberName: renewMember.full_name,
+          memberPhone: renewMember.phone,
+          gymPackageName: pkg?.name,
+          gymEndDate: pkg ? endDate : undefined,
+          ptPackageName: ptPkg?.name,
+          ptSessions: ptPkg?.total_sessions ?? undefined,
+          totalAmount,
+          paymentMethod: renewPayMethod,
+          transactionType: 'renew',
+        })
+        setReceiptOpen(true)
+      }
+
       setRenewOpen(false)
       setRenewMember(null)
       setRenewMemberNo('')
       setRenewMembershipId('')
       setRenewPtMembershipId('')
-    } catch {
+    } catch (err: any) {
+      console.error(err)
       toast.error('Gagal memperpanjang membership')
     }
   }
@@ -196,6 +255,30 @@ export default function ExpiryPage() {
 
   return (
     <div className="space-y-5">
+      {/* Header Expiry */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-2xl uppercase text-foreground sm:text-3xl">Membership Expiry</h1>
+          <p className="text-sm text-muted-foreground">Monitoring member yang akan habis masa aktifnya</p>
+        </div>
+
+        {/* Legend Warna */}
+        <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-xl border border-border/50 bg-card/50 p-3">
+          {[
+            { label: 'Aktif (>7hr)', color: 'bg-[#00FF85]' },
+            { label: 'Segera (4-7hr)', color: 'bg-[#D4FF00]' },
+            { label: 'Kritis (1-3hr)', color: 'bg-[#FFB800]' },
+            { label: 'Hari Terakhir', color: 'bg-[#FF6B35]' },
+            { label: 'Lewat Hari', color: 'bg-[#FF2A2A]' },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${item.color} shadow-[0_0_5px_currentColor]`} />
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Metric Cards */}
       <div className="grid grid-cols-3 gap-3">
         <MetricCard label="Expired Hari Ini" value={stats?.todayCount ?? 0} icon={CalendarX} accent="red" />
@@ -215,11 +298,10 @@ export default function ExpiryPage() {
             <button
               key={opt.value}
               onClick={() => setActiveTab(opt.value as any)}
-              className={`whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold transition-colors border ${
-                activeTab === opt.value
+              className={`whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold transition-colors border ${activeTab === opt.value
                   ? 'bg-primary text-black border-primary'
                   : 'bg-card text-muted-foreground border-border/50 hover:text-foreground'
-              }`}
+                }`}
             >
               {opt.label.toUpperCase()}
             </button>
@@ -229,7 +311,7 @@ export default function ExpiryPage() {
         {/* Status Filter pill */}
         <div className="flex w-full items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
           {[
-            { value: 'all', label: 'Semua Status' },
+            { value: 'all', label: 'Semua' },
             { value: 'active', label: 'Aktif' },
             { value: 'expiring_soon', label: 'Segera' },
             { value: 'critical', label: 'Kritis' },
@@ -237,11 +319,11 @@ export default function ExpiryPage() {
           ].map((opt) => (
             <button
               key={opt.value}
-              onClick={() => setStatusFilter(opt.value as any)}
-              className={`whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-semibold transition-colors border ${
+              onClick={() => { setStatusFilter(opt.value as any); setPage(1); }}
+              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border ${
                 statusFilter === opt.value
-                  ? 'bg-[#FF2A2A] text-white border-[#FF2A2A]'
-                  : 'bg-transparent text-muted-foreground border-border/50 hover:border-muted-foreground'
+                  ? 'bg-primary text-foreground border-[#FF2A2A]'
+                  : 'bg-card text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground border-border'
               }`}
             >
               {opt.label}
@@ -251,8 +333,8 @@ export default function ExpiryPage() {
 
         {/* Search Bar */}
         <div className="relative">
-          <Input 
-            placeholder="Cari member di sini..." 
+          <Input
+            placeholder="Cari member di sini..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="border-border bg-card text-foreground placeholder:text-muted-foreground/50 h-10 pl-4"
@@ -302,7 +384,7 @@ export default function ExpiryPage() {
           {paginated.map((m) => {
             const initials = m.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
             const priority = getPriorityLabel(m)
-            
+
             // Cek apakah sudah dihubungi dalam 30 hari terakhir
             const lastContacted = m.last_contacted_at ? new Date(m.last_contacted_at) : null
             const isRecentlyContacted = lastContacted && (Date.now() - lastContacted.getTime()) < 30 * 24 * 60 * 60 * 1000
@@ -316,7 +398,7 @@ export default function ExpiryPage() {
                 <div className="flex items-start gap-3">
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-heading text-lg ${priority === 'critical' && !isRecentlyContacted
                     ? 'animate-pulse-critical bg-red-500/10 text-red-400'
-                    : priority === 'expired' 
+                    : priority === 'expired'
                       ? 'bg-red-500/20 text-red-500'
                       : 'bg-[#D4FF00]/10 text-accent'
                     }`}>
@@ -333,14 +415,28 @@ export default function ExpiryPage() {
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                       <span>{m.membership_name || (m.pt_membership_name ? `PT: ${m.pt_membership_name}` : 'No Package')} Â· {formatRupiah(m.price ?? 0)}</span>
                       {m.pt_remaining_sessions !== null && (
-                         <span className={m.pt_remaining_sessions === 0 ? 'text-red-400 font-bold' : ''}>Sisa Sesi PT: {m.pt_remaining_sessions}</span>
+                        <span className={m.pt_remaining_sessions === 0 ? 'text-red-400 font-bold' : ''}>Sisa Sesi PT: {m.pt_remaining_sessions}</span>
                       )}
                       <span>Exp: {formatTanggal(m.end_date || m.pt_end_date || '')}</span>
                     </div>
-                    <p className={`mt-0.5 text-xs font-semibold ${priority === 'expired' || priority === 'critical' ? 'text-red-400' : priority === 'expiring_soon' ? 'text-[#FF6B35]' : 'text-muted-foreground'
+                    <div className="mt-1 flex items-center gap-3">
+                      <p className={`text-xs font-bold ${
+                        m.days_remaining === null ? 'text-muted-foreground' :
+                        m.days_remaining < 0 ? 'text-[#FF2A2A]' :
+                        m.days_remaining === 0 ? 'text-[#FF6B35]' :
+                        m.days_remaining <= 3 ? 'text-[#FFB800]' :
+                        m.days_remaining <= 7 ? 'text-[#D4FF00]' : 'text-[#00FF85]'
                       }`}>
-                      {priority === 'expired' ? 'SUDAH EXPIRED / SESI HABIS' : `Sisa ${m.days_remaining} hari`}
-                    </p>
+                        {m.days_remaining === null 
+                          ? 'BELUM ADA PAKET'
+                          : m.days_remaining < 0 
+                            ? `LEWAT ${Math.abs(m.days_remaining)} HARI` 
+                            : m.days_remaining === 0 
+                              ? 'AKTIF (S/D MALAM INI)' 
+                              : `Sisa ${m.days_remaining} hari`}
+                      </p>
+                      <span className="text-[#00E5FF] text-[11px] font-bold">Kunjungan: {m.attendance_count}x</span>
+                    </div>
                   </div>
                 </div>
 
@@ -353,11 +449,11 @@ export default function ExpiryPage() {
                       handleMarkAsContacted(m.member_id)
                       const isPt = activeTab === 'pt'
                       const url = generateWALink(
-                        m.phone, 
-                        m.full_name, 
-                        isPt ? m.pt_end_date : m.end_date, 
-                        isPt ? null : m.days_remaining, 
-                        isPt, 
+                        m.phone,
+                        m.full_name,
+                        isPt ? m.pt_end_date : m.end_date,
+                        isPt ? null : m.days_remaining,
+                        isPt,
                         m.pt_remaining_sessions
                       )
                       window.open(url, '_blank')
@@ -381,44 +477,99 @@ export default function ExpiryPage() {
         </div>
       )}
 
-      {/* Pagination Controls */}
+      {/* Pagination Controls — Sesuai Gambar Request */}
       {totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-between border-t border-border/50 pt-4">
-          <p className="text-xs text-muted-foreground">
-            Menampilkan <span className="text-foreground font-medium">{(page - 1) * PER_PAGE + 1}</span> - <span className="text-foreground font-medium">{Math.min(page * PER_PAGE, filteredList.length)}</span> dari <span className="text-foreground font-medium">{filteredList.length}</span> member
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === 1}
-              onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo(0, 0) }}
-              className="border-border text-muted-foreground hover:bg-card hover:text-foreground"
-            >
-              Sebelumnya
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === totalPages}
-              onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo(0, 0) }}
-              className="border-border text-muted-foreground hover:bg-card hover:text-foreground"
-            >
-              Selanjutnya
-            </Button>
+        <div className="mt-8 flex items-center justify-center gap-6">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 1}
+            onClick={() => { setPage(p => Math.max(1, p - 1)) }}
+            className="border-border/50 bg-card px-4 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            Sebelumnya
+          </Button>
+          
+          <div className="flex items-center gap-2 font-heading text-sm">
+            <span className="text-[#D4FF00] font-bold">{page}</span>
+            <span className="text-muted-foreground/30">/</span>
+            <span className="text-[#D4FF00] opacity-80">{totalPages}</span>
           </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === totalPages}
+            onClick={() => { setPage(p => Math.min(totalPages, p + 1)) }}
+            className="border-border/50 bg-card px-4 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            Selanjutnya
+          </Button>
         </div>
       )}
 
+      {/* Receipt Dialog */}
+      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
+        <DialogContent className="border-border bg-card text-foreground sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl text-center">Pembayaran Berhasil!</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 text-green-500">
+              <RotateCcw className="h-8 w-8" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Pembayaran dari</p>
+              <p className="font-heading text-lg">{receiptData?.memberName}</p>
+              <p className="text-xl font-bold text-accent">{formatRupiah(receiptData?.totalAmount ?? 0)}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-background p-3 text-left text-xs space-y-1">
+              {receiptData?.gymPackageName && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Paket Gym:</span>
+                  <span>{receiptData.gymPackageName}</span>
+                </div>
+              )}
+              {receiptData?.ptPackageName && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Paket PT:</span>
+                  <span>{receiptData.ptPackageName}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Metode:</span>
+                <span className="uppercase">{receiptData?.paymentMethod}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Button
+              className="w-full bg-[#25D366] font-bold text-white hover:bg-[#128C7E]"
+              onClick={() => {
+                if (receiptData) {
+                  const link = generateReceiptWALink(receiptData);
+                  window.open(link, '_blank');
+                }
+              }}
+            >
+              <MessageCircle className="mr-2 h-4 w-4" /> Kirim Struk (WhatsApp)
+            </Button>
+            <Button variant="ghost" className="w-full text-muted-foreground" onClick={() => setReceiptOpen(false)}>
+              Selesai
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Renew Dialog */}
-      <Dialog open={renewOpen} onOpenChange={(open) => { 
-        setRenewOpen(open); 
-        if (!open) { 
-          setRenewPtMembershipId(''); 
-          setRenewMembershipId(''); 
+      <Dialog open={renewOpen} onOpenChange={(open) => {
+        setRenewOpen(open);
+        if (!open) {
+          setRenewPtMembershipId('');
+          setRenewMembershipId('');
           setRenewMemberNo('');
           setRenewStartDate(new Date().toISOString().split('T')[0]);
-        } 
+        }
       }}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto border-border bg-card text-foreground sm:max-w-md">
           <DialogHeader>
