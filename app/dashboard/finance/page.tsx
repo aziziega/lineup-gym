@@ -424,18 +424,22 @@ export default function FinancePage() {
 
       {activeTab === 'income' && (
         <div className="space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="text-sm font-semibold text-foreground">Pemasukan <span className="text-[10px] font-normal text-muted-foreground/60">(otomatis dari pendaftaran member)</span></h3>
-            <div className="flex gap-2">
-              <div className="relative flex-1 sm:w-48 sm:flex-none">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <h3 className="text-sm font-semibold text-foreground">
+              Pemasukan <span className="text-[10px] font-normal text-muted-foreground/60">(otomatis dari pendaftaran member)</span>
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+              <div className="relative col-span-2 sm:w-48">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
                 <Input
                   placeholder="Cari nama..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="border-border bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground/60"
+                  className="h-9 border-border bg-card pl-9 text-xs text-foreground placeholder:text-muted-foreground/60"
                 />
               </div>
+              
               <NativeSelect
                 value={filterMethod}
                 onChange={(e) => setFilterMethod(e.target.value)}
@@ -445,46 +449,75 @@ export default function FinancePage() {
                   { value: 'transfer', label: 'Transfer' },
                   { value: 'qris', label: 'QRIS' },
                 ]}
-                triggerClassName="w-28 text-xs"
+                triggerClassName="h-9 text-[11px]"
               />
-              <Button size="sm" variant="outline" onClick={() => setExportOpen(true)} className="border-border text-xs text-muted-foreground">
-                <Download className="mr-1 h-3.5 w-3.5" /> Export Excel
+
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => setExportOpen(true)} 
+                className="h-9 border-border text-[11px] text-muted-foreground"
+              >
+                <Download className="mr-1 h-3.5 w-3.5" /> Export
               </Button>
 
               <Dialog open={incOpen} onOpenChange={setIncOpen}>
-                <DialogTrigger render={<Button size="sm" className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]" />}>
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pemasukan
+                <DialogTrigger render={<Button size="sm" className="col-span-2 h-10 bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00] sm:h-9" />}>
+                  <Plus className="mr-1 h-4 w-4" /> Catat Pemasukan
                 </DialogTrigger>
-                <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
+                <DialogContent className="border-border bg-card text-foreground w-[95vw] max-w-md rounded-2xl p-6 sm:w-full">
                   <DialogHeader>
                     <DialogTitle className="font-heading text-xl">Catat Pemasukan Tambahan</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-3 pt-4">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Keterangan (Contoh: Jualan Air)</Label>
-                      <Input value={incDesc} onChange={(e) => setIncDesc(e.target.value)} className="border-border bg-background text-foreground" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Nominal Pemasukan (Rp)</Label>
-                      <Input type="number" value={incAmount} onChange={(e) => setIncAmount(e.target.value)} className="border-border bg-background text-foreground" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Metode Bayar</Label>
-                      <NativeSelect
-                        value={incMethod}
-                        onChange={(e) => setIncMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
-                        options={[
-                          { value: 'cash', label: 'Cash' },
-                          { value: 'transfer', label: 'Transfer' },
-                          { value: 'qris', label: 'QRIS' },
-                        ]}
+                  <div className="space-y-4 pt-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-muted-foreground">Keterangan</Label>
+                      <Input 
+                        placeholder="Contoh: Jualan Air Mineral"
+                        value={incDesc} 
+                        onChange={(e) => setIncDesc(e.target.value)} 
+                        className="h-11 border-border bg-background text-foreground" 
                       />
                     </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Tanggal</Label>
-                      <Input type="date" value={incDate} onChange={(e) => setIncDate(e.target.value)} className="border-border bg-background text-foreground" />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-muted-foreground">Nominal (Rp)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="0"
+                        value={incAmount} 
+                        onChange={(e) => setIncAmount(e.target.value)} 
+                        className="h-11 border-border bg-background text-foreground" 
+                      />
                     </div>
-                    <Button onClick={handleAddIncome} disabled={createPayment.isPending} className="mt-2 w-full bg-[#D4FF00] font-bold text-black hover:bg-[#c5ef00]">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">Metode Bayar</Label>
+                        <NativeSelect
+                          value={incMethod}
+                          onChange={(e) => setIncMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
+                          options={[
+                            { value: 'cash', label: 'Cash' },
+                            { value: 'transfer', label: 'Transfer' },
+                            { value: 'qris', label: 'QRIS' },
+                          ]}
+                          triggerClassName="h-11"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">Tanggal</Label>
+                        <Input 
+                          type="date" 
+                          value={incDate} 
+                          onChange={(e) => setIncDate(e.target.value)} 
+                          className="h-11 border-border bg-background text-foreground [color-scheme:dark]" 
+                        />
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={handleAddIncome} 
+                      disabled={createPayment.isPending} 
+                      className="mt-4 h-12 w-full bg-[#D4FF00] text-sm font-bold text-black hover:bg-[#c5ef00]"
+                    >
                       {createPayment.isPending ? 'Menyimpan...' : 'Simpan Pemasukan'}
                     </Button>
                   </div>
@@ -547,18 +580,18 @@ export default function FinancePage() {
       {
         activeTab === 'expenses' && (
           <div className="space-y-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Pengeluaran</h3>
               </div>
-              <div className="flex gap-2">
-                <div className="relative flex-1 sm:w-48 sm:flex-none">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                <div className="relative col-span-2 sm:w-48">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
                   <Input
                     placeholder="Cari keterangan..."
                     value={searchExp}
                     onChange={(e) => setSearchExp(e.target.value)}
-                    className="border-border bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground/60"
+                    className="h-9 border-border bg-card pl-9 text-xs text-foreground placeholder:text-muted-foreground/60"
                   />
                 </div>
                 <NativeSelect
@@ -572,19 +605,19 @@ export default function FinancePage() {
                     { value: 'marketing', label: 'Marketing' },
                     { value: 'lainnya', label: 'Lainnya' },
                   ]}
-                  triggerClassName="w-32 text-xs"
+                  triggerClassName="h-9 text-[11px]"
                 />
                 <Dialog open={expOpen} onOpenChange={setExpOpen}>
-                  <DialogTrigger render={<Button size="sm" className="bg-primary text-xs font-bold text-black hover:bg-[#E60000]" />}>
+                  <DialogTrigger render={<Button size="sm" className="h-9 bg-primary text-[11px] font-bold text-black hover:bg-[#E60000]" />}>
                     <Plus className="mr-1 h-3.5 w-3.5" /> Catat Pengeluaran
                   </DialogTrigger>
-                  <DialogContent className="border-border bg-card text-foreground sm:max-w-md">
+                  <DialogContent className="border-border bg-card text-foreground w-[95vw] max-w-md rounded-2xl p-6 sm:w-full">
                     <DialogHeader>
                       <DialogTitle className="font-heading text-xl">Catat Pengeluaran</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-3">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Kategori</Label>
+                    <div className="space-y-4 pt-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">Kategori</Label>
                         <NativeSelect
                           value={expCategory}
                           onChange={(e) => setExpCategory(e.target.value)}
@@ -595,21 +628,42 @@ export default function FinancePage() {
                             { value: 'marketing', label: 'Marketing & Iklan' },
                             { value: 'lainnya', label: 'Lainnya' },
                           ]}
+                          triggerClassName="h-11"
                         />
                       </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Nominal (Rp)</Label>
-                        <Input type="number" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} className="border-border bg-background text-foreground" />
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">Nominal (Rp)</Label>
+                        <Input 
+                          type="number" 
+                          placeholder="0"
+                          value={expAmount} 
+                          onChange={(e) => setExpAmount(e.target.value)} 
+                          className="h-11 border-border bg-background text-foreground" 
+                        />
                       </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Keterangan</Label>
-                        <Input value={expDesc} onChange={(e) => setExpDesc(e.target.value)} className="border-border bg-background text-foreground" />
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">Keterangan</Label>
+                        <Input 
+                          placeholder="Deskripsi pengeluaran..."
+                          value={expDesc} 
+                          onChange={(e) => setExpDesc(e.target.value)} 
+                          className="h-11 border-border bg-background text-foreground" 
+                        />
                       </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Tanggal Pengeluaran</Label>
-                        <Input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} className="border-border bg-background text-foreground" />
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">Tanggal Pengeluaran</Label>
+                        <Input 
+                          type="date" 
+                          value={expDate} 
+                          onChange={(e) => setExpDate(e.target.value)} 
+                          className="h-11 border-border bg-background text-foreground [color-scheme:dark]" 
+                        />
                       </div>
-                      <Button onClick={handleAddExpense} disabled={createExpense.isPending} className="w-full bg-primary font-bold text-black hover:bg-[#E60000]">
+                      <Button 
+                        onClick={handleAddExpense} 
+                        disabled={createExpense.isPending} 
+                        className="mt-4 h-12 w-full bg-primary text-sm font-bold text-black hover:bg-[#E60000]"
+                      >
                         {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}
                       </Button>
                     </div>
