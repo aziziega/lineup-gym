@@ -32,6 +32,7 @@ export default function PackageDonutChart() {
   }, {})
 
   const chartData = Object.entries(dist).map(([name, value]) => ({ name, value }))
+  const totalMembers = chartData.reduce((acc, curr) => acc + curr.value, 0)
 
   if (chartData.length === 0) {
     return (
@@ -44,33 +45,49 @@ export default function PackageDonutChart() {
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null
     return (
-      <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs">
-        <p className="text-muted-foreground">{payload[0].name}</p>
-        <p className="font-heading text-base text-foreground">{payload[0].value} member</p>
+      <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs shadow-xl">
+        <p className="text-muted-foreground mb-1">{payload[0].name}</p>
+        <p className="font-heading text-sm text-foreground">{payload[0].value} Member</p>
       </div>
     )
   }
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card p-4">
-      <h3 className="mb-4 text-sm font-semibold text-foreground">Distribusi Paket</h3>
+    <div className="rounded-xl border border-border/50 bg-card p-5 shadow-sm">
+      <div className="mb-2">
+        <h3 className="text-sm font-semibold text-foreground">Distribusi Paket</h3>
+        <p className="text-[11px] text-muted-foreground">Persentase jenis membership aktif</p>
+      </div>
 
-      <div className="flex flex-col items-center gap-4 sm:flex-row">
-        <div className="h-40 w-40 shrink-0">
+      <div className="flex flex-col items-center">
+        {/* Chart Container */}
+        <div className="relative h-64 w-full max-w-[300px]">
+          {/* Middle Content */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-4xl font-bold text-foreground tracking-tight">{totalMembers}</span>
+            <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mt-1">Total</span>
+          </div>
+
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={45}
-                outerRadius={70}
-                paddingAngle={3}
+                innerRadius={82}
+                outerRadius={105}
+                paddingAngle={4}
                 dataKey="value"
                 animationBegin={300}
+                animationDuration={1500}
+                stroke="none"
               >
                 {chartData.map((_, idx) => (
-                  <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
+                  <Cell 
+                    key={idx} 
+                    fill={COLORS[idx % COLORS.length]} 
+                    className="outline-none hover:opacity-80 transition-opacity"
+                  />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
@@ -78,16 +95,18 @@ export default function PackageDonutChart() {
           </ResponsiveContainer>
         </div>
 
-        {/* Legend */}
-        <div className="space-y-2">
+        {/* Legend Grid */}
+        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 w-full border-t border-border/30 pt-6 px-2">
           {chartData.map((entry, idx) => (
-            <div key={entry.name} className="flex items-center gap-2 text-xs">
-              <div
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-              />
-              <span className="text-muted-foreground">{entry.name}</span>
-              <span className="font-semibold text-foreground">{entry.value}</span>
+            <div key={entry.name} className="flex items-center justify-between gap-3 text-[11px]">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                />
+                <span className="text-muted-foreground truncate" title={entry.name}>{entry.name}</span>
+              </div>
+              <span className="font-bold text-foreground shrink-0">{entry.value}</span>
             </div>
           ))}
         </div>
