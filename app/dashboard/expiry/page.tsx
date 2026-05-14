@@ -469,7 +469,7 @@ export default function ExpiryPage() {
                               ? 'AKTIF (S/D MALAM INI)' 
                               : `Sisa ${m.days_remaining} hari`}
                       </p>
-                      <span className="text-[#00E5FF] text-[11px] font-bold">Kunjungan: {m.attendance_count}x</span>
+
                     </div>
                   </div>
                 </div>

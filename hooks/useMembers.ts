@@ -32,22 +32,49 @@ export function useMembersWithSubscription() {
 
       if (!members || members.length === 0) return []
 
-      // OPTIMASI: Ambil SEMUA hitungan absensi dalam 1x query saja
-      const { data: attendanceCounts, error: attError } = await supabase
+      // OPTIMASI: Hitung "Per Masa Aktif Paket" (Per Subscription)
+      // Cari tanggal paling lama dari start_date atau pt_start_date yang aktif saat ini
+      let oldestDate = new Date().toISOString()
+      members.forEach((m: any) => {
+        const d = m.start_date || m.pt_start_date
+        if (d && d < oldestDate) oldestDate = d
+      })
+
+      // Ambil absensi HANYA dari tanggal tertua tersebut ke atas (Sangat menghemat Bandwidth/Egress Supabase)
+      const { data: attendanceLogs, error: attError } = await supabase
         .from('attendance_logs')
-        .select('member_id')
+        .select('member_id, check_in_at')
+        .gte('check_in_at', oldestDate)
       
       if (attError) throw attError
 
-      const countMap: Record<string, number> = {}
-      attendanceCounts.forEach((log: any) => {
-        countMap[log.member_id] = (countMap[log.member_id] || 0) + 1
+      // Kelompokkan log per member_id untuk performa JS yang lebih cepat
+      const logsByMember: Record<string, string[]> = {}
+      attendanceLogs?.forEach((log: any) => {
+        if (!logsByMember[log.member_id]) {
+          logsByMember[log.member_id] = []
+        }
+        logsByMember[log.member_id].push(log.check_in_at)
       })
 
-      const membersWithVisits = members.map((m: any) => ({
-        ...m,
-        attendance_count: countMap[m.member_id] || 0
-      }))
+      const membersWithVisits = members.map((m: any) => {
+        // Tentukan batas tanggal hitung (mulai paket saat ini)
+        const effectiveStartDate = m.start_date || m.pt_start_date || '1970-01-01'
+        const memberLogs = logsByMember[m.member_id] || []
+        
+        // Hitung hanya kedatangan yang terjadi SETELAH paket dimulai
+        let count = 0
+        for (const checkInAt of memberLogs) {
+          if (checkInAt >= effectiveStartDate) {
+            count++
+          }
+        }
+
+        return {
+          ...m,
+          attendance_count: count
+        }
+      })
 
       return membersWithVisits as ActiveSubscriptionView[]
     },

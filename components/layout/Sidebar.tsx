@@ -131,7 +131,7 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
                 >
                   <item.icon className={cn('h-[18px] w-[18px]', active && 'text-primary')} />
                   <span>{item.label}</span>
-                  
+
                   {/* Badge V2 untuk Fitur Masa Depan */}
                   {item.isPro && (
                     <span className="ml-auto flex items-center justify-center rounded bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-500">
@@ -237,7 +237,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold text-sidebar-foreground/30 tracking-wider">DASHBOARD V1.2</span>
-              <button 
+              <button
                 onClick={() => setIsUpgradeModalOpen(true)}
                 className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary hover:bg-primary/20 transition-colors"
               >
@@ -245,7 +245,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               </button>
             </div>
             <p className="text-[9px] text-sidebar-foreground/20 uppercase tracking-tighter font-medium">
-              LAST UPDATE: 13 MEI, 05:38 WIB
+              LAST UPDATE: 14 MEI, 11:58 WIB
             </p>
           </div>
         </div>
