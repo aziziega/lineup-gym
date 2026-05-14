@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { AlertTriangle, Clock, CalendarX, MessageCircle, RotateCcw, Send, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { GYM_ID } from '@/lib/constants'
@@ -38,7 +38,7 @@ export default function ExpiryPage() {
   const { data: memberships } = useActiveMemberships()
   const renewSub = useRenewSubscription()
 
-  const [activeTab, setActiveTab] = useState<'all' | 'regular' | 'pt' | 'visitor'>('all')
+  const [activeTab, setActiveTab] = useState<'all' | 'regular' | 'pt' | 'visitor'>('regular')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expiring_soon' | 'critical' | 'expired'>('all')
   const [search, setSearch] = useState('')
   const [renewOpen, setRenewOpen] = useState(false)
@@ -58,6 +58,23 @@ export default function ExpiryPage() {
 
   const gymPackages = useMemo(() => memberships?.filter(m => m.category === 'gym') || [], [memberships])
   const ptPackages = useMemo(() => memberships?.filter(m => m.category === 'pt') || [], [memberships])
+
+  const getPriorityLabel = useCallback((m: ActiveSubscriptionView) => {
+    // Jika di tab PT, prioritas berdasarkan sesi
+    if (activeTab === 'pt') {
+      if (m.pt_remaining_sessions === 0) return 'expired'
+      if (m.pt_remaining_sessions !== null && m.pt_remaining_sessions <= 2) return 'critical'
+      return 'active'
+    }
+
+    const isGymExpired = m.membership_name && m.days_remaining !== null && m.days_remaining < 0
+
+    if (isGymExpired) return 'expired'
+    if (m.days_remaining !== null && m.days_remaining <= 3) return 'critical'
+    if (m.days_remaining !== null && m.days_remaining <= 7) return 'expiring_soon'
+    return 'active'
+  }, [activeTab])
+
 
   const filteredList = useMemo(() => {
     let list = expiryList || []
@@ -103,28 +120,46 @@ export default function ExpiryPage() {
       )
     }
 
+    // 4. Sort
+    const priorityWeight: Record<string, number> = {
+      expired: 0,
+      critical: 1,
+      expiring_soon: 2,
+      active: 3,
+    }
+
+    list.sort((a, b) => {
+      const pA = getPriorityLabel(a)
+      const pB = getPriorityLabel(b)
+
+      if (priorityWeight[pA] !== priorityWeight[pB]) {
+        return priorityWeight[pA] - priorityWeight[pB]
+      }
+
+      // Jika sama-sama expired, yang paling baru (days_remaining mendekati 0) di atas
+      if (pA === 'expired') {
+        // Untuk Gym: -1, -2, -3 (Descending)
+        // Untuk PT: pt_remaining_sessions (Ascending, though usually all 0 here)
+        if (activeTab === 'pt') {
+          return (a.pt_remaining_sessions ?? 0) - (b.pt_remaining_sessions ?? 0)
+        }
+        return (b.days_remaining ?? 0) - (a.days_remaining ?? 0)
+      }
+
+      // Jika aktif/kritis/segera, yang paling cepat habis di atas (Ascending)
+      if (activeTab === 'pt') {
+        return (a.pt_remaining_sessions ?? 0) - (b.pt_remaining_sessions ?? 0)
+      }
+      return (a.days_remaining ?? 0) - (b.days_remaining ?? 0)
+    })
+
     return list
-  }, [expiryList, activeTab, statusFilter, search])
+  }, [expiryList, activeTab, statusFilter, search, getPriorityLabel]) // Tambahkan getPriorityLabel ke deps jika perlu, tapi biasanya stable
 
   const totalPages = Math.ceil(filteredList.length / PER_PAGE)
   const paginated = filteredList.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
 
-  const getPriorityLabel = (m: ActiveSubscriptionView) => {
-    // Jika di tab PT, prioritas berdasarkan sesi
-    if (activeTab === 'pt') {
-      if (m.pt_remaining_sessions === 0) return 'expired'
-      if (m.pt_remaining_sessions !== null && m.pt_remaining_sessions <= 2) return 'critical'
-      return 'active'
-    }
-
-    const isGymExpired = m.membership_name && m.days_remaining !== null && m.days_remaining < 0
-
-    if (isGymExpired) return 'expired'
-    if (m.days_remaining !== null && m.days_remaining <= 3) return 'critical'
-    if (m.days_remaining !== null && m.days_remaining <= 7) return 'expiring_soon'
-    return 'active'
-  }
 
   const handleMarkAsContacted = async (memberId: string) => {
     try {
@@ -290,7 +325,6 @@ export default function ExpiryPage() {
       <div className="flex flex-col gap-3">
         <div className="flex w-full items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
           {[
-            { value: 'all', label: 'Semua' },
             { value: 'regular', label: 'Member Reguler' },
             { value: 'pt', label: 'Member PT' },
             { value: 'visitor', label: 'Pengunjung Harian' },

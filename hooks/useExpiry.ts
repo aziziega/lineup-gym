@@ -14,7 +14,6 @@ export function useExpiry() {
         .select('*')
         .eq('gym_id', GYM_ID)
         .or('days_remaining.lte.30,pt_remaining_sessions.eq.0')
-        .order('days_remaining', { ascending: true })
       if (error) throw error
       return data as ActiveSubscriptionView[]
     },
