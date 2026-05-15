@@ -213,6 +213,16 @@ function MembersContent() {
       return
     }
 
+    // Cek duplikasi (Nomor HP wajib unik)
+    const existingMember = members?.find(m => 
+      m.phone.replace(/[^0-9]/g, '') === formPhone.replace(/[^0-9]/g, '')
+    )
+
+    if (existingMember) {
+      toast.error(`Nomor HP ${formPhone} sudah terdaftar atas nama "${existingMember.full_name}"!`)
+      return
+    }
+
     const selectedPkg = memberships?.find((m) => m.id === formMembership)
     if (!selectedPkg) return
 
@@ -391,6 +401,17 @@ function MembersContent() {
     if (!editMemberData) return
     if (!formName || !formPhone) {
       toast.error('Nama dan No. HP wajib diisi')
+      return
+    }
+
+    // Cek duplikasi (Nomor HP wajib unik, tapi bukan dirinya sendiri)
+    const existingOther = members?.find(m => 
+      m.member_id !== editMemberData.member_id && 
+      m.phone.replace(/[^0-9]/g, '') === formPhone.replace(/[^0-9]/g, '')
+    )
+
+    if (existingOther) {
+      toast.error(`Nomor HP ${formPhone} sudah digunakan oleh member lain ("${existingOther.full_name}")!`)
       return
     }
 
