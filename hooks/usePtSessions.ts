@@ -128,6 +128,8 @@ export function useCompletePtSession() {
           })
           .eq('id', subscriptionId)
         if (subErr) throw subErr
+      } else {
+        console.warn('PT session completed but subscription decrement skipped:', { sub, subscriptionId })
       }
 
       // 3. Audit log

@@ -84,7 +84,11 @@ Sebelum mengaktifkan fitur V2, Owner Gym wajib menyiapkan infrastruktur berikut:
    - Server Key & Client Key untuk memproses pembayaran QRIS/VA secara otomatis.
 3. **Public Domain & Hosting**:
    - Domain kustom (misal: `dashboard.lineupgym.com`) untuk menerima *Webhooks* dari Payment Gateway.
-4. **Data Security (Optional but Recommended)**:
+4. **Hardware Scanner**:
+   - Perangkat **2D QR Code Scanner Desktop** (Omnidirectional) yang terhubung ke PC/Laptop Admin.
+   - Spesifikasi wajib: Mampu membaca layar HP (Digital Card) dan mendukung *Plug-and-Play* USB.
+   - Rekomendasi: *Kassen KS-606* atau *Postronix Table Scan*.
+5. **Data Security (Optional but Recommended)**:
    - Upgrade Supabase ke **Pro Tier ($25/mo)** untuk fitur *Auto-Backup* harian dan kapasitas penyimpanan foto yang lebih besar.
 
 ---
@@ -105,7 +109,10 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
    - **Target V2:** Menu baru di profil member untuk mencatat perkembangan fisik bulanan (Berat Badan, Lingkar Perut, Body Fat, dan Target).
 
 3. **Integrasi Barcode/QR Check-In Kiosk**
-   - **Target V2:** Member tidak perlu mengetikkan nomor atau nama di layar Kiosk. Mereka cukup men-*scan* *barcode* ID card mereka ke kamera iPad/Laptop untuk melakukan absen gym atau memotong jatah sesi PT.
+   - **Target V2:** Member tidak perlu lagi mengetikkan nomor atau nama secara manual di layar Kiosk.
+   - **Hardware pendukung:** Dibutuhkan **2D QR Code Scanner Desktop** (seperti *Kassen KS-606* atau *Postronix Table Scan*) yang mendukung fitur *Hands-free* dan mampu membaca layar HP.
+   - **Flow Baru:** Admin mengirimkan "Digital Member Card" (QR Code) via WhatsApp. Member datang, scan QR di depan alat, dan sistem otomatis mencatat absensi (Auto Check-In) dalam hitungan milidetik.
+   - **Manfaat:** Keamanan 100% (tidak bisa absen dari rumah), efisiensi antrian, dan meningkatkan citra profesional Gym.
 
 4. **Multi-Coach PT Support**
    - **Catatan:** Saat ini sistem mengasumsikan hanya ada 1 Personal Trainer (conflict check 1 sesi per jam global).
@@ -185,6 +192,15 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
     - **Analisis Risiko & Mitigasi:**
         - **Risiko**: Webhook payment delay atau member salah pilih paket.
         - **Mitigasi**: Sistem tetap mengirim "Notifikasi Approval" ke Admin sebagai kontrol akhir (Double-Check) sebelum data benar-benar di-commit ke database.
+
+17. **Self-Service Membership Renewal (Portal Member)**
+    - **Target V2:** Member tidak perlu lagi datang ke meja kasir hanya untuk melakukan perpanjangan paket membership.
+    - **Mekanisme:**
+        - Member mengakses portal khusus member (validasi menggunakan No. HP & OTP WhatsApp).
+        - Member memilih paket perpanjangan yang diinginkan.
+        - Integrasi pembayaran otomatis via Payment Gateway (QRIS/VA).
+        - Setelah pembayaran sukses, sistem secara otomatis memperbarui `end_date` di database dan mengirimkan struk digital.
+    - **Manfaat:** Mengurangi beban administrasi kasir di jam sibuk dan memberikan kenyamanan bagi member untuk perpanjang dari mana saja.
 
 ---
 

@@ -97,6 +97,21 @@ export function useRenewSubscription() {
 
       // Jika ada PT package, buat subscription + payment PT juga
       if (ptPayment) {
+        // Nonaktifkan subscription PT lama
+        const { data: ptSubs } = await supabase
+          .from('subscriptions')
+          .select('id, memberships!inner(category)')
+          .eq('member_id', memberId)
+          .eq('status', 'active')
+          .eq('memberships.category', 'pt')
+
+        if (ptSubs && ptSubs.length > 0) {
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'expired' })
+            .in('id', ptSubs.map((s: any) => s.id))
+        }
+
         const { error: ptSubError } = await supabase
           .from('subscriptions')
           .insert({
