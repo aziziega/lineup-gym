@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'LineUp Gym - Be Strong Be Healthy',
     description: 'Pusat kebugaran terbaik di Prambanan dengan fasilitas lengkap dan komunitas yang solid.',
-    url: 'https://lineupgym.com',
+    url: 'https://www.lineupgym.com',
     siteName: 'LineUp Gym',
     images: [
       {
@@ -75,9 +75,9 @@ export default function RootLayout({
                 '@context': 'https://schema.org',
                 '@type': 'Gym',
                 'name': 'LineUp Gym Prambanan',
-                'image': 'https://lineupgym.com/logo.jpg',
-                '@id': 'https://lineupgym.com',
-                'url': 'https://lineupgym.com',
+                'image': 'https://www.lineupgym.com/logo.jpg',
+                '@id': 'https://www.lineupgym.com',
+                'url': 'https://www.lineupgym.com',
                 'telephone': '+6285707678485',
                 'address': {
                   '@type': 'PostalAddress',
