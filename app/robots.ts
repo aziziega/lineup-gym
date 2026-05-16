@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: ['/api/', '/dashboard/settings/'],
     },
-    sitemap: 'https://lineupgym.com/sitemap.xml',
+    sitemap: 'https://www.lineupgym.com/sitemap.xml',
   }
 }
