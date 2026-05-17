@@ -523,27 +523,45 @@ function MembersContent() {
     const { memberId, ptSubId, memberName } = cancelPTData
 
     try {
-      // 1. Cari transaksi pembayaran terakhir dari member ini yang kemungkinan besar adalah PT
-      // Kita cari berdasarkan member_id dan urutan terbaru
-      const { data: latestPayment, error: searchError } = await supabase
-        .from('payments')
-        .select('id, notes, membership_type, amount')
-        .eq('member_id', memberId)
-        .order('paid_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      // 1. Ambil detail subscription PT yang mau dihapus terlebih dahulu
+      const { data: ptSub, error: subFetchError } = await supabase
+        .from('subscriptions')
+        .select('id, membership_id, memberships(name)')
+        .eq('id', ptSubId)
+        .single()
 
-      if (searchError) throw searchError
+      if (subFetchError) throw subFetchError
+
+      const ptMembershipName = ptSub?.memberships 
+        ? (Array.isArray(ptSub.memberships) 
+            ? ptSub.memberships[0]?.name 
+            : (ptSub.memberships as any).name)
+        : null
+
+      // 2. Cari transaksi pembayaran dari member ini yang spesifik untuk paket PT tersebut
+      let latestPayment = null
+      if (ptMembershipName) {
+        const { data: matchedPayment, error: searchError } = await supabase
+          .from('payments')
+          .select('id, notes, membership_type, amount')
+          .eq('member_id', memberId)
+          .eq('membership_type', ptMembershipName)
+          .order('paid_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (searchError) throw searchError
+        latestPayment = matchedPayment
+      }
 
       const promises = []
       
       // Hapus paket PT-nya
       promises.push(supabase.from('subscriptions').delete().eq('id', ptSubId))
       
-      // Hapus uangnya jika ketemu transaksinya
-      // Kita cek juga apakah nominalnya cocok atau notes-nya mengandung PT untuk keamanan
+      // Hapus uangnya hanya jika ketemu transaksi pembayaran yang COCOK
       if (latestPayment) {
-        console.log('Menghapus transaksi:', latestPayment)
+        console.log('Menghapus transaksi PT:', latestPayment)
         promises.push(supabase.from('payments').delete().eq('id', latestPayment.id))
       }
 
@@ -563,7 +581,7 @@ function MembersContent() {
       if (latestPayment) {
         toast.success(`Paket PT ${memberName} dibatalkan & uang senilai ${formatRupiah(latestPayment.amount)} telah dihapus dari laporan.`)
       } else {
-        toast.success(`Paket PT ${memberName} telah dihapus (Tidak ada data transaksi keuangan yang ditemukan).`)
+        toast.success(`Paket PT ${memberName} telah dihapus (Tidak ada data transaksi keuangan yang dihapus karena tidak ada pembayaran PT sebelumnya).`)
       }
     } catch (error: any) {
       console.error(error)
@@ -577,17 +595,38 @@ function MembersContent() {
     const { memberId, subId, memberName } = cancelRenewData
 
     try {
-      // 1. Cari transaksi pembayaran terakhir (Non-PT) dari member ini
-      const { data: latestPayment } = await supabase
-        .from('payments')
-        .select('id, amount')
-        .eq('member_id', memberId)
-        .not('membership_type', 'ilike', '%PT%') // Cari yang bukan PT
-        .order('paid_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      // 1. Ambil detail subscription gym yang mau dibatalkan perpanjangannya
+      const { data: gymSub, error: subFetchError } = await supabase
+        .from('subscriptions')
+        .select('id, membership_id, memberships(name)')
+        .eq('id', subId)
+        .single()
 
-      // 2. Cari subscription lama yang statusnya 'expired' untuk diaktifkan kembali
+      if (subFetchError) throw subFetchError
+
+      const gymMembershipName = gymSub?.memberships 
+        ? (Array.isArray(gymSub.memberships) 
+            ? gymSub.memberships[0]?.name 
+            : (gymSub.memberships as any).name)
+        : null
+
+      // 2. Cari transaksi pembayaran dari member ini yang spesifik untuk paket tersebut
+      let latestPayment = null
+      if (gymMembershipName) {
+        const { data: matchedPayment, error: searchError } = await supabase
+          .from('payments')
+          .select('id, amount')
+          .eq('member_id', memberId)
+          .eq('membership_type', gymMembershipName)
+          .order('paid_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (searchError) throw searchError
+        latestPayment = matchedPayment
+      }
+
+      // 3. Cari subscription lama yang statusnya 'expired' untuk diaktifkan kembali
       const { data: prevSub } = await supabase
         .from('subscriptions')
         .select('id')
@@ -607,7 +646,7 @@ function MembersContent() {
         promises.push(supabase.from('subscriptions').update({ status: 'active' }).eq('id', prevSub.id))
       }
       
-      // Hapus uangnya jika ketemu transaksinya
+      // Hapus uangnya hanya jika ketemu transaksi pembayaran yang COCOK
       if (latestPayment) {
         promises.push(supabase.from('payments').delete().eq('id', latestPayment.id))
       }
@@ -624,7 +663,11 @@ function MembersContent() {
       ])
       
       setCancelRenewOpen(false)
-      toast.success(`Perpanjangan ${memberName} dibatalkan. Status kembali ke sebelumnya & uang telah dihapus.`)
+      if (latestPayment) {
+        toast.success(`Perpanjangan ${memberName} dibatalkan. Status kembali ke sebelumnya & uang senilai ${formatRupiah(latestPayment.amount)} telah dihapus dari laporan.`)
+      } else {
+        toast.success(`Perpanjangan ${memberName} dibatalkan. Status kembali ke sebelumnya (Tidak ada data transaksi keuangan yang dihapus karena tidak ada pembayaran sebelumnya).`)
+      }
     } catch (error: any) {
       console.error(error)
       toast.error('Gagal membatalkan perpanjangan: ' + error.message)

@@ -192,10 +192,20 @@ export default function SchedulePage() {
                         <div className="flex shrink-0 gap-0.5">
                           {!s.is_completed ? (
                             <>
-                              <button onClick={() => handleComplete(s)} className="rounded p-0.5 text-accent hover:bg-[#D4FF00]/10" title="Tandai Selesai">
+                              <button 
+                                disabled={completeSession.isPending}
+                                onClick={() => handleComplete(s)} 
+                                className="rounded p-0.5 text-accent hover:bg-[#D4FF00]/10 disabled:opacity-40 disabled:cursor-not-allowed" 
+                                title="Tandai Selesai"
+                              >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                               </button>
-                              <button onClick={() => handleDelete(s.id)} className="rounded p-0.5 text-red-400 hover:bg-red-500/10" title="Hapus">
+                              <button 
+                                disabled={deleteSession.isPending}
+                                onClick={() => handleDelete(s.id)} 
+                                className="rounded p-0.5 text-red-400 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed" 
+                                title="Hapus"
+                              >
                                 <Trash2 className="h-3 w-3" />
                               </button>
                             </>
