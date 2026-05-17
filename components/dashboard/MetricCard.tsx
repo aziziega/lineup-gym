@@ -10,7 +10,7 @@ interface MetricCardProps {
   icon: LucideIcon
   trend?: string
   trendUp?: boolean
-  accent?: 'neon' | 'orange' | 'red' | 'yellow' | 'muted'
+  accent?: 'neon' | 'orange' | 'red' | 'yellow' | 'muted' | 'green'
   loading?: boolean
   description?: string
 }
@@ -21,6 +21,7 @@ const accentColors = {
   red: 'text-[#FF3B3B]',
   yellow: 'text-[#FFD400]',
   muted: 'text-[#F0F0F0]',
+  green: 'text-[#10B981]', // Premium Emerald Green
 }
 
 export default function MetricCard({

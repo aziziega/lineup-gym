@@ -36,7 +36,7 @@ export default function CheckinKiosk() {
         now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       )
       const hour = now.getHours()
-      if (hour < 5 || hour >= 21) {
+      if (hour < 5 || hour >= 23) {
         setIsClosed(true)
       } else {
         setIsClosed(false)
@@ -47,7 +47,7 @@ export default function CheckinKiosk() {
     return () => clearInterval(interval)
   }, [])
 
-  // Cari member â†’ jika aktif, LANGSUNG check-in (tanpa konfirmasi)
+  // Cari member – jika aktif, LANGSUNG check-in (tanpa konfirmasi)
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!searchVal) return
@@ -102,7 +102,6 @@ export default function CheckinKiosk() {
           if (logError) throw logError
 
           setStep('success')
-          setTimeout(() => resetKiosk(), 5000)
         } else {
           // Fallback: Jika database bilang expired tapi ternyata end_date-nya hari ini
           const today = toLocalISOString(new Date())
@@ -115,7 +114,6 @@ export default function CheckinKiosk() {
             if (logError) throw logError
 
             setStep('success')
-            setTimeout(() => resetKiosk(), 5000)
           } else {
             setStep('expired')
           }
@@ -183,7 +181,6 @@ export default function CheckinKiosk() {
 
       setMemberInfo({ full_name: visitorName })
       setStep('visitor_registered')
-      setTimeout(() => resetKiosk(), 10000) // Beri waktu lebih lama untuk membaca instruksi
     } catch (err: any) {
       toast.error('Gagal mendaftar visitor')
     } finally {
@@ -198,6 +195,23 @@ export default function CheckinKiosk() {
     setVisitorName('')
     setVisitorPhone('')
   }
+
+  // Auto-reset Kiosk secara terpusat menggunakan useEffect
+  useEffect(() => {
+    if (step === 'success' || step === 'expired' || step === 'not_found') {
+      const timer = setTimeout(() => {
+        resetKiosk()
+      }, 5000) // Reset kembali ke form pencarian dalam 5 detik
+      return () => clearTimeout(timer)
+    }
+    if (step === 'visitor_registered') {
+      const timer = setTimeout(() => {
+        resetKiosk()
+      }, 10000) // Beri waktu 10 detik untuk instruksi visitor
+      return () => clearTimeout(timer)
+    }
+  }, [step])
+
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0a] p-4 text-white">

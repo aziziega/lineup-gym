@@ -10,11 +10,11 @@ import MetricCard from '@/components/dashboard/MetricCard'
 import TrafficChart from '@/components/dashboard/TrafficChart'
 import PackageDonutChart from '@/components/dashboard/PackageDonutChart'
 import TodayPTSchedule from '@/components/dashboard/TodayPTSchedule'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function OverviewPage() {
-  const supabase = createClient()
+  const { profile, isAdmin, supabase } = useAuth()
   const [greeting, setGreeting] = useState('')
-  const [adminName, setAdminName] = useState('')
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -22,11 +22,29 @@ export default function OverviewPage() {
     else if (hour < 15) setGreeting('Selamat siang')
     else if (hour < 18) setGreeting('Selamat sore')
     else setGreeting('Selamat malam')
+  }, [])
 
-    supabase.auth.getUser().then(({ data }) => {
-      setAdminName(data.user?.email?.split('@')[0] ?? 'Admin')
-    })
-  }, [supabase])
+  // Metric: Total Pendapatan (Hanya Admin)
+  const { data: monthlyRevenue, isLoading: loadingRevenue } = useQuery({
+    queryKey: ['overview', 'revenue-month'],
+    queryFn: async () => {
+      if (!isAdmin) return 0
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
+      
+      const { data, error } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('gym_id', GYM_ID)
+        .gte('paid_at', start)
+        .lte('paid_at', end)
+
+      if (error) throw error
+      return data?.reduce((acc, curr) => acc + Number(curr.amount), 0) ?? 0
+    },
+    enabled: isAdmin,
+  })
 
   // Metric: Member Aktif
   const { data: activeMemberCount, isLoading: loadingMembers } = useQuery({
@@ -124,14 +142,23 @@ export default function OverviewPage() {
       {/* Greeting */}
       <div>
         <h1 className="font-heading text-2xl text-foreground lg:text-3xl">
-          {greeting}, {adminName}👋
-
+          {greeting}, {profile?.full_name?.split(' ')[0] || 'Admin'}👋
         </h1>
         <p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat('id-ID', { dateStyle: 'full' }).format(new Date())}</p>
       </div>
 
-      {/* 4 Metric Cards â€” 2 kolom di mobile, 4 di desktop */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Metric Cards */}
+      <div className={`grid gap-3 ${isAdmin ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' : 'grid-cols-2 lg:grid-cols-4'}`}>
+        {isAdmin && (
+          <MetricCard
+            label="Pendapatan (Bulan Ini)"
+            value={formatRupiah(monthlyRevenue ?? 0)}
+            icon={Wallet}
+            loading={loadingRevenue}
+            accent="neon"
+            description="Total pemasukan kotor bulan ini"
+          />
+        )}
         <MetricCard
           label="Member Aktif"
           value={activeMemberCount ?? 0}
@@ -142,9 +169,9 @@ export default function OverviewPage() {
         <MetricCard
           label="Total Kunjungan (Bulan Ini)"
           value={`${monthlyTraffic ?? 0} Orang`}
-          icon={Wallet}
+          icon={UserCheck}
           loading={loadingTraffic}
-          accent="neon"
+          accent="muted"
           description="Total kehadiran member & visitor"
         />
         <MetricCard

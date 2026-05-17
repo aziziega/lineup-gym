@@ -19,8 +19,10 @@ import { Wallet, TrendingUp, Calculator, Plus, Download, Search, Edit2, Trash2, 
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import { useExpenses, useCurrentMonthExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense } from '@/hooks/useExpenses'
 import { toast } from 'sonner'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function FinancePage() {
+  const { isAdmin } = useAuth()
   const { data: payments, isLoading } = usePayments()
   const { data: currentMonth } = useCurrentMonthRevenue()
   const { data: monthlyRevenue } = useMonthlyRevenue()
@@ -332,57 +334,59 @@ export default function FinancePage() {
       </div>
       <p className="-mt-3 text-xs text-muted-foreground">{selectedDateFormatted}</p>
 
-      {/* Metrics */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Revenue Bulan Ini" value={formatRupiah(currentMonth?.total ?? 0)} icon={Wallet} accent="neon" />
-        <MetricCard label="Pengeluaran Bulan Ini" value={formatRupiah(currentMonthExp?.total ?? 0)} icon={Receipt} accent="red" />
-        <MetricCard label="Profit Bersih (Net)" value={formatRupiah(netProfit)} icon={TrendingUp} accent="neon" />
-        <MetricCard label="Rata-rata / Transaksi" value={formatRupiah(avgPerTx)} icon={Calculator} accent="muted" />
-      </div>
+      {/* Metrics - Hanya Admin */}
+      {isAdmin && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard label="Revenue Bulan Ini" value={formatRupiah(currentMonth?.total ?? 0)} icon={Wallet} accent="neon" />
+          <MetricCard label="Pengeluaran Bulan Ini" value={formatRupiah(currentMonthExp?.total ?? 0)} icon={Receipt} accent="red" />
+          <MetricCard label="Profit Bersih (Net)" value={formatRupiah(netProfit)} icon={TrendingUp} accent="neon" />
+          <MetricCard label="Rata-rata / Transaksi" value={formatRupiah(avgPerTx)} icon={Calculator} accent="muted" />
+        </div>
+      )}
 
-      {/* Chart */}
-      <div className="rounded-xl border border-border/50 bg-card p-4">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Revenue Lineup GYM</h3>
-            <div className="ml-2 flex gap-1 rounded-lg bg-background p-0.5">
+      {/* Chart - Hanya Admin */}
+      {isAdmin && (
+        <div className="rounded-xl border border-border/50 bg-card p-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Revenue Lineup GYM</h3>
+            </div>
+            <div className="flex gap-1 rounded-lg bg-background p-0.5 self-start sm:self-auto">
+              <button onClick={() => setChartType('bar')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-primary text-black' : 'text-muted-foreground hover:text-foreground'}`}>Bar</button>
+              <button onClick={() => setChartType('line')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-primary text-black' : 'text-muted-foreground hover:text-foreground'}`}>Line</button>
             </div>
           </div>
-          <div className="flex gap-1 rounded-lg bg-background p-0.5 self-start sm:self-auto">
-            <button onClick={() => setChartType('bar')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'bar' ? 'bg-primary text-black' : 'text-muted-foreground hover:text-foreground'}`}>Bar</button>
-            <button onClick={() => setChartType('line')} className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${chartType === 'line' ? 'bg-primary text-black' : 'text-muted-foreground hover:text-foreground'}`}>Line</button>
-          </div>
+          {chartData.length > 0 ? (
+            <div className="h-48 lg:h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                {chartType === 'bar' ? (
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+                    <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
+                    <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}jt`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="pemasukan" fill="#D4FF00" radius={[4, 4, 0, 0]} animationBegin={200} />
+                    <Bar dataKey="pengeluaran" fill="#EF4444" radius={[4, 4, 0, 0]} animationBegin={200} />
+                  </BarChart>
+                ) : (
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
+                    <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
+                    <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}jt`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line type="monotone" dataKey="pemasukan" stroke="#D4FF00" strokeWidth={2} dot={{ fill: '#D4FF00', r: 4 }} animationBegin={200} />
+                    <Line type="monotone" dataKey="pengeluaran" stroke="#EF4444" strokeWidth={2} dot={{ fill: '#EF4444', r: 4 }} animationBegin={200} />
+                  </LineChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-48 items-center justify-center">
+              <p className="text-sm text-muted-foreground/60">Belum ada data revenue</p>
+            </div>
+          )}
         </div>
-        {chartData.length > 0 ? (
-          <div className="h-48 lg:h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              {chartType === 'bar' ? (
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
-                  <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}jt`} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="pemasukan" fill="#D4FF00" radius={[4, 4, 0, 0]} animationBegin={200} />
-                  <Bar dataKey="pengeluaran" fill="#EF4444" radius={[4, 4, 0, 0]} animationBegin={200} />
-                </BarChart>
-              ) : (
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
-                  <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}jt`} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="pemasukan" stroke="#D4FF00" strokeWidth={2} dot={{ fill: '#D4FF00', r: 4 }} animationBegin={200} />
-                  <Line type="monotone" dataKey="pengeluaran" stroke="#EF4444" strokeWidth={2} dot={{ fill: '#EF4444', r: 4 }} animationBegin={200} />
-                </LineChart>
-              )}
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="flex h-48 items-center justify-center">
-            <p className="text-sm text-muted-foreground/60">Belum ada data revenue</p>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Custom Month Dialog */}
       <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
@@ -835,6 +839,6 @@ export default function FinancePage() {
           )}
         </DialogContent>
       </Dialog>
-    </div >
+    </div>
   )
 }

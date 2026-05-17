@@ -177,7 +177,7 @@ export function usePtActiveMembers() {
         .from('active_subscriptions_view')
         .select('member_id, full_name, phone, pt_membership_name, pt_subscription_id, pt_remaining_sessions, pt_total_sessions, pt_status')
         .eq('gym_id', GYM_ID)
-        .eq('pt_status', 'active')
+        .gt('pt_remaining_sessions', 0) // Selama sisa sesi masih ada, tampilkan di dropdown!
         .not('pt_subscription_id', 'is', null)
 
       if (error) throw error

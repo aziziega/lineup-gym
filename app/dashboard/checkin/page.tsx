@@ -4,12 +4,24 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatTanggal } from '@/lib/utils'
-import { UserCheck, Users, Clock } from 'lucide-react'
+import { UserCheck, Users, Clock, Trash2, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export default function CheckInDashboard() {
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('sv-SE'))
   const [isToday, setIsToday] = useState(true)
   const supabase = createClient()
@@ -72,6 +84,26 @@ export default function CheckInDashboard() {
       supabase.removeChannel(channel)
     }
   }, [selectedDate])
+
+  const handleDeleteLog = async (id: string) => {
+    setDeletingId(id)
+    try {
+      const { error } = await supabase
+        .from('attendance_logs')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      
+      toast.success('Check-in berhasil dihapus')
+      fetchLogs() // Refresh data
+    } catch (err) {
+      console.error('Error deleting log:', err)
+      toast.error('Gagal menghapus check-in')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const fetchLogs = async () => {
     setLoading(true)
@@ -175,7 +207,7 @@ export default function CheckInDashboard() {
                 const isVisitor = log.notes?.toLowerCase().includes('visitor')
 
                 return (
-                  <div key={log.id} className="flex items-center justify-between rounded-lg border border-border/50 bg-background p-4">
+                  <div key={log.id} className="group flex items-center justify-between rounded-lg border border-border/50 bg-background p-4 transition-colors hover:border-primary/30">
                     <div className="flex items-center gap-4">
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${isVisitor ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
                         <UserCheck className="h-5 w-5" />
@@ -188,8 +220,41 @@ export default function CheckInDashboard() {
                         <p className="text-xs text-muted-foreground/60">{isVisitor ? 'Visitor Harian' : 'Member Aktif'}</p>
                       </div>
                     </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Clock className="mr-1 h-4 w-4" /> {time}
+                    
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center text-sm text-muted-foreground">
+                        <Clock className="mr-1 h-4 w-4" /> {time}
+                      </div>
+                      
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          disabled={deletingId === log.id}
+                          className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100 disabled:opacity-50"
+                          title="Hapus Check-in"
+                        >
+                          <Trash2 className="h-4.5 w-4.5" />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="border-border bg-card">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2 text-foreground">
+                              <AlertTriangle className="h-5 w-5 text-red-500" />
+                              Hapus Riwayat Check-In?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-muted-foreground">
+                              Tindakan ini akan menghapus riwayat kehadiran <strong>{log.members?.full_name}</strong> secara permanen. Statistik kunjungan member akan berkurang.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="border-border bg-background text-foreground hover:bg-muted">Batal</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteLog(log.id)}
+                              className="bg-red-600 text-white hover:bg-red-700"
+                            >
+                              Hapus Sekarang
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 )

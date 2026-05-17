@@ -25,10 +25,12 @@ import {
   FileSpreadsheet,
   Globe,
   BarChart3,
+  ShieldCheck,
 } from 'lucide-react'
 import { GYM_INFO } from '@/lib/constants'
 import { useQuery } from '@tanstack/react-query'
 import { GYM_ID } from '@/lib/constants'
+import { useAuth } from '@/hooks/useAuth'
 
 interface NavItem {
   label: string
@@ -37,6 +39,7 @@ interface NavItem {
   subItems?: { label: string; href: string }[]
   isUpgrade?: boolean
   isPro?: boolean
+  isAdminOnly?: boolean
 }
 
 interface NavGroup {
@@ -62,7 +65,7 @@ const navGroups: NavGroup[] = [
       },
       { label: 'Paket', href: '/dashboard/packages', icon: Package },
       { label: 'Jadwal PT', href: '/dashboard/schedule', icon: CalendarDays },
-      { label: 'Keuangan', href: '/dashboard/finance', icon: Wallet },
+      { label: 'Keuangan', href: '/dashboard/finance', icon: Wallet, isAdminOnly: true },
       { label: 'Expiry', href: '/dashboard/expiry', icon: Bell },
     ]
   },
@@ -70,14 +73,15 @@ const navGroups: NavGroup[] = [
     title: 'BISNIS',
     items: [
       { label: 'Halaman Publik', href: '/dashboard/formulir', icon: Globe, isPro: true },
-      { label: 'Analisis Lengkap', href: '/dashboard/analysis', icon: BarChart3, isPro: true },
+      { label: 'Analisis Lengkap', href: '/dashboard/analysis', icon: BarChart3, isPro: true, isAdminOnly: true },
     ]
   },
   {
     title: 'PENGATURAN',
     items: [
-      { label: 'Import Excel', href: '/dashboard/import', icon: FileSpreadsheet },
-      { label: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
+      { label: 'Manajemen User', href: '/dashboard/users', icon: ShieldCheck, isAdminOnly: true },
+      { label: 'Import Excel', href: '/dashboard/import', icon: FileSpreadsheet, isAdminOnly: true },
+      { label: 'Pengaturan', href: '/dashboard/settings', icon: Settings, isAdminOnly: true },
       { label: 'Upgrade Web ke-V2', href: '#', icon: ArrowUpCircle, isUpgrade: true },
     ]
   }
@@ -86,6 +90,7 @@ const navGroups: NavGroup[] = [
 function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () => void, criticalCount?: number | null, onOpenUpgrade: () => void }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { isAdmin } = useAuth()
 
   const isActive = (href: string) => {
     if (href === '#') return false
@@ -96,85 +101,92 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
 
   return (
     <nav className="mt-4 flex-1 space-y-6 px-3 overflow-y-auto">
-      {navGroups.map((group) => (
-        <div key={group.title} className="space-y-1.5">
-          <h4 className="px-3 text-[10px] font-bold text-sidebar-foreground/40 tracking-wider mb-2">
-            {group.title}
-          </h4>
-          {group.items.map((item) => {
-            const active = isActive(item.href)
+      {navGroups.map((group) => {
+        // Filter out admin-only items if user is not admin
+        const visibleItems = group.items.filter(item => !item.isAdminOnly || isAdmin)
+        
+        if (visibleItems.length === 0) return null
 
-            if (item.isUpgrade) {
+        return (
+          <div key={group.title} className="space-y-1.5">
+            <h4 className="px-3 text-[10px] font-bold text-sidebar-foreground/40 tracking-wider mb-2">
+              {group.title}
+            </h4>
+            {visibleItems.map((item) => {
+              const active = isActive(item.href)
+
+              if (item.isUpgrade) {
+                return (
+                  <div key={item.label} className="space-y-1">
+                    <button
+                      onClick={onOpenUpgrade}
+                      className="w-full group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 border-l-[3px] border-transparent text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    >
+                      <item.icon className="h-[18px] w-[18px]" />
+                      <span>{item.label}</span>
+                    </button>
+                  </div>
+                )
+              }
+
               return (
                 <div key={item.label} className="space-y-1">
-                  <button
-                    onClick={onOpenUpgrade}
-                    className="w-full group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 border-l-[3px] border-transparent text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                      active
+                        ? 'border-l-[3px] border-primary bg-primary/10 text-primary'
+                        : 'border-l-[3px] border-transparent text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                    )}
                   >
-                    <item.icon className="h-[18px] w-[18px]" />
+                    <item.icon className={cn('h-[18px] w-[18px]', active && 'text-primary')} />
                     <span>{item.label}</span>
-                  </button>
+
+                    {/* Badge V2 untuk Fitur Masa Depan */}
+                    {item.isPro && (
+                      <span className="ml-auto flex items-center justify-center rounded bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-500">
+                        V2
+                      </span>
+                    )}
+
+                    {/* Badge merah untuk Expiry */}
+                    {item.href.startsWith('/dashboard/expiry') && criticalCount && criticalCount > 0 && (
+                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-foreground">
+                        {criticalCount}
+                      </span>
+                    )}
+                  </Link>
+
+                  {/* Sub Items (Only shown if parent is active) */}
+                  {item.subItems && active && (
+                    <div className="ml-9 mt-1 flex flex-col gap-1 border-l border-border pl-4">
+                      {item.subItems.map((sub) => {
+                        const currentType = searchParams.get('type') || 'all'
+                        const subType = sub.href.split('type=')[1] || 'all'
+                        const isSubActive = currentType === subType
+
+                        return (
+                          <Link
+                            key={sub.label}
+                            href={sub.href}
+                            className={cn(
+                              'block py-1.5 text-[11px] font-medium transition-colors',
+                              isSubActive ? 'text-accent' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
+                            )}
+                          >
+                            {sub.label}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
-            }
-
-            return (
-              <div key={item.label} className="space-y-1">
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                    active
-                      ? 'border-l-[3px] border-primary bg-primary/10 text-primary'
-                      : 'border-l-[3px] border-transparent text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                  )}
-                >
-                  <item.icon className={cn('h-[18px] w-[18px]', active && 'text-primary')} />
-                  <span>{item.label}</span>
-
-                  {/* Badge V2 untuk Fitur Masa Depan */}
-                  {item.isPro && (
-                    <span className="ml-auto flex items-center justify-center rounded bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-500">
-                      V2
-                    </span>
-                  )}
-
-                  {/* Badge merah untuk Expiry */}
-                  {item.href.startsWith('/dashboard/expiry') && criticalCount && criticalCount > 0 && (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-foreground">
-                      {criticalCount}
-                    </span>
-                  )}
-                </Link>
-
-                {/* Sub Items (Only shown if parent is active) */}
-                {item.subItems && active && (
-                  <div className="ml-9 mt-1 flex flex-col gap-1 border-l border-border pl-4">
-                    {item.subItems.map((sub) => {
-                      const currentType = searchParams.get('type') || 'all'
-                      const subType = sub.href.split('type=')[1] || 'all'
-                      const isSubActive = currentType === subType
-
-                      return (
-                        <Link
-                          key={sub.label}
-                          href={sub.href}
-                          className={cn(
-                            'block py-1.5 text-[11px] font-medium transition-colors',
-                            isSubActive ? 'text-accent' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
-                          )}
-                        >
-                          {sub.label}
-                        </Link>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      ))}
+            })}
+          </div>
+        )
+      })}
     </nav>
   )
 }
@@ -245,7 +257,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               </button>
             </div>
             <p className="text-[9px] text-sidebar-foreground/20 uppercase tracking-tighter font-medium">
-              LAST UPDATE: 16 MEI, 16:12 WIB
+              LAST UPDATE: 17 MEI, 21:57 WIB
             </p>
           </div>
         </div>
