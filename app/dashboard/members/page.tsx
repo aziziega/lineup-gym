@@ -106,7 +106,7 @@ function MembersContent() {
   // Hitung nomor member berikutnya secara otomatis
   const nextMemberNo = useMemo(() => {
     if (!members || members.length === 0) return '1'
-    
+
     // Ambil semua nomor member, bersihkan karakter non-angka, konversi ke integer
     const nos = members
       .map(m => {
@@ -114,7 +114,7 @@ function MembersContent() {
         return onlyDigits ? parseInt(onlyDigits, 10) : 0
       })
       .filter(n => n > 0)
-    
+
     const max = nos.length > 0 ? Math.max(...nos) : 0
     // Kembalikan nomor berikutnya tanpa padding nol (misal 1, 2, 457)
     return String(max + 1)
@@ -166,7 +166,7 @@ function MembersContent() {
         return m.status === statusFilter
       })
     }
-    
+
     // Filter Tipe Membership vs Visitor
     if (typeFilter === 'visitor') {
       list = list.filter((m) => {
@@ -183,7 +183,7 @@ function MembersContent() {
     } else if (typeFilter === 'pt') {
       list = list.filter((m) => !!m.pt_membership_name)
     }
-    
+
     // Urutkan: 
     list.sort((a, b) => {
       // 1. Paling atas untuk yang baru absen/pending (status inactive)
@@ -194,13 +194,13 @@ function MembersContent() {
       // 2. Urutkan berdasarkan Nomor Member secara Numerik (1, 2, 3...)
       const numA = parseInt((a.member_no || '').replace(/[^0-9]/g, ''), 10) || 0
       const numB = parseInt((b.member_no || '').replace(/[^0-9]/g, ''), 10) || 0
-      
+
       if (numA !== numB) return numA - numB
-      
+
       // Fallback: Nama
       return a.full_name.localeCompare(b.full_name)
     })
-    
+
     return list
   }, [members, search, statusFilter, typeFilter])
 
@@ -214,7 +214,7 @@ function MembersContent() {
     }
 
     // Cek duplikasi (Nomor HP wajib unik)
-    const existingMember = members?.find(m => 
+    const existingMember = members?.find(m =>
       m.phone.replace(/[^0-9]/g, '') === formPhone.replace(/[^0-9]/g, '')
     )
 
@@ -295,14 +295,14 @@ function MembersContent() {
   }
   const handleRenew = async () => {
     if (!renewMember || (!renewMembershipId && !renewPtMembershipId)) return
-    
+
     const pkg = renewMembershipId ? memberships?.find((m) => m.id === renewMembershipId) : null
-    
+
     // Jika paketnya VISITOR, paksa end_date ke akhir hari ini (23:59:59)
     const isVisitorPkg = pkg?.name.toUpperCase() === 'VISITOR'
     const startDate = renewStartDate
     let endDate = pkg ? toLocalISOString(hitungEndDate(startDate, pkg.duration_days)) : ''
-    
+
     if (isVisitorPkg) {
       const today = new Date(startDate)
       today.setHours(23, 59, 59, 999)
@@ -314,7 +314,7 @@ function MembersContent() {
       const updateData: any = {
         member_no: renewMemberNo?.trim() || null,
       }
-      
+
       // Jika bayar paket VISITOR, pastikan notes-nya tertulis visitor
       if (isVisitorPkg) {
         updateData.notes = 'visitor'
@@ -327,7 +327,7 @@ function MembersContent() {
         .from('members')
         .update(updateData)
         .eq('id', renewMember.member_id)
-      
+
       if (updErr) throw updErr
 
       // OTOMATIS ABSEN (Check-In) untuk paket VISITOR
@@ -364,7 +364,7 @@ function MembersContent() {
 
       // Invalidate cache agar data UI ter-update
       queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
-      
+
       toast.success(`Membership ${renewMember.full_name} berhasil diperpanjang!`)
 
       // Prepare receipt data
@@ -405,8 +405,8 @@ function MembersContent() {
     }
 
     // Cek duplikasi (Nomor HP wajib unik, tapi bukan dirinya sendiri)
-    const existingOther = members?.find(m => 
-      m.member_id !== editMemberData.member_id && 
+    const existingOther = members?.find(m =>
+      m.member_id !== editMemberData.member_id &&
       m.phone.replace(/[^0-9]/g, '') === formPhone.replace(/[^0-9]/g, '')
     )
 
@@ -431,65 +431,65 @@ function MembersContent() {
       // 2. Override Subscription (Bypass Payment)
       const startDate = formStartDate || toLocalISOString(new Date())
       const subPromises = []
-      
+
       // Persiapkan Update Gym Package
       if (formMembership) {
-          const gymPkg = gymPackages.find(p => p.id === formMembership)
-          if (gymPkg) {
-             const endDate = toLocalISOString(hitungEndDate(startDate, gymPkg.duration_days))
-             
-             if (editMemberData.subscription_id) {
-                subPromises.push(
-                  supabase.from('subscriptions').update({
-                    membership_id: gymPkg.id,
-                    start_date: startDate,
-                    end_date: endDate,
-                    status: 'active'
-                  }).eq('id', editMemberData.subscription_id)
-                )
-             } else {
-                subPromises.push(
-                  supabase.from('subscriptions').insert({
-                    member_id: editMemberData.member_id,
-                    membership_id: gymPkg.id,
-                    start_date: startDate,
-                    end_date: endDate,
-                    status: 'active'
-                  })
-                )
-             }
+        const gymPkg = gymPackages.find(p => p.id === formMembership)
+        if (gymPkg) {
+          const endDate = toLocalISOString(hitungEndDate(startDate, gymPkg.duration_days))
+
+          if (editMemberData.subscription_id) {
+            subPromises.push(
+              supabase.from('subscriptions').update({
+                membership_id: gymPkg.id,
+                start_date: startDate,
+                end_date: endDate,
+                status: 'active'
+              }).eq('id', editMemberData.subscription_id)
+            )
+          } else {
+            subPromises.push(
+              supabase.from('subscriptions').insert({
+                member_id: editMemberData.member_id,
+                membership_id: gymPkg.id,
+                start_date: startDate,
+                end_date: endDate,
+                status: 'active'
+              })
+            )
           }
+        }
       }
 
       // Persiapkan Update PT Package
       if (formPtMembership) {
-          const ptPkg = ptPackages.find(p => p.id === formPtMembership)
-          if (ptPkg) {
-             const endDate = toLocalISOString(hitungEndDate(startDate, ptPkg.duration_days))
-             
-             if (editMemberData.pt_subscription_id) {
-                subPromises.push(
-                  supabase.from('subscriptions').update({
-                    membership_id: ptPkg.id,
-                    start_date: startDate,
-                    end_date: endDate,
-                    remaining_sessions: ptPkg.total_sessions,
-                    status: 'active'
-                  }).eq('id', editMemberData.pt_subscription_id)
-                )
-             } else {
-                subPromises.push(
-                  supabase.from('subscriptions').insert({
-                    member_id: editMemberData.member_id,
-                    membership_id: ptPkg.id,
-                    start_date: startDate,
-                    end_date: endDate,
-                    remaining_sessions: ptPkg.total_sessions,
-                    status: 'active'
-                  })
-                )
-             }
+        const ptPkg = ptPackages.find(p => p.id === formPtMembership)
+        if (ptPkg) {
+          const endDate = toLocalISOString(hitungEndDate(startDate, ptPkg.duration_days))
+
+          if (editMemberData.pt_subscription_id) {
+            subPromises.push(
+              supabase.from('subscriptions').update({
+                membership_id: ptPkg.id,
+                start_date: startDate,
+                end_date: endDate,
+                remaining_sessions: ptPkg.total_sessions,
+                status: 'active'
+              }).eq('id', editMemberData.pt_subscription_id)
+            )
+          } else {
+            subPromises.push(
+              supabase.from('subscriptions').insert({
+                member_id: editMemberData.member_id,
+                membership_id: ptPkg.id,
+                start_date: startDate,
+                end_date: endDate,
+                remaining_sessions: ptPkg.total_sessions,
+                status: 'active'
+              })
+            )
           }
+        }
       }
 
       // Jalankan semua update paket secara paralel agar cepat
@@ -532,10 +532,10 @@ function MembersContent() {
 
       if (subFetchError) throw subFetchError
 
-      const ptMembershipName = ptSub?.memberships 
-        ? (Array.isArray(ptSub.memberships) 
-            ? ptSub.memberships[0]?.name 
-            : (ptSub.memberships as any).name)
+      const ptMembershipName = ptSub?.memberships
+        ? (Array.isArray(ptSub.memberships)
+          ? ptSub.memberships[0]?.name
+          : (ptSub.memberships as any).name)
         : null
 
       // 2. Cari transaksi pembayaran dari member ini yang spesifik untuk paket PT tersebut
@@ -555,10 +555,10 @@ function MembersContent() {
       }
 
       const promises = []
-      
+
       // Hapus paket PT-nya
       promises.push(supabase.from('subscriptions').delete().eq('id', ptSubId))
-      
+
       // Hapus uangnya hanya jika ketemu transaksi pembayaran yang COCOK
       if (latestPayment) {
         console.log('Menghapus transaksi PT:', latestPayment)
@@ -566,7 +566,7 @@ function MembersContent() {
       }
 
       await Promise.all(promises)
-      
+
       // PAKSA REFRESH SEMUA DATA KEUANGAN
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
@@ -576,7 +576,7 @@ function MembersContent() {
         queryClient.invalidateQueries({ queryKey: ['overview'] }),
         queryClient.invalidateQueries({ queryKey: ['revenue-chart'] }), // Jika ada chart
       ])
-      
+
       setCancelPTOpen(false)
       if (latestPayment) {
         toast.success(`Paket PT ${memberName} dibatalkan & uang senilai ${formatRupiah(latestPayment.amount)} telah dihapus dari laporan.`)
@@ -604,10 +604,10 @@ function MembersContent() {
 
       if (subFetchError) throw subFetchError
 
-      const gymMembershipName = gymSub?.memberships 
-        ? (Array.isArray(gymSub.memberships) 
-            ? gymSub.memberships[0]?.name 
-            : (gymSub.memberships as any).name)
+      const gymMembershipName = gymSub?.memberships
+        ? (Array.isArray(gymSub.memberships)
+          ? gymSub.memberships[0]?.name
+          : (gymSub.memberships as any).name)
         : null
 
       // 2. Cari transaksi pembayaran dari member ini yang spesifik untuk paket tersebut
@@ -637,22 +637,22 @@ function MembersContent() {
         .maybeSingle()
 
       const promises = []
-      
+
       // Hapus subscription yang baru (pembatalan perpanjangan)
       promises.push(supabase.from('subscriptions').delete().eq('id', subId))
-      
+
       // Aktifkan kembali subscription lama jika ada
       if (prevSub) {
         promises.push(supabase.from('subscriptions').update({ status: 'active' }).eq('id', prevSub.id))
       }
-      
+
       // Hapus uangnya hanya jika ketemu transaksi pembayaran yang COCOK
       if (latestPayment) {
         promises.push(supabase.from('payments').delete().eq('id', latestPayment.id))
       }
 
       await Promise.all(promises)
-      
+
       // Refresh semua data
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
@@ -661,7 +661,7 @@ function MembersContent() {
         queryClient.invalidateQueries({ queryKey: ['revenue-current-month'] }),
         queryClient.invalidateQueries({ queryKey: ['overview'] }),
       ])
-      
+
       setCancelRenewOpen(false)
       if (latestPayment) {
         toast.success(`Perpanjangan ${memberName} dibatalkan. Status kembali ke sebelumnya & uang senilai ${formatRupiah(latestPayment.amount)} telah dihapus dari laporan.`)
@@ -786,34 +786,33 @@ function MembersContent() {
           />
         </div>
         <div className="flex gap-2">
-        <div className="flex w-full items-center gap-1 overflow-x-auto pb-1 sm:w-auto sm:pb-0 scrollbar-hide">
-          {[
-            { value: 'all', label: 'Semua' },
-            { value: 'active', label: 'Aktif' },
-            { value: 'expiring_soon', label: 'Segera' },
-            { value: 'critical', label: 'Kritis' },
-            { value: 'expired', label: 'Expired' },
-          ].map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => { setStatusFilter(opt.value); setPage(1); }}
-              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border ${
-                statusFilter === opt.value
-                  ? 'bg-primary text-foreground border-[#FF2A2A]'
-                  : 'bg-card text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground border-border'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+          <div className="flex w-full items-center gap-1 overflow-x-auto pb-1 sm:w-auto sm:pb-0 scrollbar-hide">
+            {[
+              { value: 'all', label: 'Semua' },
+              { value: 'active', label: 'Aktif' },
+              { value: 'expiring_soon', label: 'Segera' },
+              { value: 'critical', label: 'Kritis' },
+              { value: 'expired', label: 'Expired' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => { setStatusFilter(opt.value); setPage(1); }}
+                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border ${statusFilter === opt.value
+                    ? 'bg-primary text-foreground border-[#FF2A2A]'
+                    : 'bg-card text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground border-border'
+                  }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
 
           <Button size="sm" variant="outline" onClick={exportExcel} className="border-border text-xs text-muted-foreground">
             <Download className="mr-1 h-3.5 w-3.5" /> Excel
           </Button>
 
-          <Dialog 
-            open={addOpen} 
+          <Dialog
+            open={addOpen}
             modal={true}
             disablePointerDismissal={true}
             onOpenChange={(open, details) => {
@@ -920,8 +919,8 @@ function MembersContent() {
             </DialogContent>
           </Dialog>
 
-          <Dialog 
-            open={editOpen} 
+          <Dialog
+            open={editOpen}
             modal={true}
             disablePointerDismissal={true}
             onOpenChange={(open, details) => {
@@ -1023,53 +1022,52 @@ function MembersContent() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-foreground">
-                          {num}. {m.full_name} 
+                          {num}. {m.full_name}
                           {m.member_no && <span className="ml-1 text-xs text-muted-foreground">#{m.member_no}</span>}
                         </p>
                         <p className="text-[11px] text-muted-foreground">{m.phone}</p>
                       </div>
-                        <StatusBadge 
-                          status={(() => {
-                            const localDays = calculateDaysRemaining(m.end_date)
-                            if (localDays === null) return m.status;
-                            if (localDays < 0) return 'expired';
-                            if (localDays <= 3) return 'critical';
-                            if (localDays <= 7) return 'expiring_soon';
-                            return 'active';
-                          })()} 
-                        />
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
-                        <span>{m.membership_name}</span>
-                        <span className="flex items-center gap-1">
-                          Exp: {formatTanggal(m.end_date)}
-                        </span>
-                        <span>
-                          {(() => {
-                            const days = calculateDaysRemaining(m.end_date)
-                            if (days === null) return 'No Active Package'
-                            if (days === 0) return <span className="text-[#FF6B35] font-bold">Hari Terakhir</span>
-                            if (days < 0) return <span className="text-[#FF2A2A] font-bold">Lewat {Math.abs(days)} Hari</span>
-                            if (days <= 3) return <span className="text-[#FFB800] font-bold">Sisa {days} hari</span>
-                            if (days <= 7) return <span className="text-[#D4FF00] font-bold">Sisa {days} hari</span>
-                            return <span className="text-[#00FF85]">Sisa {days} hari</span>
-                          })()}
-                        </span>
-                        <span className="text-[#00E5FF] font-bold">Kunjungan: {m.attendance_count}x</span>
-                      </div>
+                      <StatusBadge
+                        status={(() => {
+                          const localDays = calculateDaysRemaining(m.end_date)
+                          if (localDays === null) return m.status;
+                          if (localDays < 0) return 'expired';
+                          if (localDays <= 3) return 'critical';
+                          if (localDays <= 7) return 'expiring_soon';
+                          return 'active';
+                        })()}
+                      />
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/60">
+                      <span>{m.membership_name}</span>
+                      <span className="flex items-center gap-1">
+                        Exp: {formatTanggal(m.end_date)}
+                      </span>
+                      <span>
+                        {(() => {
+                          const days = calculateDaysRemaining(m.end_date)
+                          if (days === null) return 'No Active Package'
+                          if (days === 0) return <span className="text-[#FF6B35] font-bold">Hari Terakhir</span>
+                          if (days < 0) return <span className="text-[#FF2A2A] font-bold">Lewat {Math.abs(days)} Hari</span>
+                          if (days <= 3) return <span className="text-[#FFB800] font-bold">Sisa {days} hari</span>
+                          if (days <= 7) return <span className="text-[#D4FF00] font-bold">Sisa {days} hari</span>
+                          return <span className="text-[#00FF85]">Sisa {days} hari</span>
+                        })()}
+                      </span>
+                      <span className="text-[#00E5FF] font-bold">Kunjungan: {m.attendance_count}x</span>
+                    </div>
                     {m.pt_membership_name && (
                       <div className="mt-1 flex items-center gap-1.5">
-                        <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
-                          m.pt_remaining_sessions === null || m.pt_remaining_sessions === undefined
+                        <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${m.pt_remaining_sessions === null || m.pt_remaining_sessions === undefined
                             ? 'bg-[#555]/20 text-muted-foreground'
                             : m.pt_remaining_sessions <= 0
                               ? 'bg-red-500/15 text-red-400'
                               : m.pt_remaining_sessions <= 2
                                 ? 'bg-amber-500/15 text-amber-400'
                                 : 'bg-emerald-500/15 text-emerald-400'
-                        }`}>
+                          }`}>
                           🏋️ {m.pt_membership_name} · {m.pt_remaining_sessions ?? 0}/{m.pt_total_sessions ?? 0} sesi
-                          
+
                           {/* Tombol Batal PT */}
                           {m.pt_subscription_id && (
                             <button
@@ -1191,18 +1189,18 @@ function MembersContent() {
         </div>
       )}
 
-      <Dialog 
-        open={renewOpen} 
+      <Dialog
+        open={renewOpen}
         modal={true}
         disablePointerDismissal={true}
-        onOpenChange={(open, details) => { 
+        onOpenChange={(open, details) => {
           if (details.reason === 'outside-press' || details.reason === 'escape-key') return
           setRenewOpen(open)
-          if (!open) { 
-            setRenewPtMembershipId(''); 
-            setRenewMembershipId(''); 
+          if (!open) {
+            setRenewPtMembershipId('');
+            setRenewMembershipId('');
             setRenewStartDate(new Date().toISOString().split('T')[0]);
-          } 
+          }
         }}
       >
         <DialogContent className="max-h-[90dvh] overflow-y-auto border-border bg-card text-foreground sm:max-w-md">
@@ -1215,98 +1213,98 @@ function MembersContent() {
             const totalAmount = (renewGymPkg?.price || 0) + (renewPtPkg?.price || 0)
 
             return (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Member: <span className="text-foreground">{renewMember.full_name}</span></p>
-              
-              <div>
-                <Label className="text-xs text-muted-foreground">No. Member (Baru/Opsional)</Label>
-                <Input
-                  value={renewMemberNo}
-                  onChange={(e) => setRenewMemberNo(e.target.value)}
-                  placeholder="Misal: 001"
-                  className="border-border bg-background text-foreground mt-1"
-                />
-              </div>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Member: <span className="text-foreground">{renewMember.full_name}</span></p>
 
-              <div>
-                <Label className="text-xs text-muted-foreground">Tanggal Mulai</Label>
-                <Input
-                  type="date"
-                  value={renewStartDate}
-                  onChange={(e) => setRenewStartDate(e.target.value)}
-                  className="border-border bg-background text-foreground mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs text-muted-foreground">Paket Gym (Opsional)</Label>
-                  <PackageCombobox
-                    packages={gymPackages}
-                    value={renewMembershipId}
-                    onValueChange={setRenewMembershipId}
-                    placeholder="Pilih paket gym"
+                  <Label className="text-xs text-muted-foreground">No. Member (Baru/Opsional)</Label>
+                  <Input
+                    value={renewMemberNo}
+                    onChange={(e) => setRenewMemberNo(e.target.value)}
+                    placeholder="Misal: 001"
+                    className="border-border bg-background text-foreground mt-1"
                   />
-                  {renewGymPkg && (
-                    <p className="mt-1 text-[10px] text-accent">
-                      Aktif sampai: {formatTanggal(hitungEndDate(renewStartDate, renewGymPkg.duration_days).toISOString())}
-                    </p>
-                  )}
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Paket PT (Opsional)</Label>
-                  <PackageCombobox
-                    packages={ptPackages}
-                    value={renewPtMembershipId}
-                    onValueChange={setRenewPtMembershipId}
-                    placeholder="Pilih paket PT"
-                  />
-                  {renewPtPkg && (
-                    <p className="mt-1 text-[10px] text-accent">
-                      {renewPtPkg.total_sessions} Sesi PT
-                    </p>
-                  )}
-                </div>
-              </div>
 
-              {(renewMembershipId || renewPtMembershipId) && (
-                <div className="rounded-lg border border-border bg-background p-3">
-                  <div className="mb-3 flex items-center justify-between border-b border-border pb-2 text-sm">
-                    <span className="text-muted-foreground">Total Tagihan:</span>
-                    <span className="font-heading text-lg text-accent">
-                      {formatRupiah(totalAmount)}
-                    </span>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Tanggal Mulai</Label>
+                  <Input
+                    type="date"
+                    value={renewStartDate}
+                    onChange={(e) => setRenewStartDate(e.target.value)}
+                    className="border-border bg-background text-foreground mt-1"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Paket Gym (Opsional)</Label>
+                    <PackageCombobox
+                      packages={gymPackages}
+                      value={renewMembershipId}
+                      onValueChange={setRenewMembershipId}
+                      placeholder="Pilih paket gym"
+                    />
+                    {renewGymPkg && (
+                      <p className="mt-1 text-[10px] text-accent">
+                        Aktif sampai: {formatTanggal(hitungEndDate(renewStartDate, renewGymPkg.duration_days).toISOString())}
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Metode Bayar</Label>
-                    <NativeSelect
-                      value={renewPayMethod}
-                      onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
-                      options={[
-                        { value: 'cash', label: 'Cash' },
-                        { value: 'transfer', label: 'Transfer' },
-                        { value: 'qris', label: 'QRIS' },
-                      ]}
+                    <Label className="text-xs text-muted-foreground">Paket PT (Opsional)</Label>
+                    <PackageCombobox
+                      packages={ptPackages}
+                      value={renewPtMembershipId}
+                      onValueChange={setRenewPtMembershipId}
+                      placeholder="Pilih paket PT"
                     />
+                    {renewPtPkg && (
+                      <p className="mt-1 text-[10px] text-accent">
+                        {renewPtPkg.total_sessions} Sesi PT
+                      </p>
+                    )}
                   </div>
                 </div>
-              )}
 
-              <Button
-                onClick={handleRenew}
-                disabled={renewSub.isPending || (!renewMembershipId && !renewPtMembershipId)}
-                className="w-full bg-primary font-bold text-black hover:bg-[#E60000]"
-              >
-                {renewSub.isPending ? 'Memproses...' : 'Perpanjang & Bayar'}
-              </Button>
-            </div>
+                {(renewMembershipId || renewPtMembershipId) && (
+                  <div className="rounded-lg border border-border bg-background p-3">
+                    <div className="mb-3 flex items-center justify-between border-b border-border pb-2 text-sm">
+                      <span className="text-muted-foreground">Total Tagihan:</span>
+                      <span className="font-heading text-lg text-accent">
+                        {formatRupiah(totalAmount)}
+                      </span>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Metode Bayar</Label>
+                      <NativeSelect
+                        value={renewPayMethod}
+                        onChange={(e) => setRenewPayMethod(e.target.value as 'cash' | 'transfer' | 'qris')}
+                        options={[
+                          { value: 'cash', label: 'Cash' },
+                          { value: 'transfer', label: 'Transfer' },
+                          { value: 'qris', label: 'QRIS' },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleRenew}
+                  disabled={renewSub.isPending || (!renewMembershipId && !renewPtMembershipId)}
+                  className="w-full bg-primary font-bold text-black hover:bg-[#E60000]"
+                >
+                  {renewSub.isPending ? 'Memproses...' : 'Perpanjang & Bayar'}
+                </Button>
+              </div>
             )
           })()}
         </DialogContent>
       </Dialog>
 
-      <Dialog 
-        open={receiptOpen} 
+      <Dialog
+        open={receiptOpen}
         modal={true}
         disablePointerDismissal={true}
         onOpenChange={(open, details) => {
@@ -1408,8 +1406,8 @@ function MembersContent() {
             </div>
             <AlertDialogTitle className="text-center">Batalkan Perpanjangan?</AlertDialogTitle>
             <AlertDialogDescription className="text-center text-muted-foreground">
-              Yakin ingin membatalkan perpanjangan terakhir untuk <span className="font-bold text-foreground">{cancelRenewData?.memberName}</span>? 
-              <br/><br/>
+              Yakin ingin membatalkan perpanjangan terakhir untuk <span className="font-bold text-foreground">{cancelRenewData?.memberName}</span>?
+              <br /><br />
               Sistem akan <span className="text-orange-400 font-medium">mengembalikan tanggal expired ke aslinya</span> dan <span className="text-red-400 font-medium">MENGHAPUS pendapatan</span> terkait dari laporan keuangan.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1434,8 +1432,8 @@ function MembersContent() {
             </div>
             <AlertDialogTitle className="text-center">Batalkan Paket PT?</AlertDialogTitle>
             <AlertDialogDescription className="text-center text-muted-foreground">
-              Yakin ingin membatalkan paket PT untuk <span className="font-bold text-foreground">{cancelPTData?.memberName}</span>? 
-              <br/><br/>
+              Yakin ingin membatalkan paket PT untuk <span className="font-bold text-foreground">{cancelPTData?.memberName}</span>?
+              <br /><br />
               Tindakan ini akan <span className="text-red-400 font-medium">menghapus paket PT</span> dan <span className="text-red-400 font-medium">MENGURANGI pendapatan</span> di Laporan Keuangan secara otomatis.
             </AlertDialogDescription>
           </AlertDialogHeader>
