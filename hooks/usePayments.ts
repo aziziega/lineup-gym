@@ -5,7 +5,7 @@ import type { Payment } from '@/lib/types'
 
 const supabase = createClient()
 
-export function usePayments() {
+export function usePayments(refetchInterval?: number) {
   return useQuery({
     queryKey: ['payments'],
     queryFn: async () => {
@@ -17,6 +17,7 @@ export function usePayments() {
       if (error) throw error
       return data
     },
+    refetchInterval,
   })
 }
 

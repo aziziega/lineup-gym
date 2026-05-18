@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatTanggal } from '@/lib/utils'
-import { UserCheck, Users, Clock, Trash2, AlertTriangle } from 'lucide-react'
+import { GYM_ID } from '@/lib/constants'
+import { UserCheck, Users, Clock, Trash2, AlertTriangle, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -25,6 +27,29 @@ export default function CheckInDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('sv-SE'))
   const [isToday, setIsToday] = useState(true)
   const supabase = createClient()
+
+  // Date Navigation Handlers
+  const handlePrevDay = () => {
+    const d = new Date(selectedDate)
+    d.setDate(d.getDate() - 1)
+    const newDateStr = d.toLocaleDateString('sv-SE')
+    setSelectedDate(newDateStr)
+    setIsToday(newDateStr === new Date().toLocaleDateString('sv-SE'))
+  }
+
+  const handleNextDay = () => {
+    const d = new Date(selectedDate)
+    d.setDate(d.getDate() + 1)
+    const newDateStr = d.toLocaleDateString('sv-SE')
+    setSelectedDate(newDateStr)
+    setIsToday(newDateStr === new Date().toLocaleDateString('sv-SE'))
+  }
+
+  const handleToday = () => {
+    const todayStr = new Date().toLocaleDateString('sv-SE')
+    setSelectedDate(todayStr)
+    setIsToday(true)
+  }
 
   // Auto-switch date if it changes overnight
   useEffect(() => {
@@ -88,12 +113,41 @@ export default function CheckInDashboard() {
   const handleDeleteLog = async (id: string) => {
     setDeletingId(id)
     try {
+      // 1. Dapatkan info member sebelum datanya dihapus untuk audit log
+      const logToDelete = logs.find((l) => l.id === id)
+      const memberName = logToDelete?.members?.full_name || 'Member'
+
+      // 2. Hapus data absensi
       const { error } = await supabase
         .from('attendance_logs')
         .delete()
         .eq('id', id)
 
       if (error) throw error
+
+      // 3. Catat ke tabel audit log (activity_logs)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await supabase.from('activity_logs').insert({
+            gym_id: GYM_ID,
+            admin_id: user.id,
+            action_type: 'delete_check_in',
+            table_name: 'attendance_logs',
+            record_id: id,
+            details: {
+              old_data: {
+                id,
+                member_name: memberName,
+                check_in_at: logToDelete?.check_in_at,
+                notes: logToDelete?.notes
+              }
+            }
+          })
+        }
+      } catch (auditErr) {
+        console.error('Failed to write audit log for delete checkin:', auditErr)
+      }
       
       toast.success('Check-in berhasil dihapus')
       fetchLogs() // Refresh data
@@ -151,18 +205,6 @@ export default function CheckInDashboard() {
           <h1 className="font-heading text-2xl uppercase text-foreground sm:text-3xl">Laporan Check-In</h1>
           <p className="text-sm text-muted-foreground">Pantau kehadiran member secara real-time</p>
         </div>
-        <div>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => {
-              const val = e.target.value
-              setSelectedDate(val)
-              setIsToday(val === new Date().toLocaleDateString('sv-SE'))
-            }}
-            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground [color-scheme:dark]"
-          />
-        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -189,16 +231,71 @@ export default function CheckInDashboard() {
         </Card>
       </div>
 
-      <Card className="border-border/50 bg-card">
-        <CardHeader>
-          <CardTitle className="text-lg text-foreground">Riwayat Hari Ini</CardTitle>
+      <Card className="border-border/50 bg-card overflow-hidden">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/30 px-5 py-4">
+          <CardTitle className="text-lg text-foreground font-heading uppercase tracking-wide flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" />
+            {isToday ? 'Riwayat Hari Ini' : `Riwayat: ${formatTanggal(selectedDate)}`}
+          </CardTitle>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handlePrevDay}
+              className="h-8 w-8 border-border/50 hover:bg-primary/10"
+            >
+              <ChevronLeft className="h-4 w-4 text-foreground" />
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToday}
+              disabled={selectedDate === new Date().toLocaleDateString('sv-SE')}
+              className="h-8 text-xs font-bold border-border/50 hover:bg-[#D4FF00] hover:text-black disabled:opacity-50"
+            >
+              Hari Ini
+            </Button>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleNextDay}
+              disabled={selectedDate >= new Date().toLocaleDateString('sv-SE')}
+              className="h-8 w-8 border-border/50 hover:bg-primary/10 disabled:opacity-50"
+            >
+              <ChevronRight className="h-4 w-4 text-foreground" />
+            </Button>
+
+            {/* Styled Date Picker Input */}
+            <div className="relative flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-1.5 text-xs text-foreground font-semibold">
+              <Calendar className="h-3.5 w-3.5 text-primary" />
+              <input
+                type="date"
+                value={selectedDate}
+                max={new Date().toLocaleDateString('sv-SE')}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setSelectedDate(val)
+                  setIsToday(val === new Date().toLocaleDateString('sv-SE'))
+                }}
+                className="bg-transparent text-foreground outline-none cursor-pointer [color-scheme:dark] font-heading"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-center text-sm text-muted-foreground/60">Memuat data...</p>
           ) : logs.length === 0 ? (
             <div className="py-12 text-center">
-              <p className="text-sm text-muted-foreground/60">Belum ada yang check-in hari ini</p>
+              <p className="text-sm text-muted-foreground/60">
+                {isToday 
+                  ? 'Belum ada yang check-in hari ini' 
+                  : `Belum ada yang check-in pada tanggal ${formatTanggal(selectedDate)}`
+                }
+              </p>
             </div>
           ) : (
             <div className="space-y-3">

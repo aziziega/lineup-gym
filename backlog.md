@@ -118,6 +118,23 @@ Fitur-fitur *advanced* yang ditunda ke pembaruan sistem tahap selanjutnya (V2):
    - **Catatan:** Saat ini sistem mengasumsikan hanya ada 1 Personal Trainer (conflict check 1 sesi per jam global).
    - **Target V2:** Tambah field `trainer_id` di tabel `pt_sessions`, UI dropdown pilih trainer, conflict check per-trainer sehingga 2 coach bisa latih member berbeda di jam yang sama.
    - **Trigger:** Fitur ini diaktifkan saat Line Up Gym menambah coach kedua.
+        ## 🏋️ 1. Pemisahan Khusus Role "Trainer" (Personal Trainer)
+      Saat ini, semua pekerja menggunakan role `'staff'`. Ke depannya, Trainer perlu dibatasi hak aksesnya agar tidak dapat melihat atau mencatat data keuangan serta database member umum.
+          ### Rencana Fitur:
+          * **Role Baru (`'trainer'`):** Penambahan opsi `'trainer'` pada kolom `role` di tabel `profiles`.
+          * **Sidebar Minimalis untuk Trainer:**
+            * **Dashboard khusus:** Menampilkan jumlah sesi PT hari ini dan sisa kuota sesi member bimbingannya.
+            * **Menu Jadwal PT:** Hanya bisa mengelola `/dashboard/schedule` untuk menandai sesi latihan yang mereka bimbing.
+            * **Menu Member PT:** Membatasi agar Trainer hanya bisa melihat daftar member yang secara eksplisit didelegasikan ke mereka.
+            * **Blokir Total Keuangan:** Menyembunyikan menu `/dashboard/finance` dan `/dashboard/packages` secara mutlak.
+
+          ## 🤝 2. Sistem Multi-Coach & Pendelegasian Trainer (PT Assignment)
+          Mendukung fleksibilitas latihan di mana satu member bisa dilatih oleh coach yang berbeda sesuai kesepakatan atau jadwal kerja coach.
+
+          ### Rencana Fitur:
+          * **Relasi Member & Trainer:** Pembuatan kolom `trainer_id` (UUID) pada pendaftaran/perpanjangan paket PT.
+          * **Fitur Pendelegasian:** Owner atau Staff Kasir dapat memilih Coach saat member membeli paket PT.
+          * **Pencatatan KPI Komisi:** Sistem akan merekam sesi latihan PT mana saja yang telah berhasil diselesaikan oleh masing-masing Coach, mempermudah kalkulasi gaji/komisi bulanan coach secara otomatis.
 
 5. **Server-Side Pagination**
    - **Target V2:** Halaman Keuangan dan log check-in perlu dipaginate saat data sudah ribuan.

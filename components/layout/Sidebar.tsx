@@ -65,7 +65,7 @@ const navGroups: NavGroup[] = [
       },
       { label: 'Paket', href: '/dashboard/packages', icon: Package },
       { label: 'Jadwal PT', href: '/dashboard/schedule', icon: CalendarDays },
-      { label: 'Keuangan', href: '/dashboard/finance', icon: Wallet, isAdminOnly: true },
+      { label: 'Keuangan', href: '/dashboard/finance', icon: Wallet },
       { label: 'Expiry', href: '/dashboard/expiry', icon: Bell },
     ]
   },

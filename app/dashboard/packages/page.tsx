@@ -11,8 +11,10 @@ import NativeSelect from '@/components/dashboard/NativeSelect'
 import { Plus, Edit, ToggleLeft, ToggleRight } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Membership } from '@/lib/types'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function PackagesPage() {
+  const { isAdmin } = useAuth()
   const { data: memberships, isLoading } = useMemberships()
   const createMembership = useCreateMembership()
   const updateMembership = useUpdateMembership()
@@ -100,11 +102,20 @@ export default function PackagesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Kelola paket membership dari sini. Perubahan langsung mempengaruhi form tambah member.</p>
-        <Button size="sm" onClick={openCreate} className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#E60000]">
-          <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Paket
-        </Button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-0.5">
+          <p className="text-xs text-muted-foreground font-medium">Kelola paket membership dari sini. Perubahan langsung mempengaruhi form tambah member.</p>
+          {!isAdmin && (
+            <p className="text-[11px] font-semibold text-red-400">
+              * Mode Kasir: Penambahan, pengeditan, atau status keaktifan paket hanya dapat dikelola oleh Admin (Owner).
+            </p>
+          )}
+        </div>
+        {isAdmin && (
+          <Button size="sm" onClick={openCreate} className="bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00]">
+            <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Paket
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -146,24 +157,26 @@ export default function PackagesPage() {
                     <p className="mt-1 text-xs text-muted-foreground/60">{pkg.description}</p>
                   )}
                 </div>
-                <div className="flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => openEdit(pkg)}
-                    className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleToggle(pkg.id, pkg.is_active, pkg.name)}
-                    className={`h-8 w-8 p-0 ${pkg.is_active ? 'text-primary' : 'text-muted-foreground/60'}`}
-                  >
-                    {pkg.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                  </Button>
-                </div>
+                {isAdmin && (
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEdit(pkg)}
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleToggle(pkg.id, pkg.is_active, pkg.name)}
+                      className={`h-8 w-8 p-0 ${pkg.is_active ? 'text-primary' : 'text-muted-foreground/60'}`}
+                    >
+                      {pkg.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           ))}

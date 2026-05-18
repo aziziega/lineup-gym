@@ -23,14 +23,14 @@ import { useAuth } from '@/hooks/useAuth'
 
 export default function FinancePage() {
   const { isAdmin } = useAuth()
-  const { data: payments, isLoading } = usePayments()
+  const { data: payments, isLoading } = usePayments(5000) // Auto-refresh 5 detik
   const { data: currentMonth } = useCurrentMonthRevenue()
   const { data: monthlyRevenue } = useMonthlyRevenue()
   const updatePayment = useUpdatePayment()
   const deletePayment = useDeletePayment()
 
   // Expenses hooks
-  const { data: expenses, isLoading: expLoading } = useExpenses()
+  const { data: expenses, isLoading: expLoading } = useExpenses(5000) // Auto-refresh 5 detik
   const { data: currentMonthExp } = useCurrentMonthExpenses()
   const createExpense = useCreateExpense()
   const updateExpense = useUpdateExpense()
@@ -110,13 +110,16 @@ export default function FinancePage() {
 
   const netProfit = (currentMonth?.total || 0) - (currentMonthExp?.total || 0)
 
-  // Filter payments by selectedDate + search + method
+  // Filter payments by selectedDate + search + method (Staff hanya bisa melihat transaksi hari ini)
   const filtered = useMemo(() => {
     let list = payments || []
-    // Filter by selected date
+    const todayStr = new Date().toLocaleDateString('sv-SE')
+    const targetDate = isAdmin ? selectedDate : todayStr
+
+    // Filter by date
     list = list.filter((p: any) => {
       const paidDate = p.paid_at?.split('T')[0]
-      return paidDate === selectedDate
+      return paidDate === targetDate
     })
     if (search) {
       const s = search.toLowerCase()
@@ -126,16 +129,18 @@ export default function FinancePage() {
       list = list.filter((p: any) => p.payment_method === filterMethod)
     }
     return list
-  }, [payments, search, filterMethod, selectedDate])
+  }, [payments, search, filterMethod, selectedDate, isAdmin])
 
-  // Filter expenses by selectedDate + search + category
+  // Filter expenses by selectedDate + search + category (Staff hanya bisa melihat pengeluaran hari ini)
   const filteredExpenses = useMemo(() => {
     let list = expenses || []
+    const todayStr = new Date().toLocaleDateString('sv-SE')
+    const targetDate = isAdmin ? selectedDate : todayStr
 
     // Filter by date
     list = list.filter((e: any) => {
       const expDate = e.expense_date?.split('T')[0]
-      return expDate === selectedDate
+      return expDate === targetDate
     })
 
     // Filter by search
@@ -150,7 +155,7 @@ export default function FinancePage() {
     }
 
     return list
-  }, [expenses, selectedDate, searchExp, filterExpCategory])
+  }, [expenses, selectedDate, searchExp, filterExpCategory, isAdmin])
 
   // Chart data (income + expenses aggregated by month for full current year)
   const chartData = useMemo(() => {
@@ -315,22 +320,29 @@ export default function FinancePage() {
 
   return (
     <div className="space-y-5">
-      {/* Date Header + Date Picker */}
+      {/* Date Header + Date Picker (Hanya Admin yang dapat memilih tanggal lain) */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="font-heading text-lg text-foreground">Laporan Keuangan</h2>
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => {
-              const val = e.target.value
-              setSelectedDate(val)
-              setIsToday(val === new Date().toLocaleDateString('sv-SE'))
-            }}
-            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground [color-scheme:dark]"
-          />
-        </div>
+        {isAdmin ? (
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                const val = e.target.value
+                setSelectedDate(val)
+                setIsToday(val === new Date().toLocaleDateString('sv-SE'))
+              }}
+              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground [color-scheme:dark]"
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-card px-2.5 py-1.5 text-xs text-muted-foreground">
+            <CalendarDays className="h-3.5 w-3.5 text-primary" />
+            <span className="font-medium">Mode Kasir (Hari Ini)</span>
+          </div>
+        )}
       </div>
       <p className="-mt-3 text-xs text-muted-foreground">{selectedDateFormatted}</p>
 
@@ -456,14 +468,16 @@ export default function FinancePage() {
                 triggerClassName="h-9 text-[11px]"
               />
 
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={() => setExportOpen(true)} 
-                className="h-9 border-border text-[11px] text-muted-foreground"
-              >
-                <Download className="mr-1 h-3.5 w-3.5" /> Export
-              </Button>
+              {isAdmin && (
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => setExportOpen(true)} 
+                  className="h-9 border-border text-[11px] text-muted-foreground"
+                >
+                  <Download className="mr-1 h-3.5 w-3.5" /> Export
+                </Button>
+              )}
 
               <Dialog open={incOpen} onOpenChange={setIncOpen}>
                 <DialogTrigger render={<Button size="sm" className="col-span-2 h-10 bg-[#D4FF00] text-xs font-bold text-black hover:bg-[#c5ef00] sm:h-9" />}>
@@ -564,14 +578,16 @@ export default function FinancePage() {
                       <p className="font-heading text-lg text-accent">{formatRupiah(Number(p.amount))}</p>
                       <p className="text-[10px] text-muted-foreground/60">{formatTanggal(p.paid_at)}</p>
                     </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => { setEditData(p); setEditOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground">
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setDeleteId(p.id); setDeleteOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-red-400">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => { setEditData(p); setEditOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground">
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => { setDeleteId(p.id); setDeleteOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-red-400">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -699,14 +715,16 @@ export default function FinancePage() {
                         <p className="font-heading text-lg text-red-400">{formatRupiah(Number(e.amount))}</p>
                         <p className="text-[10px] text-muted-foreground/60">{formatTanggal(e.expense_date)}</p>
                       </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setEditExpData(e); setEditExpOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground">
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => { setDeleteExpId(e.id); setDeleteExpOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-red-400">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      {isAdmin && (
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => { setEditExpData(e); setEditExpOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground">
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setDeleteExpId(e.id); setDeleteExpOpen(true); }} className="h-7 w-7 text-muted-foreground hover:bg-[#2A2A2A] hover:text-red-400">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
