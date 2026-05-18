@@ -172,13 +172,29 @@ export default function UserManagementPage() {
             <strong className="text-foreground">{details.new_data?.full_name}</strong>.
           </span>
         )
-      case 'renew_subscription':
+      case 'renew_subscription': {
+        const memberName = details.member_name || 'Member'
+        const packages = []
+        if (details.has_gym) {
+          packages.push(details.membership_type || 'UMUM')
+        }
+        if (details.has_pt) {
+          packages.push(details.pt_membership_type || 'PT')
+        }
         return (
           <span>
-            <strong className="text-foreground">{name}</strong> memperpanjang paket Member:{' '}
-            <strong className="text-foreground">{details.new_data?.full_name || 'Member'}</strong>.
+            <strong className="text-foreground font-bold">{name}</strong> memperpanjang Paket Member atas nama:{' '}
+            <strong className="text-foreground font-bold">{memberName}</strong>
+            {packages.length > 0 && (
+              <>
+                , pilihan PAKET:{' '}
+                <strong className="text-foreground font-bold">{packages.join(' & ').toUpperCase()}</strong>
+              </>
+            )}
+            .
           </span>
         )
+      }
       case 'complete_pt_session':
         return (
           <span>

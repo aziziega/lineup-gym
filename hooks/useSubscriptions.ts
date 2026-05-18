@@ -138,6 +138,13 @@ export function useRenewSubscription() {
         if (ptPayError) throw ptPayError
       }
 
+      // Ambil nama member untuk audit log yang informatif
+      const { data: member } = await supabase
+        .from('members')
+        .select('full_name')
+        .eq('id', memberId)
+        .single()
+
       // Audit log
       await supabase.from('activity_logs').insert({
         gym_id: GYM_ID,
@@ -145,7 +152,13 @@ export function useRenewSubscription() {
         action_type: 'renew_subscription',
         table_name: 'subscriptions',
         record_id: subId || 'PT_ONLY_RENEWAL',
-        details: { has_gym: !!membershipId, has_pt: !!ptPayment },
+        details: {
+          member_name: member?.full_name || 'Member',
+          membership_type: membershipType || null,
+          has_gym: !!membershipId,
+          has_pt: !!ptPayment,
+          pt_membership_type: ptPayment?.membershipType || null
+        },
       })
 
       return true
