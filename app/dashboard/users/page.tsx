@@ -21,6 +21,16 @@ import { useQuery } from '@tanstack/react-query'
 import { formatTanggal } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createStaffAccount, deleteUserAccount } from '@/app/actions/users'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 export default function UserManagementPage() {
   const { supabase, isAdmin, user: currentUser } = useAuth()
@@ -33,6 +43,10 @@ export default function UserManagementPage() {
   const [newPassword, setNewPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // States for deleting user
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteUserData, setDeleteUserData] = useState<{ id: string; name: string } | null>(null)
 
   // 1. Fetch Users from Profiles
   const { data: users, isLoading, refetch } = useQuery({
@@ -82,6 +96,7 @@ export default function UserManagementPage() {
         toast.error(res.error || "Gagal mendaftarkan staff")
       }
     } catch (error) {
+      console.error("Gagal daftarkan staff (sistem):", error)
       toast.error("Terjadi kesalahan sistem")
     } finally {
       setLoading(false)
@@ -89,18 +104,20 @@ export default function UserManagementPage() {
   }
 
   // 3. Handle Delete User
-  const handleDelete = async (userId: string, name: string) => {
+  const handleDelete = async () => {
+    if (!deleteUserData) return
+    const { id: userId, name } = deleteUserData
+
     if (userId === currentUser?.id) {
       toast.error("Kamu tidak bisa menghapus akunmu sendiri!")
       return
     }
 
-    if (!confirm(`Hapus akun ${name}? Tindakan ini tidak bisa dibatalkan.`)) return
-
     try {
       const res = await deleteUserAccount(userId)
       if (res.success) {
-        toast.success("Akun berhasil dihapus")
+        toast.success(`Akun ${name} berhasil dihapus`)
+        setDeleteOpen(false)
         refetch()
       } else {
         toast.error(res.error)
@@ -243,7 +260,10 @@ export default function UserManagementPage() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => handleDelete(user.id, user.full_name)}
+                        onClick={() => {
+                          setDeleteUserData({ id: user.id, name: user.full_name || 'Tanpa Nama' })
+                          setDeleteOpen(true)
+                        }}
                         className="h-8 w-8 text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -268,6 +288,27 @@ export default function UserManagementPage() {
           )
         })}
       </div>
+
+      {/* AlertDialog konfirmasi hapus akun staff */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent className="border-border bg-card text-foreground">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus Akun Staff?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Apakah kamu yakin ingin menghapus akun staff <span className="font-bold text-foreground">{deleteUserData?.name}</span>? Tindakan ini tidak bisa dibatalkan dan staff tersebut tidak akan bisa login lagi ke sistem.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-muted-foreground">Batal</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete}
+              className="bg-red-500 text-foreground hover:bg-red-600"
+            >
+              Hapus Akun
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
