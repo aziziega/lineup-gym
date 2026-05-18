@@ -22,20 +22,24 @@ import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 
 export default function FinancePage() {
-  const { isAdmin } = useAuth()
-  const { data: payments, isLoading } = usePayments(5000) // Auto-refresh 5 detik
-  const { data: currentMonth } = useCurrentMonthRevenue()
-  const { data: monthlyRevenue } = useMonthlyRevenue()
+  const { isAdmin, isLoading: authLoading, user } = useAuth()
+  const hasUser = !!user && !authLoading
+
+  const { data: payments, isLoading } = usePayments(undefined, hasUser)
+  const { data: currentMonth } = useCurrentMonthRevenue(hasUser)
+  const { data: monthlyRevenue } = useMonthlyRevenue(hasUser)
   const updatePayment = useUpdatePayment()
   const deletePayment = useDeletePayment()
 
   // Expenses hooks
-  const { data: expenses, isLoading: expLoading } = useExpenses(5000) // Auto-refresh 5 detik
-  const { data: currentMonthExp } = useCurrentMonthExpenses()
+  const { data: expenses, isLoading: expLoading } = useExpenses(undefined, hasUser)
+  const { data: currentMonthExp } = useCurrentMonthExpenses(hasUser)
   const createExpense = useCreateExpense()
   const updateExpense = useUpdateExpense()
   const deleteExpense = useDeleteExpense()
   const createPayment = useCreatePayment()
+
+
 
   // Search & Filter for Expenses
   const [searchExp, setSearchExp] = useState('')
@@ -193,6 +197,17 @@ export default function FinancePage() {
   const selectedDateFormatted = new Intl.DateTimeFormat('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   }).format(new Date(selectedDate + 'T00:00:00'))
+
+  if (authLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground animate-pulse font-medium">Memuat data transaksi aman...</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleEditSave = async () => {
     if (!editData) return
@@ -444,7 +459,7 @@ export default function FinancePage() {
             <h3 className="text-sm font-semibold text-foreground">
               Pemasukan <span className="text-[10px] font-normal text-muted-foreground/60">(otomatis dari pendaftaran member)</span>
             </h3>
-            
+
             <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
               <div className="relative col-span-2 sm:w-48">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
@@ -455,7 +470,7 @@ export default function FinancePage() {
                   className="h-9 border-border bg-card pl-9 text-xs text-foreground placeholder:text-muted-foreground/60"
                 />
               </div>
-              
+
               <NativeSelect
                 value={filterMethod}
                 onChange={(e) => setFilterMethod(e.target.value)}
@@ -469,10 +484,10 @@ export default function FinancePage() {
               />
 
               {isAdmin && (
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => setExportOpen(true)} 
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setExportOpen(true)}
                   className="h-9 border-border text-[11px] text-muted-foreground"
                 >
                   <Download className="mr-1 h-3.5 w-3.5" /> Export
@@ -490,21 +505,21 @@ export default function FinancePage() {
                   <div className="space-y-4 pt-4">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-muted-foreground">Keterangan</Label>
-                      <Input 
+                      <Input
                         placeholder="Contoh: Jualan Air Mineral"
-                        value={incDesc} 
-                        onChange={(e) => setIncDesc(e.target.value)} 
-                        className="h-11 border-border bg-background text-foreground" 
+                        value={incDesc}
+                        onChange={(e) => setIncDesc(e.target.value)}
+                        className="h-11 border-border bg-background text-foreground"
                       />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-muted-foreground">Nominal (Rp)</Label>
-                      <Input 
-                        type="number" 
+                      <Input
+                        type="number"
                         placeholder="0"
-                        value={incAmount} 
-                        onChange={(e) => setIncAmount(e.target.value)} 
-                        className="h-11 border-border bg-background text-foreground" 
+                        value={incAmount}
+                        onChange={(e) => setIncAmount(e.target.value)}
+                        className="h-11 border-border bg-background text-foreground"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -523,17 +538,17 @@ export default function FinancePage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Tanggal</Label>
-                        <Input 
-                          type="date" 
-                          value={incDate} 
-                          onChange={(e) => setIncDate(e.target.value)} 
-                          className="h-11 border-border bg-background text-foreground [color-scheme:dark]" 
+                        <Input
+                          type="date"
+                          value={incDate}
+                          onChange={(e) => setIncDate(e.target.value)}
+                          className="h-11 border-border bg-background text-foreground [color-scheme:dark]"
                         />
                       </div>
                     </div>
-                    <Button 
-                      onClick={handleAddIncome} 
-                      disabled={createPayment.isPending} 
+                    <Button
+                      onClick={handleAddIncome}
+                      disabled={createPayment.isPending}
                       className="mt-4 h-12 w-full bg-[#D4FF00] text-sm font-bold text-black hover:bg-[#c5ef00]"
                     >
                       {createPayment.isPending ? 'Menyimpan...' : 'Simpan Pemasukan'}
@@ -653,35 +668,35 @@ export default function FinancePage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Nominal (Rp)</Label>
-                        <Input 
-                          type="number" 
+                        <Input
+                          type="number"
                           placeholder="0"
-                          value={expAmount} 
-                          onChange={(e) => setExpAmount(e.target.value)} 
-                          className="h-11 border-border bg-background text-foreground" 
+                          value={expAmount}
+                          onChange={(e) => setExpAmount(e.target.value)}
+                          className="h-11 border-border bg-background text-foreground"
                         />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Keterangan</Label>
-                        <Input 
+                        <Input
                           placeholder="Deskripsi pengeluaran..."
-                          value={expDesc} 
-                          onChange={(e) => setExpDesc(e.target.value)} 
-                          className="h-11 border-border bg-background text-foreground" 
+                          value={expDesc}
+                          onChange={(e) => setExpDesc(e.target.value)}
+                          className="h-11 border-border bg-background text-foreground"
                         />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Tanggal Pengeluaran</Label>
-                        <Input 
-                          type="date" 
-                          value={expDate} 
-                          onChange={(e) => setExpDate(e.target.value)} 
-                          className="h-11 border-border bg-background text-foreground [color-scheme:dark]" 
+                        <Input
+                          type="date"
+                          value={expDate}
+                          onChange={(e) => setExpDate(e.target.value)}
+                          className="h-11 border-border bg-background text-foreground [color-scheme:dark]"
                         />
                       </div>
-                      <Button 
-                        onClick={handleAddExpense} 
-                        disabled={createExpense.isPending} 
+                      <Button
+                        onClick={handleAddExpense}
+                        disabled={createExpense.isPending}
                         className="mt-4 h-12 w-full bg-primary text-sm font-bold text-black hover:bg-[#E60000]"
                       >
                         {createExpense.isPending ? 'Menyimpan...' : 'Simpan Pengeluaran'}

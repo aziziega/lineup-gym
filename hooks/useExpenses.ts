@@ -5,7 +5,7 @@ import type { Expense } from '@/lib/types'
 
 const supabase = createClient()
 
-export function useExpenses(refetchInterval?: number) {
+export function useExpenses(refetchInterval?: number, enabled = true) {
   return useQuery({
     queryKey: ['expenses'],
     queryFn: async () => {
@@ -18,10 +18,11 @@ export function useExpenses(refetchInterval?: number) {
       return data as Expense[]
     },
     refetchInterval,
+    enabled,
   })
 }
 
-export function useCurrentMonthExpenses() {
+export function useCurrentMonthExpenses(enabled = true) {
   return useQuery({
     queryKey: ['expenses-current-month'],
     queryFn: async () => {
@@ -40,6 +41,7 @@ export function useCurrentMonthExpenses() {
       const total = (data || []).reduce((sum, e) => sum + Number(e.amount), 0)
       return { total, count: data?.length ?? 0 }
     },
+    enabled,
   })
 }
 
