@@ -104,7 +104,7 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
       {navGroups.map((group) => {
         // Filter out admin-only items if user is not admin
         const visibleItems = group.items.filter(item => !item.isAdminOnly || isAdmin)
-        
+
         if (visibleItems.length === 0) return null
 
         return (
@@ -257,7 +257,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               </button>
             </div>
             <p className="text-[9px] text-sidebar-foreground/20 uppercase tracking-tighter font-medium">
-              LAST UPDATE: 18 MEI, 07.52 WIB
+              LAST UPDATE: 18 MEI, 17.30 WIB
             </p>
           </div>
         </div>
