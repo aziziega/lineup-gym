@@ -34,7 +34,7 @@ export default function Footer() {
           <div className="flex items-center gap-6 text-xs text-muted-foreground/60">
             <a href="https://www.instagram.com/lineup.gym_/" target="_blank" className="hover:text-foreground">Instagram</a>
             <a href="https://maps.app.goo.gl/gWF4BnTf6oxZjV366" target="_blank" className="hover:text-foreground">Google Maps</a>
-            <a href="https://wa.me/6285647618646" target="_blank" className="hover:text-foreground">WhatsApp</a>
+            <a href="https://wa.me/6285707678485" target="_blank" className="hover:text-foreground">WhatsApp</a>
           </div>
         </div>
 
