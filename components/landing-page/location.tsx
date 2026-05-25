@@ -15,7 +15,7 @@ export default function Location() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Google Maps */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 50 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-50px' }}
@@ -78,9 +78,9 @@ export default function Location() {
                   </div>
                   <div>
                     <h4 className="text-sm font-semibold text-foreground">Hubungi Kami</h4>
-                    <a href="tel:+6285647618646" className="mt-1 block text-sm text-muted-foreground hover:text-foreground">0856-4761-8646</a>
+                    <a href="tel:+6285707678485" className="mt-1 block text-sm text-muted-foreground hover:text-foreground">0857-0767-8485</a>
                     <a
-                      href="https://wa.me/6285647618646?text=Halo,%20saya%20ingin%20bertanya%20tentang%20Line%20Up%20Gym"
+                      href="https://wa.me/6285707678485?text=Halo,%20saya%20ingin%20bertanya%20tentang%20Line%20Up%20Gym"
                       target="_blank"
                       className="mt-2 inline-flex items-center gap-1 rounded-lg bg-[#25D366]/10 px-3 py-1.5 text-xs font-medium text-[#25D366] hover:bg-[#25D366]/20"
                     >
