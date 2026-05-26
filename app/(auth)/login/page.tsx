@@ -69,7 +69,7 @@ export default function LoginPage() {
           <span className="text-white">GYM</span>
         </h1>
 
-        {/* Rating */}
+        {/* Rating
         <div className="mt-2 flex items-center justify-center gap-1.5 text-sm text-[#888]">
           <div className="flex">
             {[...Array(5)].map((_, i) => (
@@ -79,9 +79,8 @@ export default function LoginPage() {
               />
             ))}
           </div>
-          <span className="text-white/80">{GYM_INFO.RATING}</span>
-          <span>Â· Ulasan Google</span>
-        </div>
+
+        </div> */}
 
         {/* Tagline */}
         <p className="mt-2 text-sm text-[#888]">
