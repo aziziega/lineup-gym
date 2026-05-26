@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { CheckCircle2, AlertTriangle, ArrowLeft, Clock } from 'lucide-react'
 import { GYM_ID } from '@/lib/constants'
 import { toLocalISOString } from '@/lib/utils'
+import { kioskCheckinLookup, checkExistingPhone } from '@/app/actions/kiosk'
 
 type Step = 'search' | 'visitor' | 'success' | 'expired' | 'not_found' | 'visitor_registered' | 'visitor_checked_in'
 
@@ -54,43 +55,33 @@ export default function CheckinKiosk() {
 
     setLoading(true)
     try {
-      // Cari dari active_subscriptions_view menggunakan No Member ATAU No HP
-      const { data, error } = await supabase
-        .from('active_subscriptions_view')
-        .select('*')
-        .eq('gym_id', GYM_ID)
-        .or(`member_no.eq.${searchVal},phone.eq.${searchVal}`)
-        .limit(1)
-        .single()
+      // Cari dari active_subscriptions_view secara aman menggunakan Server Action
+      const res = await kioskCheckinLookup(searchVal)
 
-      if (error && error.code !== 'PGRST116') {
-        console.error("Supabase Error [active_subscriptions_view]:", error)
-        throw error
+      if (!res.success) {
+        throw new Error(res.error)
       }
+
+      const data = res.data as any
 
       if (data) {
         setMemberInfo(data)
 
         if (data.status === 'active' || data.status === 'expiring_soon' || data.status === 'critical') {
-          // Check anti-spam (4 jam terakhir)
-          const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
-          const { data: recentLog } = await supabase
-            .from('attendance_logs')
-            .select('id, check_in_at')
-            .eq('member_id', data.member_id)
-            .gte('check_in_at', fourHoursAgo)
-            .order('check_in_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
+          // Check anti-spam (4 jam terakhir) menggunakan data last_check_in_at dari Server Action
+          if (data.last_check_in_at) {
+            const lastCheckinTime = new Date(data.last_check_in_at).getTime()
+            const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000
 
-          if (recentLog) {
-            const timeStr = new Date(recentLog.check_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-            toast.error(`Anda sudah Check in hari ini jam ${timeStr}. Silahkan ke meja Kasir untuk konfirmasi.`, {
-              duration: 6000,
-              icon: '⚠️',
-            })
-            setLoading(false)
-            return
+            if (lastCheckinTime >= fourHoursAgo) {
+              const timeStr = new Date(data.last_check_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+              toast.error(`Anda sudah Check in hari ini jam ${timeStr}. Silahkan ke meja Kasir untuk konfirmasi.`, {
+                duration: 6000,
+                icon: '⚠️',
+              })
+              setLoading(false)
+              return
+            }
           }
 
           // LANGSUNG check-in tanpa konfirmasi
@@ -115,25 +106,15 @@ export default function CheckinKiosk() {
 
             setStep('success')
           } else {
+            // Jika membership_name kosong/null, berarti memang tidak punya paket aktif sama sekali
+            if (!data.membership_name) {
+              setMemberInfo({ ...data, status: 'expired', membership_name: 'Tidak ada paket aktif' })
+            }
             setStep('expired')
           }
         }
       } else {
-        // Coba cari di tabel members biasa (mungkin belum punya subscription)
-        const { data: memberData } = await supabase
-          .from('members')
-          .select('*')
-          .eq('gym_id', GYM_ID)
-          .or(`member_no.eq.${searchVal},phone.eq.${searchVal}`)
-          .limit(1)
-          .single()
-
-        if (memberData) {
-          setMemberInfo({ ...memberData, status: 'expired', membership_name: 'Tidak ada paket aktif' })
-          setStep('expired')
-        } else {
-          setStep('not_found')
-        }
+        setStep('not_found')
       }
     } catch (err: any) {
       console.error("Check-in Error:", err)
@@ -149,16 +130,16 @@ export default function CheckinKiosk() {
     setLoading(true)
 
     try {
-      // 0. Cek apakah visitor sudah pernah daftar (berdasarkan No HP)
-      const { data: existing } = await supabase
-        .from('members')
-        .select('id')
-        .eq('gym_id', GYM_ID)
-        .eq('phone', visitorPhone)
-        .limit(1)
-        .maybeSingle()
+      // 0. Cek apakah visitor sudah pernah daftar secara aman via Server Action
+      const res = await checkExistingPhone(visitorPhone)
 
-      if (existing) {
+      if (!res.success) {
+        throw new Error(res.error)
+      }
+
+      const phoneExists = res.exists
+
+      if (phoneExists) {
         toast.error('Data sudah Terinput sebelumnya, silahkan konfirmasi ke kasir.', {
           duration: 5000,
           icon: '⚠️',
