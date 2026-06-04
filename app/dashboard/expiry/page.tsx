@@ -250,6 +250,7 @@ export default function ExpiryPage() {
         setReceiptData({
           memberName: renewMember.full_name,
           memberPhone: renewMember.phone,
+          memberNo: renewMemberNo?.trim() || renewMember.member_no || null,
           gymPackageName: pkg?.name,
           gymEndDate: pkg ? endDate : undefined,
           ptPackageName: ptPkg?.name,
@@ -488,7 +489,8 @@ export default function ExpiryPage() {
                         isPt ? m.pt_end_date : m.end_date,
                         isPt ? null : m.days_remaining,
                         isPt,
-                        m.pt_remaining_sessions
+                        m.pt_remaining_sessions,
+                        m.member_no
                       )
                       window.open(url, '_blank')
                     }}
@@ -554,7 +556,9 @@ export default function ExpiryPage() {
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Pembayaran dari</p>
-              <p className="font-heading text-lg">{receiptData?.memberName}</p>
+              <p className="font-heading text-lg">
+                {receiptData?.memberName} {receiptData?.memberNo ? `#${receiptData.memberNo}` : ''}
+              </p>
               <p className="text-xl font-bold text-accent">{formatRupiah(receiptData?.totalAmount ?? 0)}</p>
             </div>
             <div className="rounded-lg border border-border bg-background p-3 text-left text-xs space-y-1">

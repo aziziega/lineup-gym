@@ -271,6 +271,7 @@ function MembersContent() {
         setReceiptData({
           memberName: formName,
           memberPhone: formPhone,
+          memberNo: formMemberNo || null,
           gymPackageName: selectedPkg?.name,
           gymEndDate: selectedPkg ? toLocalISOString(hitungEndDate(formStartDate, selectedPkg.duration_days)) : undefined,
           ptPackageName: selectedPtPkg?.name,
@@ -373,6 +374,7 @@ function MembersContent() {
         setReceiptData({
           memberName: renewMember.full_name,
           memberPhone: renewMember.phone,
+          memberNo: renewMemberNo?.trim() || renewMember.member_no || null,
           gymPackageName: pkg?.name,
           gymEndDate: pkg ? endDate : undefined,
           ptPackageName: ptPkg?.name,
@@ -1328,7 +1330,9 @@ function MembersContent() {
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Member</span>
-                    <span className="text-foreground font-medium">{receiptData.memberName}</span>
+                    <span className="text-foreground font-medium">
+                      {receiptData.memberName} {receiptData.memberNo ? `#${receiptData.memberNo}` : ''}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Jenis</span>

@@ -22,7 +22,8 @@ export const generateWALink = (
   endDate: string | null | undefined,
   daysLeft: number | null | undefined,
   isPt?: boolean,
-  ptRemainingSessions?: number | null
+  ptRemainingSessions?: number | null,
+  memberNo?: string | null
 ) => {
   const tgl = endDate ? formatTanggal(endDate) : '-'
   const sisa = daysLeft ?? 0
@@ -45,8 +46,10 @@ export const generateWALink = (
     }
   }
 
+  const nameWithNo = memberNo ? `${name} #${memberNo}` : name
+
   const pesan = encodeURIComponent(
-    `Halo Kak ${name},\n\n${statusMsg}\n\nInfo perpanjangan hubungi kami:\nTelp: 0857-0767-8485\nLokasi: *Banjarsari, Kb. Dalem Kidul Kec. Prambanan, Klaten, Jawa Tengah, Indonesia 57454*\n\n*LINEUP GYM PRAMBANAN* - Be Strong Be Healthy!`
+    `Halo Kak ${nameWithNo},\n\n${statusMsg}\n\nInfo perpanjangan hubungi kami:\nTelp: 0857-0767-8485\nLokasi: *Banjarsari, Kb. Dalem Kidul Kec. Prambanan, Klaten, Jawa Tengah, Indonesia 57454*\n\n*LINEUP GYM PRAMBANAN* - Be Strong Be Healthy!`
   )
   const cleanPhone = phone.replace(/[^0-9]/g, '').replace(/^0/, '62')
   return `https://wa.me/${cleanPhone}?text=${pesan}`
@@ -74,6 +77,7 @@ export const hitungEndDate = (startDate: Date | string, durationDays: number): D
 export type ReceiptData = {
   memberName: string
   memberPhone: string
+  memberNo?: string | null
   gymPackageName?: string
   gymEndDate?: string
   ptPackageName?: string
@@ -110,8 +114,10 @@ export const generateReceiptWALink = (data: ReceiptData) => {
     detailPaket = '- (Tidak ada paket)\n'
   }
 
+  const nameWithNo = data.memberNo ? `${data.memberName} #${data.memberNo}` : data.memberName
+
   const pesan = encodeURIComponent(
-    `*KWITANSI PEMBAYARAN*\n*LINEUP GYM PRAMBANAN*\nNo: ${trxId}\n\nTerima kasih Kak *${data.memberName}*!\nPembayaran ${tipeLabel.toLowerCase()} telah kami terima.\n\n*Detail Paket:*\n${detailPaket}\n*Detail Pembayaran:*\n- Total: ${formatRupiah(data.totalAmount)}\n- Metode: ${metodeLabel}\n- Tanggal: ${tanggalBayar}, ${jam} WIB\n- Jenis: ${tipeLabel}\n\nTetap semangat latihannya!\nJika ada pertanyaan, silakan balas pesan ini.\n\n*LINEUP GYM PRAMBANAN*\nBe Strong Be Healthy!`
+    `*KWITANSI PEMBAYARAN*\n*LINEUP GYM PRAMBANAN*\nNo: ${trxId}\n\nTerima kasih Kak *${nameWithNo}*!\nPembayaran ${tipeLabel.toLowerCase()} telah kami terima.\n\n*Detail Paket:*\n${detailPaket}\n*Detail Pembayaran:*\n- Total: ${formatRupiah(data.totalAmount)}\n- Metode: ${metodeLabel}\n- Tanggal: ${tanggalBayar}, ${jam} WIB\n- Jenis: ${tipeLabel}\n\nTetap semangat latihannya!\nJika ada pertanyaan, silakan balas pesan ini.\n\n*LINEUP GYM PRAMBANAN*\nBe Strong Be Healthy!`
   )
 
   const cleanPhone = data.memberPhone.replace(/[^0-9]/g, '').replace(/^0/, '62')

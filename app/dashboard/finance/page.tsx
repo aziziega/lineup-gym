@@ -108,9 +108,15 @@ export default function FinancePage() {
       .reduce((sum, r) => sum + Number(r.total), 0)
   }, [monthlyRevenue])
 
-  const avgPerTx = currentMonth && currentMonth.count > 0
-    ? currentMonth.total / currentMonth.count
-    : 0
+  const dailyRevenue = useMemo(() => {
+    const list = payments || []
+    const todayStr = new Date().toLocaleDateString('sv-SE')
+    const targetDate = isAdmin ? selectedDate : todayStr
+
+    return list
+      .filter((p: any) => p.paid_at?.split('T')[0] === targetDate)
+      .reduce((sum, p) => sum + Number(p.amount), 0)
+  }, [payments, selectedDate, isAdmin])
 
   const netProfit = (currentMonth?.total || 0) - (currentMonthExp?.total || 0)
 
@@ -367,7 +373,7 @@ export default function FinancePage() {
           <MetricCard label="Revenue Bulan Ini" value={formatRupiah(currentMonth?.total ?? 0)} icon={Wallet} accent="neon" />
           <MetricCard label="Pengeluaran Bulan Ini" value={formatRupiah(currentMonthExp?.total ?? 0)} icon={Receipt} accent="red" />
           <MetricCard label="Profit Bersih (Net)" value={formatRupiah(netProfit)} icon={TrendingUp} accent="neon" />
-          <MetricCard label="Rata-rata / Transaksi" value={formatRupiah(avgPerTx)} icon={Calculator} accent="muted" />
+          <MetricCard label="Revenue Harian" value={formatRupiah(dailyRevenue)} icon={Calculator} accent="muted" />
         </div>
       )}
 
