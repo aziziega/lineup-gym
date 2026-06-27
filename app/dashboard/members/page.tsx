@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import NativeSelect from '@/components/dashboard/NativeSelect'
 import PackageCombobox from '@/components/dashboard/PackageCombobox'
-import { Search, Plus, Edit2, Trash2, CheckCircle2, X, Download, RotateCcw, ShieldAlert, Loader2, ArrowLeft, MessageSquare } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, CheckCircle2, X, Download, RotateCcw, UserCheck, ShieldAlert, Loader2, ArrowLeft, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { GYM_ID } from '@/lib/constants'
 import type { ActiveSubscriptionView, Membership } from '@/lib/types'
@@ -142,6 +142,9 @@ function MembersContent() {
 
   const [cancelPTOpen, setCancelPTOpen] = useState(false)
   const [cancelPTData, setCancelPTData] = useState<{ memberId: string; ptSubId: string; memberName: string } | null>(null)
+  // 'downgrade' = sesi habis (0), pindah ke reguler tanpa hapus uang
+  // 'force'     = sesi masih ada (>0), batalkan + hapus uang
+  const [cancelPTMode, setCancelPTMode] = useState<'downgrade' | 'force'>('downgrade')
 
   const [cancelRenewOpen, setCancelRenewOpen] = useState(false)
   const [cancelRenewData, setCancelRenewData] = useState<{ memberId: string; subId: string; memberName: string } | null>(null)
@@ -519,13 +522,38 @@ function MembersContent() {
     }
   }
 
-  // Fitur Batalkan PT & Hapus Uangnya (Sudah Pakai Modal)
+  // Handler 1: Pindahkan ke Reguler — sesi sudah habis (0), pendapatan TIDAK dihapus
   const handleCancelPT = async () => {
+    if (!cancelPTData) return
+    const { ptSubId, memberName } = cancelPTData
+
+    try {
+      // Hanya hapus subscription PT — data pembayaran & jadwal PT tidak diubah
+      const { error } = await supabase
+        .from('subscriptions')
+        .delete()
+        .eq('id', ptSubId)
+
+      if (error) throw error
+
+      // Refresh data member saja, keuangan tidak perlu di-refresh
+      await queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
+
+      setCancelPTOpen(false)
+      toast.success(`${memberName} berhasil dipindahkan ke Member Reguler. Badge PT telah dihapus.`)
+    } catch (error: any) {
+      console.error(error)
+      toast.error('Gagal memindahkan member: ' + error.message)
+    }
+  }
+
+  // Handler 2: Batalkan Paksa — sesi masih ada (>0), subscription + pembayaran dihapus
+  const handleForceCancelPT = async () => {
     if (!cancelPTData) return
     const { memberId, ptSubId, memberName } = cancelPTData
 
     try {
-      // 1. Ambil detail subscription PT yang mau dihapus terlebih dahulu
+      // 1. Ambil detail subscription PT untuk cari nama membership-nya
       const { data: ptSub, error: subFetchError } = await supabase
         .from('subscriptions')
         .select('id, membership_id, memberships(name)')
@@ -540,7 +568,7 @@ function MembersContent() {
           : (ptSub.memberships as any).name)
         : null
 
-      // 2. Cari transaksi pembayaran dari member ini yang spesifik untuk paket PT tersebut
+      // 2. Cari transaksi pembayaran PT yang paling terakhir
       let latestPayment = null
       if (ptMembershipName) {
         const { data: matchedPayment, error: searchError } = await supabase
@@ -558,32 +586,31 @@ function MembersContent() {
 
       const promises = []
 
-      // Hapus paket PT-nya
+      // Hapus subscription PT
       promises.push(supabase.from('subscriptions').delete().eq('id', ptSubId))
 
-      // Hapus uangnya hanya jika ketemu transaksi pembayaran yang COCOK
+      // Hapus pembayaran jika ada yang cocok
       if (latestPayment) {
-        console.log('Menghapus transaksi PT:', latestPayment)
         promises.push(supabase.from('payments').delete().eq('id', latestPayment.id))
       }
 
       await Promise.all(promises)
 
-      // PAKSA REFRESH SEMUA DATA KEUANGAN
+      // Refresh semua data termasuk keuangan
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
         queryClient.invalidateQueries({ queryKey: ['payments'] }),
         queryClient.invalidateQueries({ queryKey: ['revenue-monthly'] }),
         queryClient.invalidateQueries({ queryKey: ['revenue-current-month'] }),
         queryClient.invalidateQueries({ queryKey: ['overview'] }),
-        queryClient.invalidateQueries({ queryKey: ['revenue-chart'] }), // Jika ada chart
+        queryClient.invalidateQueries({ queryKey: ['revenue-chart'] }),
       ])
 
       setCancelPTOpen(false)
       if (latestPayment) {
         toast.success(`Paket PT ${memberName} dibatalkan & uang senilai ${formatRupiah(latestPayment.amount)} telah dihapus dari laporan.`)
       } else {
-        toast.success(`Paket PT ${memberName} telah dihapus (Tidak ada data transaksi keuangan yang dihapus karena tidak ada pembayaran PT sebelumnya).`)
+        toast.success(`Paket PT ${memberName} telah dihapus (tidak ada transaksi pembayaran PT yang ditemukan).`)
       }
     } catch (error: any) {
       console.error(error)
@@ -1070,16 +1097,18 @@ function MembersContent() {
                           }`}>
                           🏋️ {m.pt_membership_name} · {m.pt_remaining_sessions ?? 0}/{m.pt_total_sessions ?? 0} sesi
 
-                          {/* Tombol Batal PT */}
+                          {/* Tombol X pada badge PT — validasi sesi sebelum buka modal */}
                           {m.pt_subscription_id && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const mode = (m.pt_remaining_sessions ?? 0) <= 0 ? 'downgrade' : 'force';
+                                setCancelPTMode(mode);
                                 setCancelPTData({ memberId: m.member_id, ptSubId: m.pt_subscription_id!, memberName: m.full_name });
                                 setCancelPTOpen(true);
                               }}
                               className="ml-1 hover:text-red-500 transition-colors"
-                              title="Batalkan Paket PT & Hapus Uangnya"
+                              title={(m.pt_remaining_sessions ?? 0) <= 0 ? 'Pindahkan ke Member Reguler' : 'Batalkan Paket PT & Hapus Uangnya'}
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -1427,29 +1456,74 @@ function MembersContent() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Modal Konfirmasi Batal PT */}
+      {/* Modal Konfirmasi PT — konten & aksi berbeda berdasarkan sisa sesi */}
       <AlertDialog open={cancelPTOpen} onOpenChange={setCancelPTOpen}>
         <AlertDialogContent className="border-border bg-card text-foreground">
-          <AlertDialogHeader>
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 mb-4 mx-auto">
-              <ShieldAlert className="h-6 w-6 text-red-500" />
-            </div>
-            <AlertDialogTitle className="text-center">Batalkan Paket PT?</AlertDialogTitle>
-            <AlertDialogDescription className="text-center text-muted-foreground">
-              Yakin ingin membatalkan paket PT untuk <span className="font-bold text-foreground">{cancelPTData?.memberName}</span>?
-              <br /><br />
-              Tindakan ini akan <span className="text-red-400 font-medium">menghapus paket PT</span> dan <span className="text-red-400 font-medium">MENGURANGI pendapatan</span> di Laporan Keuangan secara otomatis.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border text-muted-foreground">Kembali</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCancelPT}
-              className="bg-red-500 text-white hover:bg-red-600 font-bold"
-            >
-              Ya, Batalkan PT & Uangnya
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {cancelPTMode === 'downgrade' ? (
+            /* ── MODE: Sesi habis (0) → Pindahkan ke Reguler ─────────────────── */
+            <>
+              <AlertDialogHeader>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/10 mb-4 mx-auto">
+                  <UserCheck className="h-6 w-6 text-blue-400" />
+                </div>
+                <AlertDialogTitle className="text-center">Pindahkan ke Member Reguler?</AlertDialogTitle>
+                <AlertDialogDescription className="text-center text-muted-foreground">
+                  Badge{' '}
+                  <span className="font-semibold text-blue-400">PERSONAL TRAINER</span>{' '}
+                  untuk{' '}
+                  <span className="font-bold text-foreground">{cancelPTData?.memberName}</span>{' '}
+                  akan dihapus dan member dipindahkan ke kategori Reguler.
+                </AlertDialogDescription>
+                <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-left">
+                  <p className="text-[11px] text-amber-400 font-medium">
+                    ⚠️ Pastikan sesi PT sudah <span className="font-bold">habis (0 sesi)</span> sebelum melakukan ini.
+                  </p>
+                </div>
+                <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-left">
+                  <p className="text-[11px] text-emerald-400 font-medium">
+                    ✅ Pendapatan dari paket PT <span className="font-bold">tidak akan berubah</span>. Jadwal PT yang sudah ditetapkan juga tetap tersimpan.
+                  </p>
+                </div>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-border text-muted-foreground">Kembali</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleCancelPT}
+                  className="bg-blue-600 text-white hover:bg-blue-700 font-bold"
+                >
+                  Ya, Pindahkan ke Reguler
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            /* ── MODE: Sesi masih ada (>0) → Batalkan + Hapus Uang ────────────── */
+            <>
+              <AlertDialogHeader>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 mb-4 mx-auto">
+                  <ShieldAlert className="h-6 w-6 text-red-500" />
+                </div>
+                <AlertDialogTitle className="text-center">Batalkan Paket PT?</AlertDialogTitle>
+                <AlertDialogDescription className="text-center text-muted-foreground">
+                  Yakin ingin membatalkan paket PT untuk{' '}
+                  <span className="font-bold text-foreground">{cancelPTData?.memberName}</span>?
+                </AlertDialogDescription>
+                <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-left">
+                  <p className="text-[11px] text-red-400 font-medium">
+                    ⚠️ Member masih memiliki sesi PT yang tersisa. Tindakan ini akan <span className="font-bold">menghapus paket PT</span> dan <span className="font-bold">MENGURANGI pendapatan</span> di Laporan Keuangan secara otomatis.
+                  </p>
+                </div>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-border text-muted-foreground">Kembali</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleForceCancelPT}
+                  className="bg-red-500 text-white hover:bg-red-600 font-bold"
+                >
+                  Ya, Batalkan PT & Uangnya
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </div>

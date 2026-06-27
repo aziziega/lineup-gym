@@ -64,7 +64,7 @@ export default function Stats() {
 
   const statsData = [
     { value: '50+', label: 'Alat Premium & Modern' },
-    { value: '450+', label: 'Member Terdaftar' },
+    { value: '500+', label: 'Member Terdaftar' },
     { value: '06.00-21.00 WIB', label: 'Jam Operasional' },
   ]
 
