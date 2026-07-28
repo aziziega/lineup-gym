@@ -49,13 +49,20 @@ function MembersContent() {
   const supabase = createClient()
   const queryClient = useQueryClient()
 
-  // Realtime subscription agar data visitor baru langsung muncul (LIVE)
+  // Realtime subscription agar data member & log kunjungan baru langsung muncul (LIVE)
   useEffect(() => {
     const channel = supabase
       .channel('members-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'members' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance_logs' },
         () => {
           queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
         }
@@ -717,7 +724,7 @@ function MembersContent() {
 
   const exportExcel = () => {
     const rows = [
-      ['Nomer Member', 'Nama', 'Telepon', 'Paket', 'Mulai', 'Expired', 'Status'],
+      ['Nomer Member', 'Nama', 'Telepon', 'Paket', 'Mulai', 'Expired', 'Total Kunjungan', 'Status'],
       ...(filtered || []).map((m) => [
         m.member_no ?? '',
         m.full_name,
@@ -725,6 +732,7 @@ function MembersContent() {
         m.membership_name,
         m.start_date,
         m.end_date,
+        `${m.attendance_count ?? 0}x`,
         m.status,
       ]),
     ]
@@ -1083,7 +1091,7 @@ function MembersContent() {
                           return <span className="text-[#00FF85]">Sisa {days} hari</span>
                         })()}
                       </span>
-                      <span className="text-[#00E5FF] font-bold">Kunjungan: {m.attendance_count}x</span>
+                      <span className="text-[#00E5FF] font-bold">Total Kunjungan: {m.attendance_count ?? 0}x</span>
                     </div>
                     {m.pt_membership_name && (
                       <div className="mt-1 flex items-center gap-1.5">
@@ -1168,20 +1176,30 @@ function MembersContent() {
                     <AlertDialogTrigger className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), "h-7 flex-1 text-[11px] text-red-400 hover:bg-red-500/10")}>
                       <Trash2 className="mr-1 h-3 w-3" /> Hapus
                     </AlertDialogTrigger>
-                    <AlertDialogContent className="border-border bg-card text-foreground">
+                    <AlertDialogContent className="border-border bg-card text-foreground sm:max-w-md">
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Hapus {m.full_name}?</AlertDialogTitle>
-                        <AlertDialogDescription className="text-muted-foreground">
-                          Data member tidak bisa dikembalikan setelah dihapus.
+                        <AlertDialogTitle className="flex items-center gap-2 text-red-500">
+                          <ShieldAlert className="h-5 w-5" /> Hapus Member {m.full_name}?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="space-y-2 text-xs text-muted-foreground text-left pt-2">
+                          <span className="block font-semibold text-foreground">Tindakan ini bersifat permanen dan akan menghapus:</span>
+                          <span className="block pl-2 text-muted-foreground">
+                            • Total <strong className="text-foreground">Riwayat Kunjungan ({m.attendance_count ?? 0}x)</strong> member.<br />
+                            • Riwayat status <strong className="text-foreground">Membership & Sesi PT</strong>.<br />
+                            • Catatan <strong className="text-foreground">Riwayat Transaksi Pembayaran</strong> member.
+                          </span>
+                          <span className="block text-amber-400 bg-amber-500/10 p-2 rounded border border-amber-500/20 text-[11px] mt-2">
+                            ⚠️ <strong>Catatan Penting:</strong> Jika profil member ini dibuat ulang nanti, riwayat kunjungan tidak akan kembali dan akan dimulai dari 0x karena ID member baru akan berbeda.
+                          </span>
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel className="border-border text-muted-foreground">Batal</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => handleDelete(m.member_id, m.full_name)}
-                          className="bg-red-500 text-foreground hover:bg-red-600"
+                          className="bg-red-500 text-foreground hover:bg-red-600 font-bold"
                         >
-                          Hapus
+                          Ya, Hapus Permanen
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>

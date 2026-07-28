@@ -32,47 +32,43 @@ export function useMembersWithSubscription() {
 
       if (!members || members.length === 0) return []
 
-      // OPTIMASI: Hitung "Per Masa Aktif Paket" (Per Subscription)
-      // Cari tanggal paling lama dari start_date atau pt_start_date yang aktif saat ini
-      let oldestDate = new Date().toISOString()
-      members.forEach((m: any) => {
-        const d = m.start_date || m.pt_start_date
-        if (d && d < oldestDate) oldestDate = d
-      })
+      // Fetch ALL attendance logs with pagination (Supabase caps at 1000 rows per request)
+      const PAGE_SIZE = 1000
+      let allAttendanceLogs: { member_id: string }[] = []
+      let from = 0
+      let hasMore = true
 
-      // Ambil absensi HANYA dari tanggal tertua tersebut ke atas (Sangat menghemat Bandwidth/Egress Supabase)
-      const { data: attendanceLogs, error: attError } = await supabase
-        .from('attendance_logs')
-        .select('member_id, check_in_at')
-        .gte('check_in_at', oldestDate)
-      
-      if (attError) throw attError
+      while (hasMore) {
+        const { data: batch, error: batchError } = await supabase
+          .from('attendance_logs')
+          .select('member_id')
+          .eq('gym_id', GYM_ID)
+          .range(from, from + PAGE_SIZE - 1)
 
-      // Kelompokkan log per member_id untuk performa JS yang lebih cepat
-      const logsByMember: Record<string, string[]> = {}
-      attendanceLogs?.forEach((log: any) => {
-        if (!logsByMember[log.member_id]) {
-          logsByMember[log.member_id] = []
+        if (batchError) throw batchError
+
+        if (batch && batch.length > 0) {
+          allAttendanceLogs = allAttendanceLogs.concat(batch)
+          from += PAGE_SIZE
+          hasMore = batch.length === PAGE_SIZE
+        } else {
+          hasMore = false
         }
-        logsByMember[log.member_id].push(log.check_in_at)
+      }
+
+      // Group & count total check-ins per member_id
+      const logsCountByMember: Record<string, number> = {}
+      allAttendanceLogs.forEach((log) => {
+        if (log.member_id) {
+          logsCountByMember[log.member_id] = (logsCountByMember[log.member_id] || 0) + 1
+        }
       })
 
       const membersWithVisits = members.map((m: any) => {
-        // Tentukan batas tanggal hitung (mulai paket saat ini)
-        const effectiveStartDate = m.start_date || m.pt_start_date || '1970-01-01'
-        const memberLogs = logsByMember[m.member_id] || []
-        
-        // Hitung hanya kedatangan yang terjadi SETELAH paket dimulai
-        let count = 0
-        for (const checkInAt of memberLogs) {
-          if (checkInAt >= effectiveStartDate) {
-            count++
-          }
-        }
-
         return {
           ...m,
-          attendance_count: count
+          attendance_count: logsCountByMember[m.member_id] || 0,
+          total_attendance_count: logsCountByMember[m.member_id] || 0,
         }
       })
 

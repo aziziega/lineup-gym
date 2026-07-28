@@ -134,6 +134,7 @@ export interface ActiveSubscriptionView {
   pt_total_sessions: number | null;
   pt_status: 'active' | 'expired' | 'inactive';
   attendance_count?: number;
+  total_attendance_count?: number;
 }
 
 export interface Expense {

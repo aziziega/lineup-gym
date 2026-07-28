@@ -88,6 +88,7 @@ export function useCheckIn() {
       queryClient.invalidateQueries({ queryKey: ['attendance-today'] })
       queryClient.invalidateQueries({ queryKey: ['attendance-today-count'] })
       queryClient.invalidateQueries({ queryKey: ['overview'] })
+      queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
     },
   })
 }
