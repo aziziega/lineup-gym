@@ -15,7 +15,7 @@ WITH latest_gym AS (
 ),
 latest_pt AS (
     SELECT DISTINCT ON (s.member_id) 
-        s.id AS pt_subscription_id, s.member_id, s.start_date AS pt_start_date, s.end_date AS pt_end_date, s.status AS pt_sub_status, s.remaining_sessions,
+        s.id AS pt_subscription_id, s.member_id, s.start_date AS pt_start_date, s.end_date AS pt_end_date, s.status AS pt_sub_status, s.remaining_sessions, s.total_sessions_override,
         m.name AS pt_membership_name, m.price AS pt_price, m.total_sessions
     FROM subscriptions s
     JOIN memberships m ON s.membership_id = m.id
@@ -66,6 +66,7 @@ SELECT
     p.pt_end_date,
     p.remaining_sessions AS pt_remaining_sessions,
     p.total_sessions AS pt_total_sessions,
+    p.total_sessions_override,
     
     -- PT Status Logic
     CASE

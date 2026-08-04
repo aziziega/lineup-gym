@@ -381,14 +381,23 @@ function MembersContent() {
       // Prepare receipt data
       const totalAmount = (pkg?.price || 0) + (ptPkg?.price || 0)
       if (totalAmount > 0) {
+        const isPtTopUp = !!(
+          ptPkg &&
+          renewMember.pt_subscription_id &&
+          (renewMember.pt_remaining_sessions ?? 0) > 0
+        )
+        const postMergePtSessions = isPtTopUp
+          ? (renewMember.pt_remaining_sessions ?? 0) + (ptPkg?.total_sessions ?? 0)
+          : (ptPkg?.total_sessions ?? undefined)
+
         setReceiptData({
           memberName: renewMember.full_name,
           memberPhone: renewMember.phone,
           memberNo: renewMemberNo?.trim() || renewMember.member_no || null,
           gymPackageName: pkg?.name,
           gymEndDate: pkg ? endDate : undefined,
-          ptPackageName: ptPkg?.name,
-          ptSessions: ptPkg?.total_sessions ?? undefined,
+          ptPackageName: ptPkg ? (isPtTopUp ? `${ptPkg.name} (Top-Up)` : ptPkg.name) : undefined,
+          ptSessions: postMergePtSessions,
           totalAmount,
           paymentMethod: renewPayMethod,
           transactionType: 'renew',
@@ -554,56 +563,94 @@ function MembersContent() {
     }
   }
 
-  // Handler 2: Batalkan Paksa — sesi masih ada (>0), subscription + pembayaran dihapus
+  // Handler 2: Batalkan PT — mendukung Rollback Top-Up (bertahap) vs Batal Total Paket
   const handleForceCancelPT = async () => {
     if (!cancelPTData) return
     const { memberId, ptSubId, memberName } = cancelPTData
 
     try {
-      // 1. Ambil detail subscription PT untuk cari nama membership-nya
+      // 1. Ambil detail subscription PT (termasuk remaining_sessions & total_sessions_override)
       const { data: ptSub, error: subFetchError } = await supabase
         .from('subscriptions')
-        .select('id, membership_id, memberships(name)')
+        .select('id, remaining_sessions, total_sessions_override, membership_id, memberships(name, total_sessions)')
         .eq('id', ptSubId)
         .single()
 
       if (subFetchError) throw subFetchError
 
-      const ptMembershipName = ptSub?.memberships
-        ? (Array.isArray(ptSub.memberships)
-          ? ptSub.memberships[0]?.name
-          : (ptSub.memberships as any).name)
-        : null
+      const baseTotalSessions = (ptSub?.memberships as any)?.total_sessions || 0
 
-      // 2. Cari transaksi pembayaran PT yang paling terakhir
-      let latestPayment = null
-      if (ptMembershipName) {
-        const { data: matchedPayment, error: searchError } = await supabase
-          .from('payments')
-          .select('id, notes, membership_type, amount')
-          .eq('member_id', memberId)
-          .eq('membership_type', ptMembershipName)
-          .order('paid_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
+      // 2. Cari transaksi pembayaran PT yang paling terakhir dari member ini
+      const { data: rawPayments, error: searchError } = await supabase
+        .from('payments')
+        .select('id, notes, membership_type, amount, paid_at')
+        .eq('member_id', memberId)
+        .order('paid_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(10)
 
-        if (searchError) throw searchError
-        latestPayment = matchedPayment
-      }
+      if (searchError) throw searchError
+
+      const ptPayments = (rawPayments || []).filter(p =>
+        p.notes?.includes('PT') ||
+        p.notes?.includes('Top-Up') ||
+        p.membership_type?.toUpperCase().includes('PERSONAL TRAINER') ||
+        p.membership_type?.toUpperCase().includes('PT')
+      )
+
+      // Pisahkan mana yang Top-Up
+      const topUpPayments = ptPayments.filter(p => p.notes === 'Top-Up Sesi PT')
+
+      // Deteksi apakah ada Top-Up yang bisa di-rollback
+      const hasOverride = ptSub.total_sessions_override !== null && ptSub.total_sessions_override > baseTotalSessions
+      const isRollbackTopUp = topUpPayments.length > 0 || hasOverride
 
       const promises = []
 
-      // Hapus subscription PT
-      promises.push(supabase.from('subscriptions').delete().eq('id', ptSubId))
+      if (isRollbackTopUp) {
+        // ── MODE ROLLBACK SEMUA TOP-UP: Sesi dikurangi balik ke paket awal (Base) ──
+        // Kita tidak perlu menebak paket per transaksi, cukup kembalikan ke baseTotalSessions!
+        const totalTopUpSessions = (ptSub.total_sessions_override || baseTotalSessions) - baseTotalSessions
+        const currentRemaining = ptSub.remaining_sessions || 0
+        
+        // Kembalikan remaining dengan mengurangi total sesi top-up yang pernah ditambahkan
+        const newRemaining = Math.max(0, currentRemaining - totalTopUpSessions)
 
-      // Hapus pembayaran jika ada yang cocok
-      if (latestPayment) {
-        promises.push(supabase.from('payments').delete().eq('id', latestPayment.id))
+        promises.push(
+          supabase
+            .from('subscriptions')
+            .update({
+              remaining_sessions: newRemaining,
+              total_sessions_override: null, // Reset override
+            })
+            .eq('id', ptSubId)
+        )
+
+        // Hapus SEMUA payment Top-Up sekaligus
+        if (topUpPayments.length > 0) {
+          promises.push(
+            supabase.from('payments').delete().in('id', topUpPayments.map(p => p.id))
+          )
+        }
+      } else {
+        // ── MODE BATAL KESELURUHAN (BASE PT) ──
+        promises.push(
+          supabase
+            .from('subscriptions')
+            .delete()
+            .eq('id', ptSubId)
+        )
+        // Hapus SEMUA pembayaran terkait PT ini
+        const paymentIds = ptPayments.map(p => p.id)
+        if (paymentIds.length > 0) {
+          promises.push(
+            supabase.from('payments').delete().in('id', paymentIds)
+          )
+        }
       }
 
       await Promise.all(promises)
 
-      // Refresh semua data termasuk keuangan
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
         queryClient.invalidateQueries({ queryKey: ['payments'] }),
@@ -614,10 +661,15 @@ function MembersContent() {
       ])
 
       setCancelPTOpen(false)
-      if (latestPayment) {
-        toast.success(`Paket PT ${memberName} dibatalkan & uang senilai ${formatRupiah(latestPayment.amount)} telah dihapus dari laporan.`)
+
+      if (isRollbackTopUp) {
+        const totalTopUpAmount = topUpPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
+        toast.success(
+          `Semua Top-Up PT berhasil dibatalkan. Sesi kembali ke ${Math.max(0, (ptSub.remaining_sessions || 0) - ((ptSub.total_sessions_override || baseTotalSessions) - baseTotalSessions))}/${baseTotalSessions} & income ${formatRupiah(totalTopUpAmount)} telah dihapus dari laporan.`
+        )
       } else {
-        toast.success(`Paket PT ${memberName} telah dihapus (tidak ada transaksi pembayaran PT yang ditemukan).`)
+        const totalPtAmount = ptPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
+        toast.success(`Paket PT ${memberName} dibatalkan & uang senilai ${formatRupiah(totalPtAmount)} telah dihapus dari laporan.`)
       }
     } catch (error: any) {
       console.error(error)
@@ -1308,11 +1360,29 @@ function MembersContent() {
                       onValueChange={setRenewPtMembershipId}
                       placeholder="Pilih paket PT"
                     />
-                    {renewPtPkg && (
-                      <p className="mt-1 text-[10px] text-accent">
-                        {renewPtPkg.total_sessions} Sesi PT
-                      </p>
-                    )}
+                    {renewPtPkg && (() => {
+                      const hasActivePt = !!(
+                        renewMember?.pt_subscription_id &&
+                        (renewMember?.pt_remaining_sessions ?? 0) > 0
+                      )
+                      const currentRemaining = renewMember?.pt_remaining_sessions ?? 0
+                      const addedSessions = renewPtPkg.total_sessions ?? 0
+                      const newTotal = currentRemaining + addedSessions
+
+                      return hasActivePt ? (
+                        <div className="mt-1.5 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2.5 py-1.5">
+                          <p className="text-[11px] text-blue-400 font-medium leading-relaxed">
+                            🔄 <span className="font-bold">Top-Up Sesi:</span> Member masih memiliki{' '}
+                            <span className="font-bold text-foreground">{currentRemaining} sesi</span> tersisa. Sesi akan digabung → Total menjadi{' '}
+                            <span className="font-bold text-emerald-400">{newTotal} sesi</span>.
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-[10px] text-accent">
+                          {renewPtPkg.total_sessions} Sesi PT
+                        </p>
+                      )
+                    })()}
                   </div>
                 </div>
 

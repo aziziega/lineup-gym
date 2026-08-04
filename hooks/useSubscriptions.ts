@@ -95,35 +95,64 @@ export function useRenewSubscription() {
         if (payError) throw payError
       }
 
-      // Jika ada PT package, buat subscription + payment PT juga
+      // Jika ada PT package, buat/update subscription + payment PT
       if (ptPayment) {
-        // Nonaktifkan subscription PT lama
-        const { data: ptSubs } = await supabase
+        // Cek apakah ada subscription PT aktif dengan sisa sesi
+        const { data: existingPtSubs } = await supabase
           .from('subscriptions')
-          .select('id, memberships!inner(category)')
+          .select('id, remaining_sessions, total_sessions_override, memberships!inner(category, total_sessions)')
           .eq('member_id', memberId)
           .eq('status', 'active')
           .eq('memberships.category', 'pt')
 
-        if (ptSubs && ptSubs.length > 0) {
-          await supabase
+        const activePtSub = existingPtSubs?.[0]
+        const hasActivePt = !!(
+          activePtSub &&
+          activePtSub.remaining_sessions !== null &&
+          activePtSub.remaining_sessions > 0
+        )
+
+        if (hasActivePt) {
+          // ── MODE TOP-UP: Merge ke subscription yang sudah ada ──
+          const currentTotal =
+            activePtSub.total_sessions_override ??
+            (activePtSub.memberships as any)?.total_sessions ??
+            0
+          const newRemaining = (activePtSub.remaining_sessions || 0) + ptPayment.totalSessions
+          const newTotal = currentTotal + ptPayment.totalSessions
+
+          const { error: updateErr } = await supabase
             .from('subscriptions')
-            .update({ status: 'expired' })
-            .in('id', ptSubs.map((s: any) => s.id))
+            .update({
+              remaining_sessions: newRemaining,
+              total_sessions_override: newTotal,
+              end_date: '2099-12-31', // PT tidak ada expired
+            })
+            .eq('id', activePtSub.id)
+          if (updateErr) throw updateErr
+        } else {
+          // ── MODE BARU: Tidak ada PT aktif — nonaktifkan PT lama jika ada ──
+          if (existingPtSubs && existingPtSubs.length > 0) {
+            await supabase
+              .from('subscriptions')
+              .update({ status: 'expired' })
+              .in('id', existingPtSubs.map((s: any) => s.id))
+          }
+
+          const { error: ptSubError } = await supabase
+            .from('subscriptions')
+            .insert({
+              member_id: memberId,
+              membership_id: ptPayment.membershipId,
+              start_date: ptPayment.startDate,
+              end_date: '2099-12-31', // PT tidak ada expired
+              remaining_sessions: ptPayment.totalSessions,
+              status: 'active',
+            })
+          if (ptSubError) throw ptSubError
         }
 
-        const { error: ptSubError } = await supabase
-          .from('subscriptions')
-          .insert({
-            member_id: memberId,
-            membership_id: ptPayment.membershipId,
-            start_date: ptPayment.startDate,
-            end_date: ptPayment.endDate,
-            remaining_sessions: ptPayment.totalSessions,
-            status: 'active',
-          })
-        if (ptSubError) throw ptSubError
-
+        // Catat pembayaran (Top-Up vs Baru)
         const { error: ptPayError } = await supabase
           .from('payments')
           .insert({
@@ -132,7 +161,7 @@ export function useRenewSubscription() {
             amount: ptPayment.amount,
             payment_method: paymentMethod,
             membership_type: ptPayment.membershipType,
-            notes: 'Pembayaran Paket PT (Perpanjangan)',
+            notes: hasActivePt ? 'Top-Up Sesi PT' : 'Pembayaran Paket PT (Perpanjangan)',
             paid_at: ptPayment.startDate,
           })
         if (ptPayError) throw ptPayError
