@@ -273,7 +273,7 @@ WITH latest_gym AS (
     FROM public.subscriptions s
     JOIN public.memberships m ON s.membership_id = m.id
     WHERE m.category = 'gym'::public.membership_category_enum
-    ORDER BY s.member_id, s.end_date DESC
+    ORDER BY s.member_id, CASE WHEN s.status = 'active' THEN 1 ELSE 2 END, s.end_date DESC
 ), 
 latest_pt AS (
     SELECT DISTINCT ON (s.member_id)
@@ -290,7 +290,7 @@ latest_pt AS (
     FROM public.subscriptions s
     JOIN public.memberships m ON s.membership_id = m.id
     WHERE m.category = 'pt'::public.membership_category_enum
-    ORDER BY s.member_id, s.end_date DESC
+    ORDER BY s.member_id, CASE WHEN s.status = 'active' THEN 1 ELSE 2 END, s.end_date DESC
 )
 SELECT 
     m.id AS member_id,

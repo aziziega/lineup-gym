@@ -39,6 +39,8 @@ export async function kioskCheckinLookup(searchVal: string) {
     `)
     .eq('gym_id', GYM_ID)
     .or(`member_no.eq.${searchVal},phone.eq.${searchVal}`)
+    .order('status', { ascending: true })
+    .order('end_date', { ascending: false })
     .limit(1)
     .maybeSingle()
 
