@@ -58,19 +58,16 @@ export default function TodayPTSchedule() {
                   </span>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center">
                 {session.is_completed ? (
-                  <span className="inline-flex items-center gap-1 rounded bg-[#25D366]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#25D366]">
+                  <span className="inline-flex items-center gap-1 rounded bg-[#25D366]/10 px-2 py-0.5 text-[10px] font-semibold text-[#25D366]">
                     Selesai
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
                     <User className="h-3 w-3" /> PT
                   </span>
                 )}
-                <span className={`text-[10px] ${session.is_completed ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
-                  Sesi {((session.total_sessions || 0) - (session.remaining_sessions || 0)) + 1}/{session.total_sessions}
-                </span>
               </div>
             </div>
           ))}

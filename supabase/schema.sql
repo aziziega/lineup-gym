@@ -329,7 +329,7 @@ SELECT
     p.pt_start_date,
     p.pt_end_date,
     p.remaining_sessions AS pt_remaining_sessions,
-    p.total_sessions AS pt_total_sessions,
+    COALESCE(p.total_sessions_override, p.total_sessions) AS pt_total_sessions,
     p.total_sessions_override,
     CASE
         WHEN p.pt_subscription_id IS NULL THEN 'inactive'

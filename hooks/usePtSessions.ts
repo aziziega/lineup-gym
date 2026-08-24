@@ -34,6 +34,7 @@ export function usePtSessionsByWeek(startDate: string, endDate: string) {
           members(full_name, phone),
           subscriptions(
             remaining_sessions,
+            total_sessions_override,
             memberships(name, total_sessions)
           )
         `)
@@ -59,7 +60,7 @@ export function usePtSessionsByWeek(startDate: string, endDate: string) {
         member_phone: s.members?.phone,
         pt_membership_name: s.subscriptions?.memberships?.name,
         remaining_sessions: s.subscriptions?.remaining_sessions,
-        total_sessions: s.subscriptions?.memberships?.total_sessions,
+        total_sessions: s.subscriptions?.total_sessions_override ?? s.subscriptions?.memberships?.total_sessions,
       })) as PtSession[]
     },
     refetchInterval: 10000, // Auto-refresh agar sesi yang selesai langsung hilang dari grid
