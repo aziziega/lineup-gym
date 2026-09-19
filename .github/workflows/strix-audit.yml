@@ -1,0 +1,68 @@
+name: Strix AI Security Audit
+
+on:
+  workflow_dispatch: # Memungkinkan eksekusi manual dari tab Actions
+  pull_request:
+    branches: [ "main", "master" ] # Hanya berjalan otomatis saat PR ke branch main/master (menghemat token)
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    name: Run Strix AI Pentest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Wajib agar Strix bisa melihat seluruh history untuk diff-scoping
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Install Strix (package bernama 'strix-agent') menggunakan pip
+      - name: Install Strix
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install strix-agent
+          
+      - name: Run Strix Security Scan
+        env:
+          # Menggunakan model dari Ollama Cloud dengan prefix openai/ untuk custom provider
+          STRIX_LLM: "openai/glm-5.3-flash:cloud" 
+          # Tambahkan base URL layaknya config opencode
+          OPENAI_API_BASE: "https://ollama.com/v1"
+          # Gunakan secret yang sudah kamu siapkan, petakan ke OPENAI_API_KEY agar terbaca
+          OPENAI_API_KEY: ${{ secrets.AI_PROVIDER_API_KEY }}
+        run: |
+          echo "Memulai audit keamanan berbasis AI (Strix)..."
+          # Mengeksekusi via module python, tambahkan --scan-mode quick untuk mempercepat proses
+          python -m strix.interface.main -n --target . --scan-mode quick
+
+      - name: Upload Strix Report Artifacts (ZIP)
+        if: always() # Memastikan artifact tetap di-upload meskipun ada celah keamanan (exit code non-zero)
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-scan-results
+          path: strix_runs/
+
+      - name: Filter Invalid SARIF Findings
+        if: always()
+        run: |
+          for f in $(find strix_runs -name "*.sarif"); do
+            echo "Membersihkan data SARIF di $f..."
+            jq 'del(.runs[].results[]? | select(.locations == null or .locations[0].physicalLocation == null))' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+          done
+
+      - name: Upload SARIF to GitHub Code Scanning (Untuk PR Comment)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: strix_runs/
