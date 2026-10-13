@@ -142,3 +142,72 @@ export const calculateDaysRemaining = (endDate: string | Date | null | undefined
   
   return diffDays
 }
+
+/**
+ * Kompresi gambar client-side menggunakan HTML5 Canvas ke format WebP.
+ * Menurunkan file kamera HP (4MB-12MB) menjadi ~80KB-120KB
+ * dengan kualitas visual tetap prima untuk foto progress tubuh.
+ */
+export async function compressImageToWebp(
+  file: File,
+  maxWidth = 1200,
+  quality = 0.72
+): Promise<File> {
+  if (typeof window === 'undefined' || !file.type.startsWith('image/')) {
+    return file
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        let width = img.width
+        let height = img.height
+
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width)
+            width = maxWidth
+          } else {
+            width = Math.round((width * maxWidth) / height)
+            height = maxWidth
+          }
+        }
+
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(file)
+          return
+        }
+
+        ctx.drawImage(img, 0, 0, width, height)
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file)
+              return
+            }
+            const fileName = file.name.replace(/\.[^/.]+$/, '') + '.webp'
+            const compressedFile = new File([blob], fileName, {
+              type: 'image/webp',
+              lastModified: Date.now(),
+            })
+            resolve(compressedFile)
+          },
+          'image/webp',
+          quality
+        )
+      }
+      img.onerror = () => resolve(file)
+      img.src = e.target?.result as string
+    }
+    reader.onerror = () => resolve(file)
+    reader.readAsDataURL(file)
+  })
+}

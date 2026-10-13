@@ -14,6 +14,16 @@ const nextConfig = {
         hostname: 'hjcavtketqqzpwepeori.supabase.co',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'rbvuirftchhgmhhmdmlv.supabase.co',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/**',
+      },
     ],
   },
   webpack: (config) => {

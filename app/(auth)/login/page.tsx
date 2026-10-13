@@ -3,12 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
-import { Loader2, Star, MapPin, Phone, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Star, MapPin, Phone, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { GYM_INFO } from '@/lib/constants'
+import { toast } from 'sonner'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -30,20 +32,33 @@ export default function LoginPage() {
     })
 
     if (error) {
-      setError(error.message === 'Invalid login credentials'
+      const errorMessage = error.message === 'Invalid login credentials'
         ? 'Email atau password salah. Silakan coba lagi.'
         : error.message
-      )
+      setError(errorMessage)
+      toast.error(errorMessage)
       setLoading(false)
       return
     }
 
+    toast.success('Selamat datang kembali! Mengalihkan ke dashboard...')
     router.push('/dashboard')
     router.refresh()
   }
 
   return (
     <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-4 py-8">
+      {/* Tombol Kembali ke Landing Page (Pojok Kiri Atas) */}
+      <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-20">
+        <Link
+          href="/"
+          className="group flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#1A1A1A]/80 px-3 py-1.5 text-xs font-medium text-[#888] backdrop-blur-sm transition-all hover:border-[#FF2A2A]/40 hover:bg-[#1A1A1A] hover:text-white"
+        >
+          <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
+          <span>Kembali ke Beranda</span>
+        </Link>
+      </div>
+
       {/* Background pattern */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -155,6 +170,16 @@ export default function LoginPage() {
                 'MASUK'
               )}
             </Button>
+
+            <div className="pt-2 text-center">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-1.5 text-xs text-[#666] transition-colors hover:text-[#FF2A2A]"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>Kembali ke Landing Page</span>
+              </Link>
+            </div>
           </form>
         </CardContent>
       </Card>
