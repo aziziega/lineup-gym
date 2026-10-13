@@ -2,11 +2,21 @@
 
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCreateBodyMetric, uploadProgressPhoto } from '@/hooks/usePtProgress'
-import { Scale, Camera, Loader2, X, Image as ImageIcon, CheckCircle2 } from 'lucide-react'
+import { Scale, Camera, Loader2, X, Image as ImageIcon, CheckCircle2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BodyMetricPhase } from '@/lib/types'
 
@@ -46,6 +56,7 @@ export function BodyMetricModal({
   const [photoBackFile, setPhotoBackFile] = useState<File | null>(null)
   const [photoBackPreview, setPhotoBackPreview] = useState<string | null>(null)
 
+  const [photoToDelete, setPhotoToDelete] = useState<'front' | 'side' | 'back' | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const createMetric = useCreateBodyMetric()
 
@@ -63,6 +74,23 @@ export function BodyMetricModal({
       setPreview(reader.result as string)
     }
     reader.readAsDataURL(file)
+  }
+
+  const handleConfirmDeletePhoto = () => {
+    if (photoToDelete === 'front') {
+      setPhotoFrontFile(null)
+      setPhotoFrontPreview(null)
+      toast.info('Foto Tampak Depan dibatalkan')
+    } else if (photoToDelete === 'side') {
+      setPhotoSideFile(null)
+      setPhotoSidePreview(null)
+      toast.info('Foto Tampak Samping dibatalkan')
+    } else if (photoToDelete === 'back') {
+      setPhotoBackFile(null)
+      setPhotoBackPreview(null)
+      toast.info('Foto Tampak Belakang dibatalkan')
+    }
+    setPhotoToDelete(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -137,7 +165,8 @@ export function BodyMetricModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -311,13 +340,11 @@ export function BodyMetricModal({
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setPhotoFrontFile(null)
-                          setPhotoFrontPreview(null)
-                        }}
-                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-red-500"
+                        onClick={() => setPhotoToDelete('front')}
+                        title="Hapus foto tampak depan"
+                        className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </>
                   ) : (
@@ -348,13 +375,11 @@ export function BodyMetricModal({
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setPhotoSideFile(null)
-                          setPhotoSidePreview(null)
-                        }}
-                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-red-500"
+                        onClick={() => setPhotoToDelete('side')}
+                        title="Hapus foto tampak samping"
+                        className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </>
                   ) : (
@@ -385,13 +410,11 @@ export function BodyMetricModal({
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setPhotoBackFile(null)
-                          setPhotoBackPreview(null)
-                        }}
-                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-red-500"
+                        onClick={() => setPhotoToDelete('back')}
+                        title="Hapus foto tampak belakang"
+                        className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </>
                   ) : (
@@ -453,5 +476,43 @@ export function BodyMetricModal({
         </form>
       </DialogContent>
     </Dialog>
+
+    {/* Modal Konfirmasi Hapus Foto Slot */}
+    <AlertDialog
+      open={!!photoToDelete}
+      onOpenChange={(open) => !open && setPhotoToDelete(null)}
+    >
+      <AlertDialogContent className="border-border bg-card text-foreground">
+        <AlertDialogHeader>
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 mb-2 mx-auto">
+            <Trash2 className="h-6 w-6 text-destructive" />
+          </div>
+          <AlertDialogTitle className="text-center font-heading text-lg">
+            Hapus Foto{' '}
+            {photoToDelete === 'front'
+              ? 'Tampak Depan'
+              : photoToDelete === 'side'
+              ? 'Tampak Samping'
+              : 'Tampak Belakang'}
+            ?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-center text-xs text-muted-foreground">
+            Foto yang baru Anda pilih akan dihapus dari form dan tidak disimpan.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex gap-2 sm:justify-center">
+          <AlertDialogCancel className="border-border text-muted-foreground hover:bg-muted">
+            Batal
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmDeletePhoto}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+          >
+            Ya, Hapus Foto
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

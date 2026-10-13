@@ -17,7 +17,9 @@ import {
   Award,
   CheckCircle2,
   Image as ImageIcon,
+  Download,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import type { PtProgressLogWithMember } from '@/hooks/usePtProgress'
 import type { MemberBodyMetric } from '@/lib/types'
 
@@ -121,17 +123,7 @@ export function ExportProgressPdfModal({
     })
   }
 
-  const handlePrintPdf = () => {
-    setIsPrinting(true)
-    const printWindow = window.open('', '_blank')
-
-    if (!printWindow) {
-      alert(
-        'Pop-up terblokir oleh browser. Harap izinkan pop-up untuk mencetak / menyimpan PDF.'
-      )
-      setIsPrinting(false)
-      return
-    }
+  const generateHtmlContent = () => {
 
     const day1Front = sanitizeImageUrl(day1Record?.photo_front_url)
     const finalFront = sanitizeImageUrl(dayFinalRecord?.photo_front_url)
@@ -704,6 +696,7 @@ export function ExportProgressPdfModal({
 
           <script>
             function waitForImagesAndPrint() {
+              document.title = ${JSON.stringify(pdfFileName)};
               var images = document.images;
               var total = images.length;
               if (total === 0) {
@@ -728,17 +721,48 @@ export function ExportProgressPdfModal({
             }
             window.addEventListener('load', waitForImagesAndPrint);
             // Fallback timeout
-            setTimeout(function() { window.print(); }, 2000);
+            setTimeout(function() { window.print(); }, 2500);
           </script>
         </body>
       </html>
     `
+    return htmlContent
+  }
 
-    printWindow.document.open()
-    printWindow.document.write(htmlContent)
-    printWindow.document.title = pdfFileName
-    printWindow.document.close()
+  const handlePrintPdf = () => {
+    setIsPrinting(true)
+    const html = generateHtmlContent()
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const blobUrl = URL.createObjectURL(blob)
+
+    const printWindow = window.open(blobUrl, '_blank')
+    if (!printWindow) {
+      alert(
+        'Pop-up terblokir oleh browser. Harap izinkan pop-up untuk mencetak / menyimpan PDF.'
+      )
+      setIsPrinting(false)
+      URL.revokeObjectURL(blobUrl)
+      return
+    }
+
+    setTimeout(() => {
+      URL.revokeObjectURL(blobUrl)
+    }, 60000)
     setIsPrinting(false)
+  }
+
+  const handleDownloadHtml = () => {
+    const html = generateHtmlContent()
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${pdfFileName}.html`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    toast.success(`Dokumen ${pdfFileName}.html siap diunduh!`)
   }
 
   return (
@@ -1068,7 +1092,7 @@ export function ExportProgressPdfModal({
             <span>Sertakan Galeri Foto Transformasi (Halaman 2)</span>
           </label>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
             <Button
               type="button"
               variant="outline"
@@ -1076,6 +1100,17 @@ export function ExportProgressPdfModal({
               className="border-border text-xs"
             >
               Tutup
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDownloadHtml}
+              className="border-border/80 text-xs gap-1.5 hover:bg-muted"
+              title="Unduh file laporan format HTML offline"
+            >
+              <Download className="h-4 w-4 text-muted-foreground" />
+              <span>Unduh File (.html)</span>
             </Button>
 
             <Button

@@ -52,6 +52,7 @@ import {
   ChevronRight,
   RotateCcw,
   Calendar,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BodyMetricPhase, BodyMeasurements } from '@/lib/types'
@@ -117,6 +118,7 @@ function MetricsFormContent() {
   const [uploadStep, setUploadStep] = useState<string>('')
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false)
+  const [photoToDelete, setPhotoToDelete] = useState<'front' | 'side' | 'back' | null>(null)
 
   // Post-submission Celebration Dialog state
   const [successDialogOpen, setSuccessDialogOpen] = useState(false)
@@ -196,11 +198,22 @@ function MetricsFormContent() {
     e.target.value = ''
   }
 
-  // Handle Remove Photo
-  const handleRemovePhoto = (
-    setter: React.Dispatch<React.SetStateAction<PhotoSlotState>>
-  ) => {
-    setter({ file: null, preview: null })
+  // Handle Remove Photo Confirmation
+  const handleConfirmDeletePhoto = () => {
+    if (photoToDelete === 'front') {
+      if (frontPhoto.preview) URL.revokeObjectURL(frontPhoto.preview)
+      setFrontPhoto({ file: null, preview: null })
+      toast.info('Foto Tampak Depan dibatalkan')
+    } else if (photoToDelete === 'side') {
+      if (sidePhoto.preview) URL.revokeObjectURL(sidePhoto.preview)
+      setSidePhoto({ file: null, preview: null })
+      toast.info('Foto Tampak Samping dibatalkan')
+    } else if (photoToDelete === 'back') {
+      if (backPhoto.preview) URL.revokeObjectURL(backPhoto.preview)
+      setBackPhoto({ file: null, preview: null })
+      toast.info('Foto Tampak Belakang dibatalkan')
+    }
+    setPhotoToDelete(null)
   }
 
   // Live Delta Calculations
@@ -1024,10 +1037,11 @@ function MetricsFormContent() {
                         />
                         <button
                           type="button"
-                          onClick={() => handleRemovePhoto(setFrontPhoto)}
-                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
+                          onClick={() => setPhotoToDelete('front')}
+                          title="Hapus foto tampak depan"
+                          className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
                         >
-                          <X className="h-3 w-3" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                         <span className="absolute bottom-1 left-1 rounded bg-emerald-600/90 px-1 py-0.5 text-[9px] font-bold text-white">
                           Baru
@@ -1042,7 +1056,7 @@ function MetricsFormContent() {
                   </div>
                 </div>
 
-                {/* Dual Action Buttons (Kamera Langsung & Galeri) */}
+                {/* Action Buttons (Kamera, Galeri, atau Ganti/Hapus) */}
                 <div className="grid grid-cols-2 gap-1.5 pt-1">
                   <input
                     ref={frontCamRef}
@@ -1059,24 +1073,49 @@ function MetricsFormContent() {
                     onChange={(e) => handlePhotoSelect(e, setFrontPhoto)}
                     className="hidden"
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => frontCamRef.current?.click()}
-                    className="h-8 text-[11px] font-bold border-border/80 hover:bg-primary/10 hover:text-primary"
-                  >
-                    <Camera className="mr-1 h-3.5 w-3.5" /> Kamera
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => frontFileRef.current?.click()}
-                    className="h-8 text-[11px] font-semibold border-border/80 hover:bg-muted"
-                  >
-                    <ImageIcon className="mr-1 h-3.5 w-3.5" /> Galeri
-                  </Button>
+                  {frontPhoto.preview ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => frontCamRef.current?.click()}
+                        className="h-8 text-[11px] font-medium border-border/80 hover:bg-muted"
+                      >
+                        <Camera className="mr-1 h-3.5 w-3.5" /> Ganti Foto
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setPhotoToDelete('front')}
+                        className="h-8 text-[11px] font-bold bg-destructive/85 hover:bg-destructive text-white shadow-xs"
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus Foto
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => frontCamRef.current?.click()}
+                        className="h-8 text-[11px] font-bold border-border/80 hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Camera className="mr-1 h-3.5 w-3.5" /> Kamera
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => frontFileRef.current?.click()}
+                        className="h-8 text-[11px] font-semibold border-border/80 hover:bg-muted"
+                      >
+                        <ImageIcon className="mr-1 h-3.5 w-3.5" /> Galeri
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1138,10 +1177,11 @@ function MetricsFormContent() {
                         />
                         <button
                           type="button"
-                          onClick={() => handleRemovePhoto(setSidePhoto)}
-                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
+                          onClick={() => setPhotoToDelete('side')}
+                          title="Hapus foto tampak samping"
+                          className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
                         >
-                          <X className="h-3 w-3" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                         <span className="absolute bottom-1 left-1 rounded bg-emerald-600/90 px-1 py-0.5 text-[9px] font-bold text-white">
                           Baru
@@ -1156,7 +1196,7 @@ function MetricsFormContent() {
                   </div>
                 </div>
 
-                {/* Dual Action Buttons */}
+                {/* Action Buttons */}
                 <div className="grid grid-cols-2 gap-1.5 pt-1">
                   <input
                     ref={sideCamRef}
@@ -1173,24 +1213,49 @@ function MetricsFormContent() {
                     onChange={(e) => handlePhotoSelect(e, setSidePhoto)}
                     className="hidden"
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => sideCamRef.current?.click()}
-                    className="h-8 text-[11px] font-bold border-border/80 hover:bg-primary/10 hover:text-primary"
-                  >
-                    <Camera className="mr-1 h-3.5 w-3.5" /> Kamera
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => sideFileRef.current?.click()}
-                    className="h-8 text-[11px] font-semibold border-border/80 hover:bg-muted"
-                  >
-                    <ImageIcon className="mr-1 h-3.5 w-3.5" /> Galeri
-                  </Button>
+                  {sidePhoto.preview ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => sideCamRef.current?.click()}
+                        className="h-8 text-[11px] font-medium border-border/80 hover:bg-muted"
+                      >
+                        <Camera className="mr-1 h-3.5 w-3.5" /> Ganti Foto
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setPhotoToDelete('side')}
+                        className="h-8 text-[11px] font-bold bg-destructive/85 hover:bg-destructive text-white shadow-xs"
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus Foto
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => sideCamRef.current?.click()}
+                        className="h-8 text-[11px] font-bold border-border/80 hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Camera className="mr-1 h-3.5 w-3.5" /> Kamera
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => sideFileRef.current?.click()}
+                        className="h-8 text-[11px] font-semibold border-border/80 hover:bg-muted"
+                      >
+                        <ImageIcon className="mr-1 h-3.5 w-3.5" /> Galeri
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1252,10 +1317,11 @@ function MetricsFormContent() {
                         />
                         <button
                           type="button"
-                          onClick={() => handleRemovePhoto(setBackPhoto)}
-                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
+                          onClick={() => setPhotoToDelete('back')}
+                          title="Hapus foto tampak belakang"
+                          className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-destructive/90 text-white flex items-center justify-center hover:bg-destructive shadow-sm"
                         >
-                          <X className="h-3 w-3" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                         <span className="absolute bottom-1 left-1 rounded bg-emerald-600/90 px-1 py-0.5 text-[9px] font-bold text-white">
                           Baru
@@ -1270,7 +1336,7 @@ function MetricsFormContent() {
                   </div>
                 </div>
 
-                {/* Dual Action Buttons */}
+                {/* Action Buttons */}
                 <div className="grid grid-cols-2 gap-1.5 pt-1">
                   <input
                     ref={backCamRef}
@@ -1287,24 +1353,49 @@ function MetricsFormContent() {
                     onChange={(e) => handlePhotoSelect(e, setBackPhoto)}
                     className="hidden"
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => backCamRef.current?.click()}
-                    className="h-8 text-[11px] font-bold border-border/80 hover:bg-primary/10 hover:text-primary"
-                  >
-                    <Camera className="mr-1 h-3.5 w-3.5" /> Kamera
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => backFileRef.current?.click()}
-                    className="h-8 text-[11px] font-semibold border-border/80 hover:bg-muted"
-                  >
-                    <ImageIcon className="mr-1 h-3.5 w-3.5" /> Galeri
-                  </Button>
+                  {backPhoto.preview ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => backCamRef.current?.click()}
+                        className="h-8 text-[11px] font-medium border-border/80 hover:bg-muted"
+                      >
+                        <Camera className="mr-1 h-3.5 w-3.5" /> Ganti Foto
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setPhotoToDelete('back')}
+                        className="h-8 text-[11px] font-bold bg-destructive/85 hover:bg-destructive text-white shadow-xs"
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus Foto
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => backCamRef.current?.click()}
+                        className="h-8 text-[11px] font-bold border-border/80 hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Camera className="mr-1 h-3.5 w-3.5" /> Kamera
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => backFileRef.current?.click()}
+                        className="h-8 text-[11px] font-semibold border-border/80 hover:bg-muted"
+                      >
+                        <ImageIcon className="mr-1 h-3.5 w-3.5" /> Galeri
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1607,6 +1698,43 @@ function MetricsFormContent() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal Konfirmasi Hapus Foto Slot */}
+      <AlertDialog
+        open={!!photoToDelete}
+        onOpenChange={(open) => !open && setPhotoToDelete(null)}
+      >
+        <AlertDialogContent className="border-border bg-card text-foreground">
+          <AlertDialogHeader>
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 mb-2 mx-auto">
+              <Trash2 className="h-6 w-6 text-destructive" />
+            </div>
+            <AlertDialogTitle className="text-center font-heading text-lg">
+              Hapus Foto{' '}
+              {photoToDelete === 'front'
+                ? 'Tampak Depan'
+                : photoToDelete === 'side'
+                ? 'Tampak Samping'
+                : 'Tampak Belakang'}
+              ?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-xs text-muted-foreground">
+              Foto yang baru Anda pilih / ambil akan dihapus dari slot ini dan tidak akan diunggah ke profil member.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex gap-2 sm:justify-center">
+            <AlertDialogCancel className="border-border text-muted-foreground hover:bg-muted">
+              Batal
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeletePhoto}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+            >
+              Ya, Hapus Foto
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

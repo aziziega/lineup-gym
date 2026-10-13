@@ -74,6 +74,7 @@ function ProgressTrackingContent() {
   // Modals state
   const [metricModalOpen, setMetricModalOpen] = useState(false)
   const [workoutToDelete, setWorkoutToDelete] = useState<any | null>(null)
+  const [metricToDelete, setMetricToDelete] = useState<any | null>(null)
   const [exportPdfOpen, setExportPdfOpen] = useState(false)
 
   // Data fetching
@@ -201,11 +202,12 @@ function ProgressTrackingContent() {
     }
   }
 
-  const handleDeleteMetric = async (id: string) => {
-    if (!confirm('Yakin ingin menghapus data body metric ini?')) return
+  const handleConfirmDeleteMetric = async () => {
+    if (!metricToDelete) return
     try {
-      await deleteBodyMetric.mutateAsync({ id, memberId: selectedMemberId })
+      await deleteBodyMetric.mutateAsync({ id: metricToDelete.id, memberId: selectedMemberId })
       toast.success('Data fisik berhasil dihapus')
+      setMetricToDelete(null)
     } catch {
       toast.error('Gagal menghapus data fisik')
     }
@@ -628,8 +630,9 @@ function ProgressTrackingContent() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => handleDeleteMetric(m.id)}
+                                  onClick={() => setMetricToDelete(m)}
                                   className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                  title="Hapus data pengukuran fisik ini"
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
@@ -692,6 +695,39 @@ function ProgressTrackingContent() {
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
                 >
                   {deleteWorkoutLog.isPending ? 'Menghapus...' : 'Ya, Hapus & Kembalikan Sesi'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Modal Konfirmasi Hapus Data Pengukuran Fisik */}
+          <AlertDialog open={!!metricToDelete} onOpenChange={(open) => !open && setMetricToDelete(null)}>
+            <AlertDialogContent className="border-border bg-card text-foreground">
+              <AlertDialogHeader>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 mb-2 mx-auto">
+                  <Trash2 className="h-6 w-6 text-red-500" />
+                </div>
+                <AlertDialogTitle className="text-center font-heading text-lg">Hapus Data Pengukuran Fisik?</AlertDialogTitle>
+                <AlertDialogDescription className="text-center text-xs text-muted-foreground space-y-2">
+                  <p>
+                    Data pengukuran fisik pada tanggal{' '}
+                    <span className="font-semibold text-foreground">
+                      {metricToDelete ? new Date(metricToDelete.recorded_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                    </span>
+                    {metricToDelete?.weight_kg ? ` (${metricToDelete.weight_kg} kg)` : ''} beserta foto dokumentasi terkait akan dihapus permanen.
+                  </p>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="flex gap-2 sm:justify-center">
+                <AlertDialogCancel className="border-border text-muted-foreground hover:bg-muted">
+                  Batal
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleConfirmDeleteMetric}
+                  disabled={deleteBodyMetric.isPending}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+                >
+                  {deleteBodyMetric.isPending ? 'Menghapus...' : 'Ya, Hapus Data Fisik'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
