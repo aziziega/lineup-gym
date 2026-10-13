@@ -57,14 +57,13 @@ interface PtProgressEmptyDashboardProps {
   isLoading?: boolean
 }
 
-type PtStatusFilter = 'all' | 'active' | 'expiring_soon' | 'critical' | 'expired'
+type PtStatusFilter = 'all' | 'active' | 'expiring_soon' | 'critical'
 
 const FILTER_OPTIONS: { value: PtStatusFilter; label: string }[] = [
   { value: 'all', label: 'Semua' },
   { value: 'active', label: 'Aktif' },
   { value: 'expiring_soon', label: 'Segera (3-4)' },
   { value: 'critical', label: 'Kritis (1-2)' },
-  { value: 'expired', label: 'Sesi Habis' },
 ]
 
 const getMemberStatus = (remaining: number): 'active' | 'expiring_soon' | 'critical' | 'expired' => {
@@ -99,14 +98,14 @@ export default function PtProgressEmptyDashboard({
 
   // Hitung jumlah member per kategori status
   const statusCounts = useMemo(() => {
-    const counts = { all: (ptMembers || []).length, active: 0, expiring_soon: 0, critical: 0, expired: 0 }
+    const counts = { all: (ptMembers || []).length, active: 0, expiring_soon: 0, critical: 0 }
     for (const m of ptMembers || []) {
       const remaining = Number(m.pt_remaining_sessions) || 0
       if (remaining > 0) {
         counts.active += 1
       }
       const st = getMemberStatus(remaining)
-      if (st !== 'active') {
+      if (st === 'expiring_soon' || st === 'critical') {
         counts[st] = (counts[st] || 0) + 1
       }
     }
