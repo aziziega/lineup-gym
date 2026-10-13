@@ -273,11 +273,19 @@ export function useDeletePtProgressLog() {
         }
       }
 
-      // 4. Rollback kuota: kembalikan 1 sesi ke subscription member (+1)
+      // 4. Rollback kuota: kembalikan 1 sesi ke subscription member (+1 dengan batas maksimal total_sessions)
       if (targetSubscriptionId) {
         const { data: currentSub, error: fetchSubErr } = await supabase
           .from('subscriptions')
-          .select('id, remaining_sessions, status')
+          .select(`
+            id,
+            remaining_sessions,
+            status,
+            total_sessions_override,
+            memberships (
+              total_sessions
+            )
+          `)
           .eq('id', targetSubscriptionId)
           .single()
 
@@ -285,37 +293,61 @@ export function useDeletePtProgressLog() {
           console.warn('Gagal mengambil subscription untuk rollback:', fetchSubErr)
         }
 
-        if (currentSub) {
-          const newRemaining = (currentSub.remaining_sessions ?? 0) + 1
-          const { error: subUpdateErr } = await supabase
-            .from('subscriptions')
-            .update({
-              remaining_sessions: newRemaining,
-              status: 'active', // Pastikan aktif kembali jika sebelumnya expired
+        if (currentSub && currentSub.remaining_sessions !== null) {
+          const totalAllowed =
+            currentSub.total_sessions_override ??
+            (currentSub.memberships as any)?.total_sessions ??
+            null
+
+          const currentRemaining = currentSub.remaining_sessions ?? 0
+
+          // Invariant Check: Cegah inflasi kuota jika sudah mencapai atau melebihi total paket yang dibeli
+          if (totalAllowed !== null && currentRemaining >= totalAllowed) {
+            console.warn('Rollback kuota dibatalkan: Kuota member sudah mencapai batas maksimal paket yang dibeli.', {
+              currentRemaining,
+              totalAllowed,
             })
-            .eq('id', currentSub.id)
+          } else {
+            // Clamping: Kuota baru tidak boleh melebihi total paket yang dibeli
+            const newRemaining =
+              totalAllowed !== null
+                ? Math.min(totalAllowed, currentRemaining + 1)
+                : currentRemaining + 1
 
-          if (subUpdateErr) {
-            console.error('Gagal mengembalikan kuota sesi:', subUpdateErr)
-            throw subUpdateErr
+            // Invariant Check: Status hanya diubah ke 'active' jika kuota > 0
+            const newStatus = newRemaining > 0 ? 'active' : currentSub.status
+
+            const { error: subUpdateErr } = await supabase
+              .from('subscriptions')
+              .update({
+                remaining_sessions: newRemaining,
+                status: newStatus,
+              })
+              .eq('id', currentSub.id)
+
+            if (subUpdateErr) {
+              console.error('Gagal mengembalikan kuota sesi:', subUpdateErr)
+              throw subUpdateErr
+            }
+
+            // Catat activity log audit
+            const user = (await supabase.auth.getUser()).data.user
+            await supabase.from('activity_logs').insert({
+              gym_id: GYM_ID,
+              admin_id: user?.id || null,
+              action_type: 'delete_pt_session_and_refund',
+              table_name: 'pt_progress_logs',
+              record_id: logId,
+              details: {
+                member_id: log.member_id,
+                pt_session_id: log.pt_session_id,
+                subscription_id: targetSubscriptionId,
+                refunded_sessions: 1,
+                new_remaining: newRemaining,
+                total_allowed: totalAllowed,
+              },
+            })
           }
-
-          // Catat activity log audit
-          const user = (await supabase.auth.getUser()).data.user
-          await supabase.from('activity_logs').insert({
-            gym_id: GYM_ID,
-            admin_id: user?.id || null,
-            action_type: 'delete_pt_session_and_refund',
-            table_name: 'pt_progress_logs',
-            record_id: logId,
-            details: {
-              member_id: log.member_id,
-              pt_session_id: log.pt_session_id,
-              subscription_id: targetSubscriptionId,
-              refunded_sessions: 1,
-              new_remaining: newRemaining,
-            },
-          })
         }
       }
 

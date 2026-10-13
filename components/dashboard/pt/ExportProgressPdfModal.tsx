@@ -34,6 +34,29 @@ interface ExportProgressPdfModalProps {
   bodyMetrics: MemberBodyMetric[]
 }
 
+function escapeHtml(str?: string | number | null): string {
+  if (str === null || str === undefined) return ''
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function sanitizeImageUrl(url?: string | null): string {
+  if (!url) return ''
+  const trimmed = String(url).trim()
+  if (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('data:image/')
+  ) {
+    return escapeHtml(trimmed)
+  }
+  return ''
+}
+
 export function ExportProgressPdfModal({
   open,
   onOpenChange,
@@ -110,12 +133,12 @@ export function ExportProgressPdfModal({
       return
     }
 
-    const day1Front = day1Record?.photo_front_url || ''
-    const finalFront = dayFinalRecord?.photo_front_url || ''
-    const day1Side = day1Record?.photo_side_url || ''
-    const finalSide = dayFinalRecord?.photo_side_url || ''
-    const day1Back = day1Record?.photo_back_url || ''
-    const finalBack = dayFinalRecord?.photo_back_url || ''
+    const day1Front = sanitizeImageUrl(day1Record?.photo_front_url)
+    const finalFront = sanitizeImageUrl(dayFinalRecord?.photo_front_url)
+    const day1Side = sanitizeImageUrl(day1Record?.photo_side_url)
+    const finalSide = sanitizeImageUrl(dayFinalRecord?.photo_side_url)
+    const day1Back = sanitizeImageUrl(day1Record?.photo_back_url)
+    const finalBack = sanitizeImageUrl(dayFinalRecord?.photo_back_url)
 
     // Measurements Table Data
     const measureKeys = [
@@ -142,9 +165,8 @@ export function ExportProgressPdfModal({
             <td style="font-weight: 600;">${label}</td>
             <td style="text-align: center;">${initVal !== undefined ? `${initVal} ${unit}` : '-'}</td>
             <td style="text-align: center;">${lastVal !== undefined ? `${lastVal} ${unit}` : '-'}</td>
-            <td style="text-align: center; font-weight: bold; color: ${
-              diff !== null && diff < 0 ? '#059669' : diff !== null && diff > 0 ? '#d97706' : '#555'
-            };">
+            <td style="text-align: center; font-weight: bold; color: ${diff !== null && diff < 0 ? '#059669' : diff !== null && diff > 0 ? '#d97706' : '#555'
+          };">
               ${diff !== null ? (diff > 0 ? `+${diff}` : `${diff}`) + ` ${unit}` : '-'}
             </td>
           </tr>
@@ -158,7 +180,7 @@ export function ExportProgressPdfModal({
       <html>
         <head>
           <meta charset="utf-8">
-          <title>${pdfFileName}</title>
+          <title>${escapeHtml(pdfFileName)}</title>
           <style>
             @page {
               size: A4 portrait;
@@ -462,30 +484,27 @@ export function ExportProgressPdfModal({
             <div class="grid-2">
               <div class="card">
                 <div class="card-title">Data Member & Membership</div>
-                <div class="info-row"><span class="info-label">Nama Member:</span><span class="info-value">${member?.full_name || '-'}</span></div>
-                <div class="info-row"><span class="info-label">Paket PT:</span><span class="info-value">${member?.pt_membership_name || '-'}</span></div>
-                <div class="info-row"><span class="info-label">No. Telepon:</span><span class="info-value">${member?.phone || '-'}</span></div>
-                <div class="info-row"><span class="info-label">Status Kuota:</span><span class="info-value">${
-                  member?.pt_remaining_sessions === 0
-                    ? 'Program Selesai (0 Sesi)'
-                    : `${member?.pt_remaining_sessions} Sesi Tersisa`
-                }</span></div>
+                <div class="info-row"><span class="info-label">Nama Member:</span><span class="info-value">${escapeHtml(member?.full_name) || '-'}</span></div>
+                <div class="info-row"><span class="info-label">Paket PT:</span><span class="info-value">${escapeHtml(member?.pt_membership_name) || '-'}</span></div>
+                <div class="info-row"><span class="info-label">No. Telepon:</span><span class="info-value">${escapeHtml(member?.phone) || '-'}</span></div>
+                <div class="info-row"><span class="info-label">Status Kuota:</span><span class="info-value">${member?.pt_remaining_sessions === 0
+        ? 'Program Selesai (0 Sesi)'
+        : `${member?.pt_remaining_sessions} Sesi Tersisa`
+      }</span></div>
               </div>
 
               <div class="card">
                 <div class="card-title">Ringkasan Berat Badan</div>
                 <div class="info-row"><span class="info-label">BB Awal (Day 1):</span><span class="info-value">${initialMetric?.weight_kg ? `${initialMetric.weight_kg} kg` : '-'}</span></div>
                 <div class="info-row"><span class="info-label">BB Akhir:</span><span class="info-value">${lastMetric?.weight_kg ? `${lastMetric.weight_kg} kg` : '-'}</span></div>
-                <div class="info-row"><span class="info-label">Total Perubahan:</span><span class="info-value" style="color: ${
-                  weightDiff !== null && weightDiff < 0 ? '#059669' : '#111'
-                };">${weightDiff !== null ? (weightDiff > 0 ? `+${weightDiff} kg` : `${weightDiff} kg`) : '-'}</span></div>
+                <div class="info-row"><span class="info-label">Total Perubahan:</span><span class="info-value" style="color: ${weightDiff !== null && weightDiff < 0 ? '#059669' : '#111'
+      };">${weightDiff !== null ? (weightDiff > 0 ? `+${weightDiff} kg` : `${weightDiff} kg`) : '-'}</span></div>
                 <div class="info-row"><span class="info-label">Tanggal Cetak:</span><span class="info-value">${todayStr}</span></div>
               </div>
             </div>
 
-            ${
-              measureRowsHtml
-                ? `
+            ${measureRowsHtml
+        ? `
               <div class="section-title">
                 <span>Perubahan Ukuran Lingkar Tubuh</span>
                 <span style="font-size: 8.5px; color: #666; font-weight: normal;">Perbandingan Awal vs Akhir</span>
@@ -504,8 +523,8 @@ export function ExportProgressPdfModal({
                 </tbody>
               </table>
             `
-                : ''
-            }
+        : ''
+      }
 
             <div class="section-title">
               <span>Riwayat Sesi Latihan (${recentWorkouts.length} Sesi Terakhir)</span>
@@ -521,39 +540,38 @@ export function ExportProgressPdfModal({
                 </tr>
               </thead>
               <tbody>
-                ${
-                  recentWorkouts.length === 0
-                    ? '<tr><td colspan="5" style="text-align: center; padding: 12px; color: #777;">Belum ada riwayat sesi latihan tercatat</td></tr>'
-                    : recentWorkouts
-                        .map((w, i) => {
-                          const d = new Date(w.created_at).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                          })
-                          const exList = (w.exercises || [])
-                            .slice(0, 4)
-                            .map((e) => `• <strong>${e.name}</strong>: ${e.sets}×${e.reps} @ ${e.weight_kg}kg`)
-                            .join('<br>')
-                          const badgeClass =
-                            w.category === 'Push'
-                              ? 'badge-push'
-                              : w.category === 'Pull'
-                              ? 'badge-pull'
-                              : w.category === 'Leg'
-                              ? 'badge-leg'
-                              : 'badge-other'
-                          return `
+                ${recentWorkouts.length === 0
+        ? '<tr><td colspan="5" style="text-align: center; padding: 12px; color: #777;">Belum ada riwayat sesi latihan tercatat</td></tr>'
+        : recentWorkouts
+          .map((w, i) => {
+            const d = new Date(w.created_at).toLocaleDateString('id-ID', {
+              day: 'numeric',
+              month: 'short',
+            })
+            const exList = (w.exercises || [])
+              .slice(0, 4)
+              .map((e) => `• <strong>${escapeHtml(e.name)}</strong>: ${e.sets}×${e.reps} @ ${e.weight_kg}kg`)
+              .join('<br>')
+            const badgeClass =
+              w.category === 'Push'
+                ? 'badge-push'
+                : w.category === 'Pull'
+                  ? 'badge-pull'
+                  : w.category === 'Leg'
+                    ? 'badge-leg'
+                    : 'badge-other'
+            return `
                           <tr>
                             <td style="text-align: center;">${i + 1}</td>
                             <td>${d}</td>
-                            <td><span class="badge ${badgeClass}">${w.category}</span></td>
+                            <td><span class="badge ${badgeClass}">${escapeHtml(w.category)}</span></td>
                             <td>${exList || '-'}</td>
-                            <td>${w.notes ? '<em>"' + w.notes + '"</em>' : '-'}</td>
+                            <td>${w.notes ? '<em>"' + escapeHtml(w.notes) + '"</em>' : '-'}</td>
                           </tr>
                         `
-                        })
-                        .join('')
-                }
+          })
+          .join('')
+      }
               </tbody>
             </table>
 
@@ -561,7 +579,7 @@ export function ExportProgressPdfModal({
               <div class="sign-box">
                 <div>Member</div>
                 <div class="sign-line"></div>
-                <div class="sign-role">${member?.full_name || 'Member'}</div>
+                <div class="sign-role">${escapeHtml(member?.full_name) || 'Member'}</div>
               </div>
               <div class="sign-box">
                 <div>Coach / Personal Trainer</div>
@@ -572,9 +590,8 @@ export function ExportProgressPdfModal({
           </div>
 
           <!-- ================= HALAMAN 2: FOTO TRANSFORMASI (OPSI A) ================= -->
-          ${
-            includePhotos
-              ? `
+          ${includePhotos
+        ? `
             <div class="page-container page-break">
               <div class="header">
                 <div class="gym-name">LineUp Gym Prambanan</div>
@@ -583,7 +600,7 @@ export function ExportProgressPdfModal({
               </div>
 
               <div class="transformation-banner">
-                <div>Member: <strong>${member?.full_name || '-'}</strong> (${member?.pt_membership_name || 'Personal Trainer'})</div>
+                <div>Member: <strong>${escapeHtml(member?.full_name) || '-'}</strong> (${escapeHtml(member?.pt_membership_name) || 'Personal Trainer'})</div>
                 <div>Status Program: <span class="cert-stamp">✓ Lulus / Selesai</span></div>
               </div>
 
@@ -594,20 +611,18 @@ export function ExportProgressPdfModal({
                   <div class="photo-pair">
                     <div class="photo-item">
                       <span class="photo-tag-day1">Day 1</span>
-                      ${
-                        day1Front
-                          ? `<img src="${day1Front}" class="photo-img" />`
-                          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
-                      }
+                      ${day1Front
+          ? `<img src="${day1Front}" class="photo-img" />`
+          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
+        }
                       <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
                     </div>
                     <div class="photo-item">
                       <span class="photo-tag-final">Hasil Akhir</span>
-                      ${
-                        finalFront
-                          ? `<img src="${finalFront}" class="photo-img" />`
-                          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
-                      }
+                      ${finalFront
+          ? `<img src="${finalFront}" class="photo-img" />`
+          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
+        }
                       <span class="photo-date">${formatShortDate(dayFinalRecord?.recorded_at)}</span>
                     </div>
                   </div>
@@ -619,20 +634,18 @@ export function ExportProgressPdfModal({
                   <div class="photo-pair">
                     <div class="photo-item">
                       <span class="photo-tag-day1">Day 1</span>
-                      ${
-                        day1Side
-                          ? `<img src="${day1Side}" class="photo-img" />`
-                          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
-                      }
+                      ${day1Side
+          ? `<img src="${day1Side}" class="photo-img" />`
+          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
+        }
                       <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
                     </div>
                     <div class="photo-item">
                       <span class="photo-tag-final">Hasil Akhir</span>
-                      ${
-                        finalSide
-                          ? `<img src="${finalSide}" class="photo-img" />`
-                          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
-                      }
+                      ${finalSide
+          ? `<img src="${finalSide}" class="photo-img" />`
+          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
+        }
                       <span class="photo-date">${formatShortDate(dayFinalRecord?.recorded_at)}</span>
                     </div>
                   </div>
@@ -644,20 +657,18 @@ export function ExportProgressPdfModal({
                   <div class="photo-pair">
                     <div class="photo-item">
                       <span class="photo-tag-day1">Day 1</span>
-                      ${
-                        day1Back
-                          ? `<img src="${day1Back}" class="photo-img" />`
-                          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
-                      }
+                      ${day1Back
+          ? `<img src="${day1Back}" class="photo-img" />`
+          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
+        }
                       <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
                     </div>
                     <div class="photo-item">
                       <span class="photo-tag-final">Hasil Akhir</span>
-                      ${
-                        finalBack
-                          ? `<img src="${finalBack}" class="photo-img" />`
-                          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
-                      }
+                      ${finalBack
+          ? `<img src="${finalBack}" class="photo-img" />`
+          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
+        }
                       <span class="photo-date">${formatShortDate(dayFinalRecord?.recorded_at)}</span>
                     </div>
                   </div>
@@ -668,7 +679,7 @@ export function ExportProgressPdfModal({
               <div class="renewal-box">
                 <div class="renewal-title">🏆 Evaluasi Kelulusan & Rekomendasi Coach:</div>
                 <div class="renewal-desc">
-                  Selamat atas konsistensi dan kerja keras Kak <strong>${member?.full_name || 'Member'}</strong> selama menyelesaikan program Personal Trainer di Line Up Gym! 
+                  Selamat atas konsistensi dan kerja keras Kak <strong>${escapeHtml(member?.full_name) || 'Member'}</strong> selama menyelesaikan program Personal Trainer di Line Up Gym! 
                   Dokumentasi transformasi di atas membuktikan hasil nyata dari disiplin latihan dan pengaturan nutrisi. 
                   Untuk mempertahankan hasil (*muscle retention*) dan melangkah ke fase berikutnya, coach menyarankan melanjutkan ke <strong>Program PT Lanjutan / Maintenance Fase 2</strong>.
                 </div>
@@ -688,8 +699,8 @@ export function ExportProgressPdfModal({
               </div>
             </div>
           `
-              : ''
-          }
+        : ''
+      }
 
           <script>
             function waitForImagesAndPrint() {
@@ -757,11 +768,10 @@ export function ExportProgressPdfModal({
             <button
               type="button"
               onClick={() => setActivePreviewPage('p1')}
-              className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all ${
-                activePreviewPage === 'p1'
+              className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all ${activePreviewPage === 'p1'
                   ? 'bg-primary text-black font-bold'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               Halaman 1: Metrik
             </button>
@@ -769,11 +779,10 @@ export function ExportProgressPdfModal({
               type="button"
               onClick={() => setActivePreviewPage('p2')}
               disabled={!includePhotos}
-              className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all ${
-                activePreviewPage === 'p2'
+              className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all ${activePreviewPage === 'p2'
                   ? 'bg-primary text-black font-bold'
                   : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
-              }`}
+                }`}
             >
               Halaman 2: Foto
             </button>
