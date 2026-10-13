@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import NotificationDropdown from './NotificationDropdown'
+import HeaderLiveStats from './HeaderLiveStats'
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Overview',
@@ -75,6 +76,10 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             {/* Tanggal (tampil di bawah judul di mobile, di samping di desktop) */}
             <p className="mt-0.5 text-[11px] text-muted-foreground lg:hidden">{currentDate}</p>
           </div>
+
+          {/* Separator & Live Stats Widget (Opsi A) */}
+          <div className="hidden h-5 w-[1px] bg-border/60 md:block" />
+          <HeaderLiveStats />
         </div>
 
         {/* Kanan: tanggal + jam + avatar */}

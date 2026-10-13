@@ -166,17 +166,6 @@ function MembersContent() {
       const s = search.toLowerCase()
       list = list.filter((m) => m.full_name.toLowerCase().includes(s) || m.phone.includes(s) || (m.member_no && m.member_no.toLowerCase().includes(s)))
     }
-    if (statusFilter !== 'all') {
-      list = list.filter((m) => {
-        const localDays = calculateDaysRemaining(m.end_date)
-        if (statusFilter === 'active') return localDays !== null && localDays > 7
-        if (statusFilter === 'expiring_soon') return localDays !== null && localDays >= 4 && localDays <= 7
-        if (statusFilter === 'critical') return localDays !== null && localDays >= 0 && localDays <= 3
-        if (statusFilter === 'expired') return localDays !== null && localDays < 0
-        return m.status === statusFilter
-      })
-    }
-
     // Filter Tipe Membership vs Visitor
     if (typeFilter === 'visitor') {
       list = list.filter((m) => {
@@ -192,6 +181,32 @@ function MembersContent() {
       })
     } else if (typeFilter === 'pt') {
       list = list.filter((m) => !!m.pt_membership_name)
+    }
+
+    if (statusFilter !== 'all') {
+      list = list.filter((m) => {
+        if (typeFilter === 'pt') {
+          const sessions = m.pt_remaining_sessions ?? 0
+          if (statusFilter === 'active') return sessions > 0
+          if (statusFilter === 'expiring_soon') return sessions >= 3 && sessions <= 4
+          if (statusFilter === 'critical') return sessions >= 1 && sessions <= 2
+          if (statusFilter === 'expired') return sessions <= 0
+          return true
+        }
+
+        const localDays = calculateDaysRemaining(m.end_date)
+        if (statusFilter === 'active') {
+          if (localDays !== null) return localDays >= 0 && m.status !== 'inactive'
+          return m.status === 'active'
+        }
+        if (statusFilter === 'expiring_soon') return localDays !== null && localDays >= 4 && localDays <= 7
+        if (statusFilter === 'critical') return localDays !== null && localDays >= 0 && localDays <= 3
+        if (statusFilter === 'expired') {
+          if (localDays !== null) return localDays < 0
+          return m.status === 'expired'
+        }
+        return m.status === statusFilter
+      })
     }
 
     // Urutkan: 
@@ -538,13 +553,13 @@ function MembersContent() {
     }
   }
 
-  // Handler 1: Pindahkan ke Reguler — sesi sudah habis (0), pendapatan TIDAK dihapus
+  // Handler 1: Pindahkan ke Reguler — sesi sudah habis (0), bersihkan PT & progress log
   const handleCancelPT = async () => {
     if (!cancelPTData) return
-    const { ptSubId, memberName } = cancelPTData
+    const { memberId, ptSubId, memberName } = cancelPTData
 
     try {
-      // Hanya hapus subscription PT — data pembayaran & jadwal PT tidak diubah
+      // 1. Hapus subscription PT
       const { error } = await supabase
         .from('subscriptions')
         .delete()
@@ -552,11 +567,24 @@ function MembersContent() {
 
       if (error) throw error
 
-      // Refresh data member saja, keuangan tidak perlu di-refresh
-      await queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] })
+      // 2. Bersihkan catatan latihan di pt_progress_logs untuk member ini
+      if (memberId) {
+        await supabase
+          .from('pt_progress_logs')
+          .delete()
+          .eq('member_id', memberId)
+      }
+
+      // 3. Sinkronkan semua query terkait (Member, Jadwal Sesi, Progress PT)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
+        queryClient.invalidateQueries({ queryKey: ['pt-active-members'] }),
+        queryClient.invalidateQueries({ queryKey: ['pt-progress-logs'] }),
+        queryClient.invalidateQueries({ queryKey: ['pt-sessions'] }),
+      ])
 
       setCancelPTOpen(false)
-      toast.success(`${memberName} berhasil dipindahkan ke Member Reguler. Badge PT telah dihapus.`)
+      toast.success(`${memberName} berhasil dipindahkan ke Member Reguler. Badge PT & catatan latihan telah dibersihkan.`)
     } catch (error: any) {
       console.error(error)
       toast.error('Gagal memindahkan member: ' + error.message)
@@ -612,7 +640,7 @@ function MembersContent() {
         // Kita tidak perlu menebak paket per transaksi, cukup kembalikan ke baseTotalSessions!
         const totalTopUpSessions = (ptSub.total_sessions_override || baseTotalSessions) - baseTotalSessions
         const currentRemaining = ptSub.remaining_sessions || 0
-        
+
         // Kembalikan remaining dengan mengurangi total sesi top-up yang pernah ditambahkan
         const newRemaining = Math.max(0, currentRemaining - totalTopUpSessions)
 
@@ -640,6 +668,15 @@ function MembersContent() {
             .delete()
             .eq('id', ptSubId)
         )
+        // Bersihkan catatan latihan di pt_progress_logs
+        if (memberId) {
+          promises.push(
+            supabase
+              .from('pt_progress_logs')
+              .delete()
+              .eq('member_id', memberId)
+          )
+        }
         // Hapus SEMUA pembayaran terkait PT ini
         const paymentIds = ptPayments.map(p => p.id)
         if (paymentIds.length > 0) {
@@ -653,6 +690,9 @@ function MembersContent() {
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
+        queryClient.invalidateQueries({ queryKey: ['pt-active-members'] }),
+        queryClient.invalidateQueries({ queryKey: ['pt-progress-logs'] }),
+        queryClient.invalidateQueries({ queryKey: ['pt-sessions'] }),
         queryClient.invalidateQueries({ queryKey: ['payments'] }),
         queryClient.invalidateQueries({ queryKey: ['revenue-monthly'] }),
         queryClient.invalidateQueries({ queryKey: ['revenue-current-month'] }),
@@ -842,19 +882,31 @@ function MembersContent() {
       {/* Header manajemen member */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl uppercase text-foreground sm:text-3xl">Manajemen Member</h1>
-          <p className="text-sm text-muted-foreground">Kelola data member reguler dan pengunjung harian</p>
+          <h1 className="font-heading text-2xl uppercase text-foreground sm:text-3xl">
+            {typeFilter === 'pt' ? 'Manajemen Member PT' : typeFilter === 'visitor' ? 'Manajemen Pengunjung Harian' : 'Manajemen Member'}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {typeFilter === 'pt' ? 'Kelola kuota sesi dan paket personal trainer member' : 'Kelola data member reguler dan pengunjung harian'}
+          </p>
         </div>
 
         {/* Legend Warna (Tampilan Baru) */}
         <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-xl border border-border/50 bg-card/50 p-3">
-          {[
-            { label: 'Aktif (>7hr)', color: 'bg-[#00FF85]' },
-            { label: 'Segera (4-7hr)', color: 'bg-[#D4FF00]' },
-            { label: 'Kritis (1-3hr)', color: 'bg-[#FFB800]' },
-            { label: 'Hari Terakhir', color: 'bg-[#FF6B35]' },
-            { label: 'Lewat Hari', color: 'bg-[#FF2A2A]' },
-          ].map((item) => (
+          {(typeFilter === 'pt'
+            ? [
+              { label: 'Aktif', color: 'bg-[#00FF85]' },
+              { label: 'Segera (3-4 Sesi)', color: 'bg-[#D4FF00]' },
+              { label: 'Kritis (1-2 Sesi)', color: 'bg-[#FFB800]' },
+              { label: 'Sesi Habis (0 Sesi)', color: 'bg-[#FF2A2A]' },
+            ]
+            : [
+              { label: 'Aktif (>7hr)', color: 'bg-[#00FF85]' },
+              { label: 'Segera (4-7hr)', color: 'bg-[#D4FF00]' },
+              { label: 'Kritis (1-3hr)', color: 'bg-[#FFB800]' },
+              { label: 'Hari Terakhir', color: 'bg-[#FF6B35]' },
+              { label: 'Lewat Hari', color: 'bg-[#FF2A2A]' },
+            ]
+          ).map((item) => (
             <div key={item.label} className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${item.color} shadow-[0_0_5px_currentColor]`} />
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">{item.label}</span>
@@ -876,19 +928,28 @@ function MembersContent() {
         </div>
         <div className="flex gap-2">
           <div className="flex w-full items-center gap-1 overflow-x-auto pb-1 sm:w-auto sm:pb-0 scrollbar-hide">
-            {[
-              { value: 'all', label: 'Semua' },
-              { value: 'active', label: 'Aktif' },
-              { value: 'expiring_soon', label: 'Segera' },
-              { value: 'critical', label: 'Kritis' },
-              { value: 'expired', label: 'Expired' },
-            ].map((opt) => (
+            {(typeFilter === 'pt'
+              ? [
+                { value: 'all', label: 'Semua' },
+                { value: 'active', label: 'Aktif' },
+                { value: 'expiring_soon', label: 'Segera (3-4)' },
+                { value: 'critical', label: 'Kritis (1-2)' },
+                { value: 'expired', label: 'Sesi Habis' },
+              ]
+              : [
+                { value: 'all', label: 'Semua' },
+                { value: 'active', label: 'Aktif' },
+                { value: 'expiring_soon', label: 'Segera' },
+                { value: 'critical', label: 'Kritis' },
+                { value: 'expired', label: 'Expired' },
+              ]
+            ).map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => { setStatusFilter(opt.value); setPage(1); }}
                 className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border ${statusFilter === opt.value
-                    ? 'bg-primary text-foreground border-[#FF2A2A]'
-                    : 'bg-card text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground border-border'
+                  ? 'bg-primary text-foreground border-[#FF2A2A]'
+                  : 'bg-card text-muted-foreground hover:bg-[#2A2A2A] hover:text-foreground border-border'
                   }`}
               >
                 {opt.label}
@@ -1118,6 +1179,13 @@ function MembersContent() {
                       </div>
                       <StatusBadge
                         status={(() => {
+                          if (typeFilter === 'pt') {
+                            const sessions = m.pt_remaining_sessions ?? 0
+                            if (sessions <= 0) return 'expired'
+                            if (sessions <= 2) return 'critical'
+                            if (sessions <= 4) return 'expiring_soon'
+                            return 'active'
+                          }
                           const localDays = calculateDaysRemaining(m.end_date)
                           if (localDays === null) return m.status;
                           if (localDays < 0) return 'expired';
@@ -1148,12 +1216,12 @@ function MembersContent() {
                     {m.pt_membership_name && (
                       <div className="mt-1 flex items-center gap-1.5">
                         <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${m.pt_remaining_sessions === null || m.pt_remaining_sessions === undefined
-                            ? 'bg-[#555]/20 text-muted-foreground'
-                            : m.pt_remaining_sessions <= 0
-                              ? 'bg-red-500/15 text-red-400'
-                              : m.pt_remaining_sessions <= 2
-                                ? 'bg-amber-500/15 text-amber-400'
-                                : 'bg-emerald-500/15 text-emerald-400'
+                          ? 'bg-[#555]/20 text-muted-foreground'
+                          : m.pt_remaining_sessions <= 0
+                            ? 'bg-red-500/15 text-red-400'
+                            : m.pt_remaining_sessions <= 2
+                              ? 'bg-amber-500/15 text-amber-400'
+                              : 'bg-emerald-500/15 text-emerald-400'
                           }`}>
                           🏋️ {m.pt_membership_name} · {m.pt_remaining_sessions ?? 0}/{m.pt_total_sessions ?? 0} sesi
 

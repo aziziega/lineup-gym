@@ -441,10 +441,12 @@ export default function ExpiryPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {m.full_name}
-                        {isRecentlyContacted && <span className="ml-2 inline-flex items-center rounded bg-green-500/10 px-1 py-0.5 text-[9px] text-green-400 font-bold">SUDAH HUBUNGI WA</span>}
-                      </p>
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {m.full_name} {m.member_no && <span className="text-muted-foreground font-normal">#{m.member_no}</span>}
+                        </p>
+                        {isRecentlyContacted && <span className="shrink-0 inline-flex items-center rounded bg-green-500/10 px-1 py-0.5 text-[9px] text-green-400 font-bold">SUDAH HUBUNGI WA</span>}
+                      </div>
                       <StatusBadge status={priority} />
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -501,7 +503,7 @@ export default function ExpiryPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => { setRenewMember(m); setRenewOpen(true) }}
+                    onClick={() => { setRenewMember(m); setRenewMemberNo(m.member_no || ''); setRenewOpen(true) }}
                     className="h-7 flex-1 text-[11px] text-primary hover:bg-primary/10"
                   >
                     <RotateCcw className="mr-1 h-3 w-3" /> Perpanjang
@@ -623,7 +625,7 @@ export default function ExpiryPage() {
                 <p className="text-sm text-muted-foreground">Member: <span className="text-foreground">{renewMember.full_name}</span></p>
 
                 <div>
-                  <Label className="text-xs text-muted-foreground">No. Member (Baru/Opsional)</Label>
+                  <Label className="text-xs text-muted-foreground">No. Member / RFID (Opsional)</Label>
                   <Input
                     value={renewMemberNo}
                     onChange={(e) => setRenewMemberNo(e.target.value)}
