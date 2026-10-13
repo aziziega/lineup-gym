@@ -169,7 +169,51 @@ export function useDeletePtSession() {
   })
 }
 
-// Ambil member yang punya PT aktif (untuk dropdown tambah sesi)
+// Reschedule sesi PT (ganti tanggal & jam sesi)
+export function useReschedulePtSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      sessionDate,
+      sessionTime,
+    }: {
+      sessionId: string
+      sessionDate: string
+      sessionTime: string
+    }) => {
+      const { data, error } = await supabase
+        .from('pt_sessions')
+        .update({
+          session_date: sessionDate,
+          session_time: sessionTime,
+        })
+        .eq('id', sessionId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Audit log
+      const { data: userData } = await supabase.auth.getUser()
+      await supabase.from('activity_logs').insert({
+        gym_id: GYM_ID,
+        admin_id: userData.user?.id || null,
+        action_type: 'reschedule_pt_session',
+        table_name: 'pt_sessions',
+        record_id: sessionId,
+        details: { new_date: sessionDate, new_time: sessionTime },
+      })
+
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pt-sessions'] })
+    },
+  })
+}
+
+// Ambil member yang punya PT aktif (untuk dropdown tambah sesi di Jadwal Sesi)
 export function usePtActiveMembers() {
   return useQuery({
     queryKey: ['pt-active-members'],
@@ -178,12 +222,78 @@ export function usePtActiveMembers() {
         .from('active_subscriptions_view')
         .select('member_id, full_name, phone, pt_membership_name, pt_subscription_id, pt_remaining_sessions, pt_total_sessions, pt_status')
         .eq('gym_id', GYM_ID)
-        .gt('pt_remaining_sessions', 0) // Selama sisa sesi masih ada, tampilkan di dropdown!
+        .gt('pt_remaining_sessions', 0)
         .not('pt_subscription_id', 'is', null)
 
       if (error) throw error
       return data || []
     },
     refetchInterval: 10000, // Auto-refresh tiap 10 detik agar member baru langsung muncul
+  })
+}
+
+// Ambil SEMUA member yang memiliki paket PT (termasuk sisa sesi 0 untuk direktori progress & perpanjangan)
+export function useAllPtMembers() {
+  return useQuery({
+    queryKey: ['all-pt-members'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('active_subscriptions_view')
+        .select('member_id, full_name, phone, pt_membership_name, pt_subscription_id, pt_remaining_sessions, pt_total_sessions, pt_status')
+        .eq('gym_id', GYM_ID)
+        .gt('pt_remaining_sessions', 0)
+        .not('pt_subscription_id', 'is', null)
+
+      if (error) throw error
+      return data || []
+    },
+    refetchInterval: 10000,
+  })
+}
+
+// Ambil sesi PT di masa lampau yang belum diselesaikan (Pending / Missed sessions)
+export function usePendingPtSessions(beforeDate: string) {
+  return useQuery({
+    queryKey: ['pt-sessions-pending', beforeDate],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('pt_sessions')
+        .select(`
+          *,
+          members(full_name, phone),
+          subscriptions(
+            remaining_sessions,
+            total_sessions_override,
+            memberships(name, total_sessions)
+          )
+        `)
+        .eq('gym_id', GYM_ID)
+        .lt('session_date', beforeDate)
+        .eq('is_completed', false)
+        .order('session_date', { ascending: false })
+        .order('session_time', { ascending: true })
+        .limit(20)
+
+      if (error) throw error
+
+      return (data || []).map((s: any) => ({
+        id: s.id,
+        gym_id: s.gym_id,
+        member_id: s.member_id,
+        subscription_id: s.subscription_id,
+        session_date: s.session_date,
+        session_time: s.session_time,
+        is_completed: s.is_completed,
+        completed_at: s.completed_at,
+        notes: s.notes,
+        created_at: s.created_at,
+        member_name: s.members?.full_name,
+        member_phone: s.members?.phone,
+        pt_membership_name: s.subscriptions?.memberships?.name,
+        remaining_sessions: s.subscriptions?.remaining_sessions,
+        total_sessions: s.subscriptions?.total_sessions_override ?? s.subscriptions?.memberships?.total_sessions,
+      })) as PtSession[]
+    },
+    refetchInterval: 15000,
   })
 }

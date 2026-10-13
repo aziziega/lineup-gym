@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { usePtSessionsByWeek, usePtActiveMembers, useCreatePtSession, useCompletePtSession, useDeletePtSession } from '@/hooks/usePtSessions'
+import { useRouter } from 'next/navigation'
+import { usePtSessionsByWeek, usePtActiveMembers, useCreatePtSession, useCompletePtSession, useDeletePtSession, useReschedulePtSession, type PtSession } from '@/hooks/usePtSessions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import MemberCombobox from '@/components/dashboard/MemberCombobox'
-import { Plus, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle, Trash2, Dumbbell } from 'lucide-react'
+import { Plus, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle, Trash2, Dumbbell, CalendarClock } from 'lucide-react'
 import { toast } from 'sonner'
 
 const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
@@ -34,11 +35,18 @@ function isTimeConflict(timeA: string, timeB: string): boolean {
 }
 
 export default function SchedulePage() {
+  const router = useRouter()
   const [weekOffset, setWeekOffset] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
   const [addDate, setAddDate] = useState('')
   const [addTime, setAddTime] = useState('07:00')
   const [addMemberId, setAddMemberId] = useState('')
+
+  // Reschedule state
+  const [rescheduleOpen, setRescheduleOpen] = useState(false)
+  const [rescheduleTarget, setRescheduleTarget] = useState<PtSession | null>(null)
+  const [rescheduleDate, setRescheduleDate] = useState('')
+  const [rescheduleTime, setRescheduleTime] = useState('07:00')
 
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
   const startDate = weekDates[0]
@@ -49,6 +57,7 @@ export default function SchedulePage() {
   const createSession = useCreatePtSession()
   const completeSession = useCompletePtSession()
   const deleteSession = useDeletePtSession()
+  const rescheduleSession = useReschedulePtSession()
 
   const selectedPtMember = ptMembers?.find(m => m.member_id === addMemberId)
 
@@ -96,8 +105,48 @@ export default function SchedulePage() {
   const handleComplete = async (session: any) => {
     try {
       await completeSession.mutateAsync({ sessionId: session.id, subscriptionId: session.subscription_id })
-      toast.success(`Sesi ${session.member_name} selesai!`)
+      toast.success(`Sesi ${session.member_name} selesai!`, {
+        action: {
+          label: 'Catat Latihan 🏋️',
+          onClick: () => router.push(`/dashboard/pt/progress/workout?memberId=${session.member_id}&sessionId=${session.id}`),
+        },
+        duration: 8000,
+      })
     } catch { toast.error('Gagal menandai sesi') }
+  }
+
+  const handleReschedule = async () => {
+    if (!rescheduleTarget || !rescheduleDate || !rescheduleTime) {
+      toast.error('Pilih tanggal dan jam baru')
+      return
+    }
+
+    // Cek bentrok jadwal (1 coach, 1 sesi per jam) kecuali dengan sesi ini sendiri
+    const sameDaySessions = (sessions || []).filter(
+      s => s.session_date === rescheduleDate && s.id !== rescheduleTarget.id
+    )
+    const conflict = sameDaySessions.find(s => isTimeConflict(s.session_time, rescheduleTime))
+    if (conflict) {
+      if (conflict.is_completed) {
+        toast.error(`Sesi jam ${conflict.session_time?.slice(0, 5)} sudah selesai bersama ${conflict.member_name}. Silahkan pilih jam lain.`)
+      } else {
+        toast.error(`Jadwal bentrok! Sudah ada sesi ${conflict.member_name} jam ${conflict.session_time?.slice(0, 5)} di hari itu. Coach hanya 1, tidak bisa double booking.`)
+      }
+      return
+    }
+
+    try {
+      await rescheduleSession.mutateAsync({
+        sessionId: rescheduleTarget.id,
+        sessionDate: rescheduleDate,
+        sessionTime: rescheduleTime,
+      })
+      toast.success(`Jadwal ${rescheduleTarget.member_name} berhasil di-reschedule!`)
+      setRescheduleOpen(false)
+      setRescheduleTarget(null)
+    } catch {
+      toast.error('Gagal mereschedule sesi')
+    }
   }
 
   const handleDelete = async (sessionId: string) => {
@@ -193,12 +242,17 @@ export default function SchedulePage() {
                           {!s.is_completed ? (
                             <>
                               <button 
-                                disabled={completeSession.isPending}
-                                onClick={() => handleComplete(s)} 
-                                className="rounded p-0.5 text-accent hover:bg-[#D4FF00]/10 disabled:opacity-40 disabled:cursor-not-allowed" 
-                                title="Tandai Selesai"
+                                disabled={rescheduleSession.isPending}
+                                onClick={() => {
+                                  setRescheduleTarget(s)
+                                  setRescheduleDate(s.session_date)
+                                  setRescheduleTime(s.session_time?.slice(0, 5) || '07:00')
+                                  setRescheduleOpen(true)
+                                }} 
+                                className="rounded p-0.5 text-sky-400 hover:bg-sky-500/10 disabled:opacity-40 disabled:cursor-not-allowed" 
+                                title="Reschedule Jadwal"
                               >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                <CalendarClock className="h-3.5 w-3.5" />
                               </button>
                               <button 
                                 disabled={deleteSession.isPending}
@@ -299,6 +353,85 @@ export default function SchedulePage() {
               {createSession.isPending ? 'Menyimpan...' : 'Jadwalkan Sesi'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reschedule PT Session Dialog */}
+      <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
+        <DialogContent className="border-border bg-card text-foreground sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-sky-400" />
+              Reschedule Sesi PT
+            </DialogTitle>
+          </DialogHeader>
+          {rescheduleTarget && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border/50 bg-background/50 p-2.5 text-xs space-y-1">
+                <p className="font-bold text-foreground text-sm">{rescheduleTarget.member_name}</p>
+                <p className="text-muted-foreground">
+                  Jadwal Lama: <span className="text-foreground font-semibold">{rescheduleTarget.session_date}</span> · Jam <span className="text-foreground font-semibold">{rescheduleTarget.session_time?.slice(0, 5)}</span>
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Tanggal Baru</Label>
+                  <Input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    className="border-border bg-background text-foreground"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Jam Baru</Label>
+                  <Input
+                    type="time"
+                    value={rescheduleTime}
+                    onChange={(e) => setRescheduleTime(e.target.value)}
+                    className="border-border bg-background text-foreground"
+                  />
+                </div>
+              </div>
+
+              {/* Conflict check */}
+              {rescheduleDate && rescheduleTime && (() => {
+                const sameDaySessions = (sessions || []).filter(
+                  s => s.session_date === rescheduleDate && s.id !== rescheduleTarget.id
+                )
+                const conflict = sameDaySessions.find(s => isTimeConflict(s.session_time, rescheduleTime))
+                if (conflict) {
+                  return (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-400 flex items-start gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <span>Bentrok dengan sesi <strong>{conflict.member_name}</strong> jam {conflict.session_time?.slice(0, 5)}. Pilih jam lain.</span>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
+              <div className="flex gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setRescheduleOpen(false)}
+                  className="flex-1 border-border"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleReschedule}
+                  disabled={rescheduleSession.isPending || !rescheduleDate || !rescheduleTime}
+                  className="flex-1 bg-sky-500 font-bold text-white hover:bg-sky-600"
+                >
+                  {rescheduleSession.isPending ? 'Menyimpan...' : 'Simpan Jadwal'}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

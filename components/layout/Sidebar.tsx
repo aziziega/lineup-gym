@@ -11,7 +11,7 @@ import {
   UserCheck,
   Users,
   Package,
-  CalendarDays,
+  Dumbbell,
   Wallet,
   Bell,
   LogOut,
@@ -26,17 +26,35 @@ import {
   Globe,
   BarChart3,
   ShieldCheck,
+  ChevronRight,
+  User,
+  BicepsFlexed,
+  Ticket,
+  CalendarClock,
+  TrendingUp,
+  UserCog,
+  Activity,
+  IdCard,
 } from 'lucide-react'
 import { GYM_INFO } from '@/lib/constants'
 import { useQuery } from '@tanstack/react-query'
 import { GYM_ID } from '@/lib/constants'
 import { useAuth } from '@/hooks/useAuth'
+import { toast } from 'sonner'
+
+interface SubNavItem {
+  label: string
+  href: string
+  icon?: any
+  isPro?: boolean
+  isAdminOnly?: boolean
+}
 
 interface NavItem {
   label: string
   href: string
   icon: any
-  subItems?: { label: string; href: string }[]
+  subItems?: SubNavItem[]
   isUpgrade?: boolean
   isPro?: boolean
   isAdminOnly?: boolean
@@ -58,13 +76,28 @@ const navGroups: NavGroup[] = [
         href: '/dashboard/members?type=regular',
         icon: Users,
         subItems: [
-          { label: 'Member Reguler', href: '/dashboard/members?type=regular' },
-          { label: 'Member PT', href: '/dashboard/members?type=pt' },
-          { label: 'Pengunjung Harian', href: '/dashboard/members?type=visitor' },
+          { label: 'Member Reguler', href: '/dashboard/members?type=regular', icon: User },
+          { label: 'Member PT', href: '/dashboard/members?type=pt', icon: BicepsFlexed },
+          { label: 'Pengunjung Harian', href: '/dashboard/members?type=visitor', icon: Ticket },
         ]
       },
       { label: 'Paket', href: '/dashboard/packages', icon: Package },
-      { label: 'Jadwal PT', href: '/dashboard/schedule', icon: CalendarDays },
+      {
+        label: 'Personal Trainer',
+        href: '/dashboard/schedule',
+        icon: Dumbbell,
+        subItems: [
+          { label: 'Jadwal Sesi', href: '/dashboard/schedule', icon: CalendarClock },
+          { label: 'Progress & Tracking', href: '/dashboard/pt/progress', icon: TrendingUp },
+          {
+            label: 'Manajemen Staff PT',
+            href: '/dashboard/pt/staff',
+            icon: UserCog,
+            isPro: true,
+            isAdminOnly: true,
+          },
+        ]
+      },
       { label: 'Keuangan', href: '/dashboard/finance', icon: Wallet },
       { label: 'Expiry', href: '/dashboard/expiry', icon: Bell },
     ]
@@ -77,9 +110,30 @@ const navGroups: NavGroup[] = [
     ]
   },
   {
+    title: 'SISTEM',
+    items: [
+      {
+        label: 'Staff',
+        href: '/dashboard/users',
+        icon: IdCard,
+        isAdminOnly: true,
+        subItems: [
+          { label: 'Daftar Akun Staff', href: '/dashboard/users', icon: UserCheck, isAdminOnly: true },
+          {
+            label: 'Manajemen Staff PT',
+            href: '/dashboard/pt/staff',
+            icon: UserCog,
+            isPro: true,
+            isAdminOnly: true,
+          },
+          { label: 'Log Aktivitas', href: '/dashboard/activity-logs', icon: Activity, isAdminOnly: true },
+        ]
+      }
+    ]
+  },
+  {
     title: 'PENGATURAN',
     items: [
-      { label: 'Manajemen User', href: '/dashboard/users', icon: ShieldCheck, isAdminOnly: true },
       { label: 'Import Excel', href: '/dashboard/import', icon: FileSpreadsheet, isAdminOnly: true },
       { label: 'Pengaturan', href: '/dashboard/settings', icon: Settings, isAdminOnly: true },
       { label: 'Upgrade Web ke-V2', href: '#', icon: ArrowUpCircle, isUpgrade: true },
@@ -91,12 +145,35 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { isAdmin } = useAuth()
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({})
 
-  const isActive = (href: string) => {
-    if (href === '#') return false
-    const basePath = href.split('?')[0]
+  const isActive = (item: NavItem) => {
+    if (item.href === '#') return false
+    const basePath = item.href.split('?')[0]
     if (basePath === '/dashboard') return pathname === '/dashboard'
-    return pathname.startsWith(basePath)
+    if (pathname.startsWith(basePath)) return true
+    if (item.subItems?.some(sub => {
+      const subBase = sub.href.split('?')[0]
+      return pathname.startsWith(subBase)
+    })) return true
+    return false
+  }
+
+  const isMenuOpen = (item: NavItem) => {
+    if (expandedMenus[item.label] !== undefined) {
+      return expandedMenus[item.label]
+    }
+    return isActive(item)
+  }
+
+  const toggleMenu = (item: NavItem) => {
+    setExpandedMenus((prev) => {
+      const current = prev[item.label] !== undefined ? prev[item.label] : isActive(item)
+      return {
+        ...prev,
+        [item.label]: !current,
+      }
+    })
   }
 
   return (
@@ -113,7 +190,7 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
               {group.title}
             </h4>
             {visibleItems.map((item) => {
-              const active = isActive(item.href)
+              const active = isActive(item)
 
               if (item.isUpgrade) {
                 return (
@@ -129,10 +206,95 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
                 )
               }
 
+              // Dropdown Menu untuk yang punya subItems (Member & Personal Trainer)
+              if (item.subItems) {
+                const isOpen = isMenuOpen(item)
+
+                return (
+                  <div key={item.label} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleMenu(item)}
+                      className={cn(
+                        'w-full group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 select-none cursor-default',
+                        active
+                          ? 'border-l-[3px] border-primary bg-primary/10 text-primary'
+                          : 'border-l-[3px] border-transparent text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                      )}
+                    >
+                      <item.icon className={cn('h-[18px] w-[18px]', active && 'text-primary')} />
+                      <span>{item.label}</span>
+
+                      {/* Icon chevron > berputar jadi v */}
+                      <ChevronRight
+                        className={cn(
+                          'ml-auto h-4 w-4 transition-transform duration-200 text-sidebar-foreground/40 group-hover:text-sidebar-foreground',
+                          isOpen && 'rotate-90 text-primary'
+                        )}
+                      />
+                    </button>
+
+                    {/* Sub Items (Hanya tampil saat terbuka) */}
+                    {isOpen && (
+                      <div className="ml-9 mt-1 flex flex-col gap-1 border-l border-border pl-4">
+                        {item.subItems
+                          .filter((sub) => !sub.isAdminOnly || isAdmin)
+                          .map((sub) => {
+                            const isSubActive = (() => {
+                              if (sub.href.includes('?')) {
+                                const [subPath, subQuery] = sub.href.split('?')
+                                const subType = new URLSearchParams(subQuery).get('type')
+                                const currentType = searchParams.get('type') || 'all'
+                                return pathname === subPath && currentType === subType
+                              }
+                              return pathname === sub.href || pathname.startsWith(sub.href + '/')
+                            })()
+
+                            const SubIcon = sub.icon
+
+                            return (
+                              <Link
+                                key={sub.label}
+                                href={sub.href}
+                                onClick={onClose}
+                                className={cn(
+                                  'group/sub flex items-center gap-2.5 py-1.5 text-[11px] font-medium transition-colors',
+                                  isSubActive ? 'text-accent font-semibold' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
+                                )}
+                              >
+                                {SubIcon && (
+                                  <SubIcon
+                                    className={cn(
+                                      'h-3.5 w-3.5 transition-colors',
+                                      isSubActive
+                                        ? 'text-accent'
+                                        : 'text-sidebar-foreground/40 group-hover/sub:text-sidebar-foreground'
+                                    )}
+                                  />
+                                )}
+                                <span>{sub.label}</span>
+
+                                {/* Badge V2 untuk Sub Item */}
+                                {sub.isPro && (
+                                  <span className="ml-auto flex items-center justify-center rounded bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-500">
+                                    V2
+                                  </span>
+                                )}
+                              </Link>
+                            )
+                          })}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              // Menu biasa tanpa subItems
               return (
                 <div key={item.label} className="space-y-1">
                   <Link
                     href={item.href}
+                    onClick={onClose}
                     className={cn(
                       'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
                       active
@@ -157,30 +319,6 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
                       </span>
                     )}
                   </Link>
-
-                  {/* Sub Items (Only shown if parent is active) */}
-                  {item.subItems && active && (
-                    <div className="ml-9 mt-1 flex flex-col gap-1 border-l border-border pl-4">
-                      {item.subItems.map((sub) => {
-                        const currentType = searchParams.get('type') || 'all'
-                        const subType = sub.href.split('type=')[1] || 'all'
-                        const isSubActive = currentType === subType
-
-                        return (
-                          <Link
-                            key={sub.label}
-                            href={sub.href}
-                            className={cn(
-                              'block py-1.5 text-[11px] font-medium transition-colors',
-                              isSubActive ? 'text-accent' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
-                            )}
-                          >
-                            {sub.label}
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  )}
                 </div>
               )
             })}
@@ -192,11 +330,23 @@ function SidebarNav({ onClose, criticalCount, onOpenUpgrade }: { onClose?: () =>
 }
 
 import { UpgradeModal } from './UpgradeModal'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter()
   const supabase = createClient()
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   // Hitung member kritis untuk badge
   const { data: criticalCount } = useQuery({
@@ -224,10 +374,20 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
     staleTime: 1000 * 60 * 5, // 5 minutes
   })
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+  const handleConfirmLogout = async () => {
+    try {
+      setIsLoggingOut(true)
+      await supabase.auth.signOut()
+      toast.success('Berhasil keluar. Sampai jumpa kembali!')
+      router.push('/login')
+      router.refresh()
+    } catch (error) {
+      toast.error('Gagal keluar dari akun. Silakan coba lagi.')
+      console.error('Logout error:', error)
+    } finally {
+      setIsLoggingOut(false)
+      setIsLogoutModalOpen(false)
+    }
   }
 
   return (
@@ -248,7 +408,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-sidebar-foreground/30 tracking-wider">DASHBOARD V1.2</span>
+              <span className="text-[10px] font-bold text-sidebar-foreground/30 tracking-wider">DASHBOARD V1.5</span>
               <button
                 onClick={() => setIsUpgradeModalOpen(true)}
                 className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary hover:bg-primary/20 transition-colors"
@@ -257,7 +417,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               </button>
             </div>
             <p className="text-[9px] text-sidebar-foreground/20 uppercase tracking-tighter font-medium">
-              LAST UPDATE: 04 Agustus, 16.05 WIB
+              LAST UPDATE: 13 Oktober 2026, 08.42 WIB
             </p>
           </div>
         </div>
@@ -296,7 +456,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
         {/* Logout */}
         <button
-          onClick={handleLogout}
+          onClick={() => setIsLogoutModalOpen(true)}
           className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400"
         >
           <LogOut className="h-4 w-4" />
@@ -307,6 +467,30 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           © {new Date().getFullYear()} {GYM_INFO.NAME}
         </p>
       </div>
+
+      {/* Modal Konfirmasi Keluar */}
+      <AlertDialog open={isLogoutModalOpen} onOpenChange={setIsLogoutModalOpen}>
+        <AlertDialogContent className="border-border bg-card text-foreground max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-heading text-lg">Konfirmasi Keluar</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              Apakah Anda yakin ingin keluar dari akun dashboard Line Up Gym?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-muted-foreground text-xs">
+              Batal
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmLogout}
+              disabled={isLoggingOut}
+              className="bg-red-500 hover:bg-red-600 text-white font-semibold text-xs"
+            >
+              {isLoggingOut ? 'Mengeluarkan...' : 'Ya, Keluar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} />
     </div>

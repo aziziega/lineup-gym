@@ -41,3 +41,10 @@ next-env.d.ts
 # Supabase
 supabase_migration.sql
 supabase/
+
+# Scratch & temporary assets
+/scratch/
+pt-progress-tracking-brainstorm.md
+SUPABASE_PRODUCTION_MIGRATION_GUIDE.md
+UPDATE_FITUR_DAN_SISTEM_OWNER.md
+

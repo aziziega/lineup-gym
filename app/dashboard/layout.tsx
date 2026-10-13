@@ -19,6 +19,10 @@ export default function DashboardLayout({
     setSidebarOpen(false)
   }, [pathname])
 
+  const isStandalonePage =
+    pathname === '/dashboard/pt/progress/workout' ||
+    pathname === '/dashboard/pt/progress/metrics'
+
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
       {/* Desktop sidebar — hidden di mobile */}
@@ -41,15 +45,15 @@ export default function DashboardLayout({
 
       {/* Konten utama */}
       <div className="flex flex-1 flex-col lg:pl-60">
-        <Topbar onMenuClick={() => setSidebarOpen(true)} />
+        {!isStandalonePage && <Topbar onMenuClick={() => setSidebarOpen(true)} />}
         
-        <main className="flex-1 px-4 pb-20 pt-4 lg:px-6 lg:pb-6 lg:pt-5">
+        <main className={`flex-1 ${isStandalonePage ? 'p-0' : 'px-4 pb-20 pt-4 lg:px-6 lg:pb-6 lg:pt-5'}`}>
           {children}
         </main>
       </div>
 
       {/* Mobile bottom navigation */}
-      <MobileNav />
+      {!isStandalonePage && <MobileNav />}
     </div>
   )
 }

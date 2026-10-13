@@ -160,3 +160,52 @@ export interface MemberAttendanceView {
   total_attendance: number;
   last_check_in: string;
 }
+
+// PT PROGRESS & BODY METRICS
+
+export type PtProgressCategory = 'Push' | 'Pull' | 'Leg' | 'Full Body' | 'Cardio' | 'Lainnya';
+
+export interface ExerciseItem {
+  name: string;
+  sets: number;
+  reps: number;
+  weight_kg: number;
+}
+
+export interface PtProgressLog {
+  id: string;
+  gym_id: string;
+  pt_session_id: string | null;
+  member_id: string;
+  category: PtProgressCategory;
+  exercises: ExerciseItem[];
+  notes: string | null;
+  recorded_by: string | null;
+  created_at: string;
+}
+
+export type BodyMetricPhase = 'day_1' | 'progress' | 'day_final' | 'regular';
+
+export interface BodyMeasurements {
+  lengan?: number;
+  perut?: number;
+  dada?: number;
+  paha?: number;
+  [key: string]: number | undefined;
+}
+
+export interface MemberBodyMetric {
+  id: string;
+  gym_id: string;
+  member_id: string;
+  weight_kg: number | null;
+  measurements: BodyMeasurements;
+  photo_front_url: string | null;
+  photo_side_url: string | null;
+  photo_back_url: string | null;
+  phase: BodyMetricPhase;
+  notes: string | null;
+  recorded_by: string | null;
+  recorded_at: string;
+  created_at: string;
+}
