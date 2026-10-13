@@ -180,6 +180,7 @@ function ProgressTrackingContent() {
       weightChangeMsg +
       (lastWorkout
         ? `\n\n*Latihan Terakhir (${new Date(lastWorkout.created_at).toLocaleDateString('id-ID')} - ${lastWorkout.category}):*\n` +
+        (lastWorkout.trainer_name ? `• Coach: *${lastWorkout.trainer_name}*\n` : '') +
         lastWorkout.exercises
           .map((e) => `• ${e.name}: ${e.sets}×${e.reps} | ${e.weight_kg}kg`)
           .join('\n') +
@@ -510,6 +511,11 @@ function ProgressTrackingContent() {
                                 <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                                 {formattedDate}
                               </span>
+                              {log.trainer_name && (
+                                <Badge variant="outline" className="border-border/60 bg-muted/40 text-[10px] text-muted-foreground font-medium">
+                                  Coach: {log.trainer_name}
+                                </Badge>
+                              )}
                             </div>
 
                             <Button

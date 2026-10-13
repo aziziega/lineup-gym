@@ -190,11 +190,19 @@ function LiveWorkoutContent() {
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
   const [resetDraftDialogOpen, setResetDraftDialogOpen] = useState(false)
 
+  const [trainerName, setTrainerName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lineup_last_trainer_name') || ''
+    }
+    return ''
+  })
+
   // Struk / Laporan@ Sesi Latihan state
   const [receiptOpen, setReceiptOpen] = useState(false)
   const [receiptData, setReceiptData] = useState<{
     memberName: string
     memberPhone?: string
+    trainerName?: string
     category: string
     duration: string
     exercises: ExerciseItem[]
@@ -459,6 +467,12 @@ function LiveWorkoutContent() {
           setDraftRestored(false)
         } else if (parsed.exercises && parsed.exercises.length > 0) {
           setExercises(parsed.exercises)
+          if (parsed.trainerName !== undefined) {
+            setTrainerName(parsed.trainerName)
+          } else {
+            const remembered = localStorage.getItem('lineup_last_trainer_name')
+            if (remembered) setTrainerName(remembered)
+          }
           if (parsed.category) setCategory(parsed.category)
           if (parsed.notes) setNotes(parsed.notes)
           if (parsed.timerSeconds) setTimerSeconds(parsed.timerSeconds)
@@ -468,6 +482,9 @@ function LiveWorkoutContent() {
           setNotes('')
           setTimerSeconds(0)
           setDraftRestored(false)
+          if (parsed.trainerName !== undefined) {
+            setTrainerName(parsed.trainerName)
+          }
         }
       } else {
         // Member baru tidak memiliki draf aktif -> reset bersih memori state dari member sebelumnya
@@ -505,6 +522,7 @@ function LiveWorkoutContent() {
         localStorage.setItem(
           draftStorageKey,
           JSON.stringify({
+            trainerName,
             category,
             exercises,
             notes,
@@ -518,7 +536,7 @@ function LiveWorkoutContent() {
     }, 400)
 
     return () => clearTimeout(timeout)
-  }, [draftStorageKey, selectedMemberId, category, exercises, notes, timerSeconds])
+  }, [draftStorageKey, selectedMemberId, trainerName, category, exercises, notes, timerSeconds])
 
   // Add exercise from chip preset or empty
   const handleAddExercise = (presetName = '') => {
@@ -645,11 +663,15 @@ function LiveWorkoutContent() {
         exercises: validExercises,
         notes: notes.trim() || null,
         pt_session_id: initialSessionId || scheduledSessionToday?.id || null,
+        trainer_name: trainerName.trim() || null,
       })
 
-      // Clean local storage draft
+      // Clean local storage draft & simpan trainer name terakhir
       if (typeof window !== 'undefined') {
         localStorage.removeItem(draftStorageKey)
+        if (trainerName.trim()) {
+          localStorage.setItem('lineup_last_trainer_name', trainerName.trim())
+        }
       }
 
       const memberName = currentMember?.full_name || 'Member'
@@ -669,6 +691,7 @@ function LiveWorkoutContent() {
       setReceiptData({
         memberName,
         memberPhone: phone,
+        trainerName: trainerName.trim() || undefined,
         category,
         duration: durationFormatted,
         exercises: validExercises,
@@ -827,6 +850,32 @@ function LiveWorkoutContent() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Input Nama Personal Trainer (Coach) */}
+        <Card className="border-border/50 bg-card">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="trainer-name-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Dumbbell className="h-3.5 w-3.5 text-primary" />
+                Personal Trainer / Coach
+              </label>
+              <span className="text-[10px] text-muted-foreground/70">Tercantum di laporan, WA & PDF</span>
+            </div>
+            <Input
+              id="trainer-name-input"
+              value={trainerName}
+              onChange={(e) => {
+                const val = e.target.value
+                setTrainerName(val)
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('lineup_last_trainer_name', val)
+                }
+              }}
+              placeholder="Ketik nama Coach (contoh: Coach Budi / Coach Randy)"
+              className="bg-background/80 border-border/60 text-sm font-medium placeholder:text-muted-foreground/50 h-10"
+            />
           </CardContent>
         </Card>
 
@@ -1447,6 +1496,12 @@ function LiveWorkoutContent() {
                   <span className="text-muted-foreground">Total Gerakan:</span>
                   <span className="font-medium text-foreground">{exercises.length} Gerakan ({totalSetsCount} Sets)</span>
                 </div>
+                {trainerName.trim() && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Coach / PT:</span>
+                    <span className="font-semibold text-accent">{trainerName.trim()}</span>
+                  </div>
+                )}
               </div>
               <p className="text-center text-[11px] text-muted-foreground">
                 1 kuota sesi PT akan otomatis dipotong dan hasil latihan akan disimpan ke riwayat member.
@@ -1521,6 +1576,12 @@ function LiveWorkoutContent() {
                     <span className="text-muted-foreground">Member</span>
                     <span className="text-foreground font-medium">{receiptData.memberName}</span>
                   </div>
+                  {receiptData.trainerName && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Coach / Trainer</span>
+                      <span className="text-accent font-semibold">{receiptData.trainerName}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Fokus Latihan</span>
                     <span className="text-primary font-bold">{receiptData.category} Day</span>
@@ -1565,7 +1626,9 @@ function LiveWorkoutContent() {
                 </div>
 
                 <div className="border-t border-dashed border-[#333] pt-2 text-center">
-                  <p className="text-[10px] text-muted-foreground/60">{receiptData.dateStr} — Terima kasih!</p>
+                  <p className="text-[10px] text-muted-foreground/60">
+                    {receiptData.dateStr} {receiptData.trainerName ? `· Coach ${receiptData.trainerName}` : ''} — Terima kasih!
+                  </p>
                 </div>
 
                 {/* Celebration Card Saat Sisa Sesi = 0 (Program Tuntas) */}
@@ -1625,6 +1688,7 @@ function LiveWorkoutContent() {
                     const message = encodeURIComponent(
                       `Halo Kak *${receiptData.memberName}*! \n\n` +
                       `Sesi latihan PT kamu di *Line Up Gym* baru saja selesai:\n` +
+                      (receiptData.trainerName ? `• Coach: *${receiptData.trainerName}*\n` : '') +
                       `• Fokus: *${receiptData.category} Day*\n` +
                       `• Durasi: *${receiptData.duration}*\n\n` +
                       `*Daftar Latihan:*\n${list}\n\n` +

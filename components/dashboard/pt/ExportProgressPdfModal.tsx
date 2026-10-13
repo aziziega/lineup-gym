@@ -106,6 +106,11 @@ export function ExportProgressPdfModal({
     }
   }, [bodyMetrics])
 
+  const latestTrainerName = useMemo(() => {
+    const logWithTrainer = (workoutLogs || []).find((w) => w.trainer_name && w.trainer_name.trim())
+    return logWithTrainer?.trainer_name?.trim() || null
+  }, [workoutLogs])
+
   const recentWorkouts = (workoutLogs || []).slice(0, 10)
   const todayStr = new Date().toLocaleDateString('id-ID', {
     day: 'numeric',
@@ -312,24 +317,18 @@ export function ExportProgressPdfModal({
             .badge-leg { background: #d1fae5; color: #065f46; }
             .badge-other { background: #f3f4f6; color: #374151; }
 
-            .footer-sign {
+            .digital-footer {
+              border-top: 1px solid #cbd5e1;
+              padding-top: 6px;
+              margin-top: 16px;
               display: flex;
               justify-content: space-between;
-              margin-top: 18px;
-              padding: 0 40px;
+              align-items: center;
+              font-size: 8px;
+              color: #64748b;
             }
-            .sign-box {
-              text-align: center;
-              width: 140px;
-            }
-            .sign-line {
-              border-bottom: 1px solid #333;
-              margin-top: 40px;
-              margin-bottom: 4px;
-            }
-            .sign-role {
-              font-size: 9.5px;
-              color: #666;
+            .digital-footer strong {
+              color: #0f172a;
             }
 
             /* HALAMAN 2: GALERI TRANSFORMASI BEFORE VS AFTER */
@@ -477,6 +476,7 @@ export function ExportProgressPdfModal({
               <div class="card">
                 <div class="card-title">Data Member & Membership</div>
                 <div class="info-row"><span class="info-label">Nama Member:</span><span class="info-value">${escapeHtml(member?.full_name) || '-'}</span></div>
+                <div class="info-row"><span class="info-label">Coach / PT:</span><span class="info-value" style="color: #000; font-weight: bold;">${escapeHtml(latestTrainerName) || 'LineUp Gym Team'}</span></div>
                 <div class="info-row"><span class="info-label">Paket PT:</span><span class="info-value">${escapeHtml(member?.pt_membership_name) || '-'}</span></div>
                 <div class="info-row"><span class="info-label">No. Telepon:</span><span class="info-value">${escapeHtml(member?.phone) || '-'}</span></div>
                 <div class="info-row"><span class="info-label">Status Kuota:</span><span class="info-value">${member?.pt_remaining_sessions === 0
@@ -525,15 +525,16 @@ export function ExportProgressPdfModal({
               <thead>
                 <tr>
                   <th style="width: 25px; text-align: center;">No</th>
-                  <th style="width: 75px;">Tanggal</th>
-                  <th style="width: 60px;">Fokus</th>
+                  <th style="width: 70px;">Tanggal</th>
+                  <th style="width: 55px;">Fokus</th>
+                  <th style="width: 80px;">Coach</th>
                   <th>Daftar Gerakan & Beban</th>
-                  <th style="width: 130px;">Catatan Coach</th>
+                  <th style="width: 120px;">Catatan Coach</th>
                 </tr>
               </thead>
               <tbody>
                 ${recentWorkouts.length === 0
-        ? '<tr><td colspan="5" style="text-align: center; padding: 12px; color: #777;">Belum ada riwayat sesi latihan tercatat</td></tr>'
+        ? '<tr><td colspan="6" style="text-align: center; padding: 12px; color: #777;">Belum ada riwayat sesi latihan tercatat</td></tr>'
         : recentWorkouts
           .map((w, i) => {
             const d = new Date(w.created_at).toLocaleDateString('id-ID', {
@@ -557,6 +558,7 @@ export function ExportProgressPdfModal({
                             <td style="text-align: center;">${i + 1}</td>
                             <td>${d}</td>
                             <td><span class="badge ${badgeClass}">${escapeHtml(w.category)}</span></td>
+                            <td style="font-weight: 600; color: #111;">${escapeHtml(w.trainer_name) || '-'}</td>
                             <td>${exList || '-'}</td>
                             <td>${w.notes ? '<em>"' + escapeHtml(w.notes) + '"</em>' : '-'}</td>
                           </tr>
@@ -567,17 +569,9 @@ export function ExportProgressPdfModal({
               </tbody>
             </table>
 
-            <div class="footer-sign">
-              <div class="sign-box">
-                <div>Member</div>
-                <div class="sign-line"></div>
-                <div class="sign-role">${escapeHtml(member?.full_name) || 'Member'}</div>
-              </div>
-              <div class="sign-box">
-                <div>Coach / Personal Trainer</div>
-                <div class="sign-line"></div>
-                <div class="sign-role">LineUp Gym Team</div>
-              </div>
+            <div class="digital-footer">
+              <span>LINEUP GYM PRAMBANAN · Official PT Progress &amp; Evaluation Report</span>
+              <span>Coach: <strong>${escapeHtml(latestTrainerName) || 'LineUp Gym Team'}</strong> · Dicetak: ${todayStr}</span>
             </div>
           </div>
 
@@ -677,17 +671,9 @@ export function ExportProgressPdfModal({
                 </div>
               </div>
 
-              <div class="footer-sign" style="margin-top: 25px;">
-                <div class="sign-box">
-                  <div>Head Trainer</div>
-                  <div class="sign-line"></div>
-                  <div class="sign-role">LineUp Gym Management</div>
-                </div>
-                <div class="sign-box">
-                  <div>Personal Trainer</div>
-                  <div class="sign-line"></div>
-                  <div class="sign-role">LineUp Gym Team</div>
-                </div>
+              <div class="digital-footer" style="margin-top: 20px;">
+                <span>LINEUP GYM PRAMBANAN · Official Physical Transformation Certificate</span>
+                <span>Coach: <strong>${escapeHtml(latestTrainerName) || 'LineUp Gym Team'}</strong> · Dicetak: ${todayStr}</span>
               </div>
             </div>
           `
@@ -844,6 +830,12 @@ export function ExportProgressPdfModal({
                       </span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Coach / PT:</span>
+                      <span className="font-semibold text-accent">
+                        {latestTrainerName || 'LineUp Gym Team'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Paket PT:</span>
                       <span className="font-medium text-foreground">
                         {member?.pt_membership_name}
@@ -909,6 +901,7 @@ export function ExportProgressPdfModal({
                         <tr>
                           <th className="p-2">Tgl</th>
                           <th className="p-2">Fokus</th>
+                          <th className="p-2">Coach</th>
                           <th className="p-2">Gerakan & Beban</th>
                         </tr>
                       </thead>
@@ -916,7 +909,7 @@ export function ExportProgressPdfModal({
                         {recentWorkouts.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={3}
+                              colSpan={4}
                               className="p-4 text-center text-muted-foreground"
                             >
                               Belum ada riwayat sesi tercatat
@@ -937,6 +930,9 @@ export function ExportProgressPdfModal({
                               <td className="p-2 font-bold text-primary">
                                 {w.category}
                               </td>
+                              <td className="p-2 font-medium text-foreground whitespace-nowrap">
+                                {w.trainer_name || '-'}
+                              </td>
                               <td className="p-2 text-muted-foreground">
                                 {(w.exercises || [])
                                   .slice(0, 3)
@@ -952,6 +948,14 @@ export function ExportProgressPdfModal({
                         )}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Digital Verification Footer */}
+                  <div className="flex items-center justify-between border-t border-border/40 pt-2 text-[9px] text-muted-foreground">
+                    <span>LINEUP GYM PRAMBANAN · Official PT Report</span>
+                    <span>
+                      Coach: <strong className="text-foreground">{latestTrainerName || 'LineUp Gym Team'}</strong> · Dicetak: {todayStr}
+                    </span>
                   </div>
                 </div>
               </>
@@ -1070,6 +1074,14 @@ export function ExportProgressPdfModal({
                     dan postur Kak <strong>{member?.full_name}</strong>. Disarankan melanjutkan
                     ke paket perpanjangan PT berikutnya untuk fase pemeliharaan / peningkatan beban.
                   </p>
+                </div>
+
+                {/* Digital Verification Footer */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2 text-[9px] text-muted-foreground">
+                  <span>LINEUP GYM PRAMBANAN · Official Certificate</span>
+                  <span>
+                    Coach: <strong className="text-foreground">{latestTrainerName || 'LineUp Gym Team'}</strong> · Dicetak: {todayStr}
+                  </span>
                 </div>
               </>
             )}

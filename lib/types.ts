@@ -179,6 +179,7 @@ export interface PtProgressLog {
   member_id: string;
   category: PtProgressCategory;
   exercises: ExerciseItem[];
+  trainer_name?: string | null;
   notes: string | null;
   recorded_by: string | null;
   created_at: string;

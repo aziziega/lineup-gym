@@ -75,6 +75,7 @@ export function useCreatePtProgressLog() {
       exercises: ExerciseItem[]
       notes?: string | null
       pt_session_id?: string | null
+      trainer_name?: string | null
     }) => {
       const user = (await supabase.auth.getUser()).data.user
       const todayStr = new Date().toLocaleDateString('sv-SE')
@@ -190,19 +191,37 @@ export function useCreatePtProgressLog() {
       }
 
       // 5. Simpan catatan latihan ke pt_progress_logs
-      const { data, error } = await supabase
+      const insertData: Record<string, any> = {
+        gym_id: GYM_ID,
+        member_id: payload.member_id,
+        category: payload.category,
+        exercises: payload.exercises,
+        notes: payload.notes || null,
+        pt_session_id: targetSessionId || null,
+        recorded_by: user?.id || null,
+      }
+
+      if (payload.trainer_name && payload.trainer_name.trim()) {
+        insertData.trainer_name = payload.trainer_name.trim()
+      }
+
+      let { data, error } = await supabase
         .from('pt_progress_logs')
-        .insert({
-          gym_id: GYM_ID,
-          member_id: payload.member_id,
-          category: payload.category,
-          exercises: payload.exercises,
-          notes: payload.notes || null,
-          pt_session_id: targetSessionId || null,
-          recorded_by: user?.id || null,
-        })
+        .insert(insertData)
         .select()
         .single()
+
+      // Graceful fallback jika kolom trainer_name belum dimigrasi di database (error code 42703)
+      if (error && (error.code === '42703' || error.message?.includes('trainer_name'))) {
+        delete insertData.trainer_name
+        const retry = await supabase
+          .from('pt_progress_logs')
+          .insert(insertData)
+          .select()
+          .single()
+        data = retry.data
+        error = retry.error
+      }
 
       if (error) throw error
       return data
@@ -470,6 +489,39 @@ export function useDeleteBodyMetric() {
         .from('member_body_metrics')
         .delete()
         .eq('id', id)
+
+      if (error) throw error
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['member-body-metrics', variables.memberId] })
+    },
+  })
+}
+
+// 8. MUTATION: Hapus Foto Spesifik pada Metrik Tubuh (Depan, Samping, atau Belakang)
+export function useRemoveBodyMetricPhoto() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      metricId,
+      angle,
+      memberId,
+    }: {
+      metricId: string
+      angle: 'front' | 'side' | 'back'
+      memberId: string
+    }) => {
+      const field =
+        angle === 'front'
+          ? 'photo_front_url'
+          : angle === 'side'
+          ? 'photo_side_url'
+          : 'photo_back_url'
+
+      const { error } = await supabase
+        .from('member_body_metrics')
+        .update({ [field]: null })
+        .eq('id', metricId)
 
       if (error) throw error
     },
