@@ -165,11 +165,18 @@ export interface MemberAttendanceView {
 
 export type PtProgressCategory = 'Push' | 'Pull' | 'Leg' | 'Full Body' | 'Cardio' | 'Lainnya';
 
+export interface SetDetail {
+  set_number: number;
+  reps: number;
+  weight_kg: number;
+}
+
 export interface ExerciseItem {
   name: string;
   sets: number;
   reps: number;
   weight_kg: number;
+  sets_detail?: SetDetail[];
 }
 
 export interface PtProgressLog {

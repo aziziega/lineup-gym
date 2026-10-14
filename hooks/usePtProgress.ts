@@ -441,6 +441,7 @@ export function useCreateBodyMetric() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (payload: {
+      id?: string
       member_id: string
       weight_kg: number | null
       measurements?: BodyMeasurements
@@ -453,26 +454,41 @@ export function useCreateBodyMetric() {
     }) => {
       const user = (await supabase.auth.getUser()).data.user
 
-      const { data, error } = await supabase
-        .from('member_body_metrics')
-        .insert({
-          gym_id: GYM_ID,
-          member_id: payload.member_id,
-          weight_kg: payload.weight_kg,
-          measurements: payload.measurements || {},
-          photo_front_url: payload.photo_front_url || null,
-          photo_side_url: payload.photo_side_url || null,
-          photo_back_url: payload.photo_back_url || null,
-          phase: payload.phase || 'regular',
-          notes: payload.notes || null,
-          recorded_by: user?.id || null,
-          recorded_at: payload.recorded_at || new Date().toISOString(),
-        })
-        .select()
-        .single()
+      const recordData: any = {
+        gym_id: GYM_ID,
+        member_id: payload.member_id,
+        weight_kg: payload.weight_kg,
+        measurements: payload.measurements || {},
+        phase: payload.phase || 'regular',
+        notes: payload.notes || null,
+        recorded_at: payload.recorded_at || new Date().toISOString(),
+      }
 
-      if (error) throw error
-      return data
+      if (payload.photo_front_url !== undefined) recordData.photo_front_url = payload.photo_front_url
+      if (payload.photo_side_url !== undefined) recordData.photo_side_url = payload.photo_side_url
+      if (payload.photo_back_url !== undefined) recordData.photo_back_url = payload.photo_back_url
+
+      if (payload.id) {
+        const { data, error } = await supabase
+          .from('member_body_metrics')
+          .update(recordData)
+          .eq('id', payload.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        return data
+      } else {
+        recordData.recorded_by = user?.id || null
+        const { data, error } = await supabase
+          .from('member_body_metrics')
+          .insert(recordData)
+          .select()
+          .single()
+
+        if (error) throw error
+        return data
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['member-body-metrics', variables.member_id] })

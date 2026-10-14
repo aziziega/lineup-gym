@@ -53,7 +53,7 @@ import {
   FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { PtProgressCategory, ExerciseItem } from '@/lib/types'
+import type { PtProgressCategory, ExerciseItem, SetDetail } from '@/lib/types'
 
 const CATEGORIES: { label: PtProgressCategory; color: string; border: string; bg: string; presets: string[] }[] = [
   {
@@ -466,7 +466,21 @@ function LiveWorkoutContent() {
           setTimerSeconds(0)
           setDraftRestored(false)
         } else if (parsed.exercises && parsed.exercises.length > 0) {
-          setExercises(parsed.exercises)
+          const normalized = (parsed.exercises as ExerciseItem[]).map((ex) => {
+            if (!ex.sets_detail || ex.sets_detail.length === 0) {
+              const count = Math.max(1, ex.sets || 1)
+              return {
+                ...ex,
+                sets_detail: Array.from({ length: count }, (_, i) => ({
+                  set_number: i + 1,
+                  reps: ex.reps || 10,
+                  weight_kg: ex.weight_kg || 20,
+                })),
+              }
+            }
+            return ex
+          })
+          setExercises(normalized)
           if (parsed.trainerName !== undefined) {
             setTrainerName(parsed.trainerName)
           } else {
@@ -549,9 +563,24 @@ function LiveWorkoutContent() {
         return
       }
     }
+    const defaultSets = 3
+    const defaultReps = 10
+    const defaultWeight = 20
+    const setsDetail: SetDetail[] = Array.from({ length: defaultSets }, (_, i) => ({
+      set_number: i + 1,
+      reps: defaultReps,
+      weight_kg: defaultWeight,
+    }))
+
     setExercises((prev) => [
       ...prev,
-      { name: presetName || 'Gerakan Baru', sets: 3, reps: 10, weight_kg: 20 },
+      {
+        name: presetName || 'Gerakan Baru',
+        sets: defaultSets,
+        reps: defaultReps,
+        weight_kg: defaultWeight,
+        sets_detail: setsDetail,
+      },
     ])
   }
 
@@ -565,6 +594,12 @@ function LiveWorkoutContent() {
       return
     }
 
+    const setsDetail: SetDetail[] = Array.from({ length: item.defaultSets }, (_, i) => ({
+      set_number: i + 1,
+      reps: item.defaultReps,
+      weight_kg: item.defaultWeight,
+    }))
+
     setExercises((prev) => [
       ...prev,
       {
@@ -572,6 +607,7 @@ function LiveWorkoutContent() {
         sets: item.defaultSets,
         reps: item.defaultReps,
         weight_kg: item.defaultWeight,
+        sets_detail: setsDetail,
       },
     ])
     toast.success(`${item.name} ditambahkan!`)
@@ -593,13 +629,134 @@ function LiveWorkoutContent() {
     })
   }
 
-  // Adjust numeric stepper values
-  const adjustValue = (index: number, field: 'sets' | 'reps' | 'weight_kg', delta: number) => {
+  // Tambah set baru (auto-copy beban & reps dari set sebelumnya)
+  const handleAddSet = (exerciseIndex: number) => {
     setExercises((prev) => {
       const next = [...prev]
-      const current = Number(next[index][field]) || 0
-      const updated = Math.max(0, Number((current + delta).toFixed(1)))
-      next[index] = { ...next[index], [field]: updated }
+      const ex = { ...next[exerciseIndex] }
+      const currentSets =
+        ex.sets_detail && ex.sets_detail.length > 0
+          ? [...ex.sets_detail]
+          : Array.from({ length: Math.max(1, ex.sets || 1) }, (_, i) => ({
+              set_number: i + 1,
+              reps: ex.reps || 10,
+              weight_kg: ex.weight_kg || 20,
+            }))
+
+      const lastSet = currentSets[currentSets.length - 1]
+      const newSet: SetDetail = {
+        set_number: currentSets.length + 1,
+        reps: lastSet ? lastSet.reps : 10,
+        weight_kg: lastSet ? lastSet.weight_kg : 20,
+      }
+
+      currentSets.push(newSet)
+      ex.sets_detail = currentSets
+      ex.sets = currentSets.length
+      next[exerciseIndex] = ex
+      return next
+    })
+  }
+
+  // Hapus set tertentu (minimal 1 set tetap ada)
+  const handleDeleteSet = (exerciseIndex: number, setIndex: number) => {
+    setExercises((prev) => {
+      const next = [...prev]
+      const ex = { ...next[exerciseIndex] }
+      const currentSets =
+        ex.sets_detail && ex.sets_detail.length > 0
+          ? [...ex.sets_detail]
+          : Array.from({ length: Math.max(1, ex.sets || 1) }, (_, i) => ({
+              set_number: i + 1,
+              reps: ex.reps || 10,
+              weight_kg: ex.weight_kg || 20,
+            }))
+
+      if (currentSets.length <= 1) {
+        toast.info('Minimal 1 set untuk setiap gerakan')
+        return prev
+      }
+
+      const filtered = currentSets.filter((_, idx) => idx !== setIndex)
+      const reindexed = filtered.map((s, idx) => ({ ...s, set_number: idx + 1 }))
+      ex.sets_detail = reindexed
+      ex.sets = reindexed.length
+      next[exerciseIndex] = ex
+      return next
+    })
+  }
+
+  // Ubah reps atau beban per set secara langsung
+  const handleSetDetailChange = (
+    exerciseIndex: number,
+    setIndex: number,
+    field: 'reps' | 'weight_kg',
+    value: number
+  ) => {
+    setExercises((prev) => {
+      const next = [...prev]
+      const ex = { ...next[exerciseIndex] }
+      const currentSets =
+        ex.sets_detail && ex.sets_detail.length > 0
+          ? [...ex.sets_detail]
+          : Array.from({ length: Math.max(1, ex.sets || 1) }, (_, i) => ({
+              set_number: i + 1,
+              reps: ex.reps || 10,
+              weight_kg: ex.weight_kg || 20,
+            }))
+
+      if (!currentSets[setIndex]) return prev
+
+      currentSets[setIndex] = {
+        ...currentSets[setIndex],
+        [field]: Math.max(0, value),
+      }
+
+      ex.sets_detail = currentSets
+      if (setIndex === currentSets.length - 1) {
+        if (field === 'reps') ex.reps = currentSets[setIndex].reps
+        if (field === 'weight_kg') ex.weight_kg = currentSets[setIndex].weight_kg
+      }
+      next[exerciseIndex] = ex
+      return next
+    })
+  }
+
+  // Penyesuaian cepat nilai stepper per set
+  const adjustSetValue = (
+    exerciseIndex: number,
+    setIndex: number,
+    field: 'reps' | 'weight_kg',
+    delta: number
+  ) => {
+    setExercises((prev) => {
+      const next = [...prev]
+      const ex = { ...next[exerciseIndex] }
+      const currentSets =
+        ex.sets_detail && ex.sets_detail.length > 0
+          ? [...ex.sets_detail]
+          : Array.from({ length: Math.max(1, ex.sets || 1) }, (_, i) => ({
+              set_number: i + 1,
+              reps: ex.reps || 10,
+              weight_kg: ex.weight_kg || 20,
+            }))
+
+      if (!currentSets[setIndex]) return prev
+
+      const currentVal = Number(currentSets[setIndex][field]) || 0
+      const updated = Math.max(0, Number((currentVal + delta).toFixed(1)))
+
+      currentSets[setIndex] = {
+        ...currentSets[setIndex],
+        [field]: updated,
+      }
+
+      ex.sets_detail = currentSets
+      if (setIndex === currentSets.length - 1) {
+        if (field === 'reps') ex.reps = currentSets[setIndex].reps
+        if (field === 'weight_kg') ex.weight_kg = currentSets[setIndex].weight_kg
+      }
+      next[exerciseIndex] = ex
       return next
     })
   }
@@ -707,7 +864,10 @@ function LiveWorkoutContent() {
   }
 
   const currentCategoryData = CATEGORIES.find((c) => c.label === category) || CATEGORIES[0]
-  const totalSetsCount = exercises.reduce((acc, curr) => acc + (Number(curr.sets) || 0), 0)
+  const totalSetsCount = exercises.reduce(
+    (acc, curr) => acc + (curr.sets_detail?.length || Number(curr.sets) || 0),
+    0
+  )
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -1067,99 +1227,139 @@ function LiveWorkoutContent() {
                   </button>
                 </div>
 
-                <CardContent className="p-4 space-y-3">
-                  {/* Steppers Bar: Sets, Reps, Weight */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Sets Control */}
-                    <div className="flex flex-col items-center rounded-xl border border-border/40 bg-background p-2">
-                      <span className="text-[10px] font-semibold uppercase text-muted-foreground">Sets</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <button
-                          type="button"
-                          onClick={() => adjustValue(idx, 'sets', -1)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-foreground active:scale-95"
-                        >
-                          <Minus className="h-3.5 w-3.5" />
-                        </button>
-                        <span className="w-6 text-center font-bold text-base text-foreground">
-                          {exercise.sets}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => adjustValue(idx, 'sets', 1)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-foreground active:scale-95"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                <CardContent className="p-3.5 sm:p-4 space-y-3">
+                  {/* Progresif Sets List: Set 1, Set 2, Set 3... */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-0.5">
+                      <span>Progresif Set ({exercise.sets_detail?.length || exercise.sets} Set)</span>
+                      <span className="text-[10px] text-muted-foreground/70 font-normal lowercase">
+                        reps × beban (kg)
+                      </span>
                     </div>
 
-                    {/* Reps Control */}
-                    <div className="flex flex-col items-center rounded-xl border border-border/40 bg-background p-2">
-                      <span className="text-[10px] font-semibold uppercase text-muted-foreground">Reps</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <button
-                          type="button"
-                          onClick={() => adjustValue(idx, 'reps', -1)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-foreground active:scale-95"
+                    <div className="space-y-1.5">
+                      {(
+                        exercise.sets_detail ||
+                        Array.from({ length: Math.max(1, exercise.sets || 1) }, (_, i) => ({
+                          set_number: i + 1,
+                          reps: exercise.reps || 10,
+                          weight_kg: exercise.weight_kg || 20,
+                        }))
+                      ).map((set, sIdx) => (
+                        <div
+                          key={sIdx}
+                          className="flex items-center justify-between gap-1.5 sm:gap-2 rounded-xl border border-border/50 bg-background/70 p-2 transition-all hover:border-primary/40"
                         >
-                          <Minus className="h-3.5 w-3.5" />
-                        </button>
-                        <span className="w-6 text-center font-bold text-base text-foreground">
-                          {exercise.reps}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => adjustValue(idx, 'reps', 1)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-foreground active:scale-95"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                          {/* Set Badge */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15 text-xs font-black text-primary">
+                              S{set.set_number}
+                            </span>
+                          </div>
+
+                          {/* Reps Stepper */}
+                          <div className="flex items-center gap-0.5 sm:gap-1 bg-card rounded-lg border border-border/60 px-1 py-1">
+                            <button
+                              type="button"
+                              onClick={() => adjustSetValue(idx, sIdx, 'reps', -1)}
+                              className="flex h-6 w-6 items-center justify-center rounded bg-muted/60 text-foreground hover:bg-muted active:scale-90"
+                              title="Kurangi Rep"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <div className="flex items-center justify-center min-w-[40px] px-0.5 text-center">
+                              <span className="font-mono text-xs sm:text-sm font-bold text-foreground">
+                                {set.reps}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground ml-0.5">r</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => adjustSetValue(idx, sIdx, 'reps', 1)}
+                              className="flex h-6 w-6 items-center justify-center rounded bg-muted/60 text-foreground hover:bg-muted active:scale-90"
+                              title="Tambah Rep"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+
+                          {/* Weight Stepper */}
+                          <div className="flex items-center gap-0.5 sm:gap-1 bg-card rounded-lg border border-border/60 px-1 py-1">
+                            <button
+                              type="button"
+                              onClick={() => adjustSetValue(idx, sIdx, 'weight_kg', -2.5)}
+                              className="flex h-6 w-6 items-center justify-center rounded bg-muted/60 text-foreground hover:bg-muted active:scale-90"
+                              title="Kurang 2.5 kg"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <div className="flex items-center justify-center min-w-[50px] px-0.5">
+                              <input
+                                type="number"
+                                step="0.5"
+                                value={set.weight_kg}
+                                onChange={(e) =>
+                                  handleSetDetailChange(
+                                    idx,
+                                    sIdx,
+                                    'weight_kg',
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                className="w-10 text-center font-mono text-xs sm:text-sm font-bold text-accent bg-transparent outline-none focus:bg-primary/10 rounded"
+                              />
+                              <span className="text-[10px] font-bold text-muted-foreground ml-0.5">kg</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => adjustSetValue(idx, sIdx, 'weight_kg', 2.5)}
+                              className="flex h-6 w-6 items-center justify-center rounded bg-primary/20 text-primary hover:bg-primary/30 active:scale-90"
+                              title="Tambah 2.5 kg"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+
+                          {/* Quick +5kg Button (Desktop/Tablet) */}
+                          <button
+                            type="button"
+                            onClick={() => adjustSetValue(idx, sIdx, 'weight_kg', 5)}
+                            className="hidden sm:flex rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[10px] font-extrabold text-primary hover:bg-primary/20 active:scale-95"
+                            title="Tambah 5.0 kg"
+                          >
+                            +5kg
+                          </button>
+
+                          {/* Delete Set Button */}
+                          {(exercise.sets_detail?.length || 1) > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSet(idx, sIdx)}
+                              className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/60 hover:text-red-400 hover:bg-red-500/10 active:scale-90 shrink-0"
+                              title={`Hapus Set ${set.set_number}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
                     </div>
 
-                    {/* Weight Control */}
-                    <div className="flex flex-col items-center rounded-xl border border-border/40 bg-background p-2">
-                      <span className="text-[10px] font-semibold uppercase text-muted-foreground">Beban (KG)</span>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={exercise.weight_kg}
-                          onChange={(e) =>
-                            handleExerciseChange(idx, 'weight_kg', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-12 text-center font-bold text-base text-primary bg-transparent outline-none"
-                        />
-                        <span className="text-[10px] font-bold text-muted-foreground">kg</span>
-                      </div>
-                    </div>
-                  </div>
+                    {/* Button Tambah Set Cepat */}
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleAddSet(idx)}
+                        className="flex items-center gap-1.5 rounded-lg border border-dashed border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 active:scale-95 transition-all"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>+ Tambah Set (S{(exercise.sets_detail?.length || exercise.sets) + 1})</span>
+                      </button>
 
-                  {/* Quick Weight Adjusters (+2.5, +5, -2.5) */}
-                  <div className="flex items-center justify-end gap-1.5 pt-1">
-                    <span className="text-[10px] text-muted-foreground mr-1">Beban Cepat:</span>
-                    <button
-                      type="button"
-                      onClick={() => adjustValue(idx, 'weight_kg', -2.5)}
-                      className="rounded-md border border-border/50 bg-muted/30 px-2 py-1 text-[10px] font-bold text-muted-foreground hover:text-foreground active:scale-95"
-                    >
-                      -2.5
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => adjustValue(idx, 'weight_kg', 2.5)}
-                      className="rounded-md border border-border/50 bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary active:scale-95"
-                    >
-                      +2.5
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => adjustValue(idx, 'weight_kg', 5)}
-                      className="rounded-md border border-border/50 bg-primary/20 px-2 py-1 text-[10px] font-bold text-primary active:scale-95"
-                    >
-                      +5.0
-                    </button>
+                      <span className="text-[10px] text-muted-foreground italic">
+                        Auto-copy dari set sebelumnya
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1596,18 +1796,52 @@ function LiveWorkoutContent() {
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Daftar Latihan</span>
                     <span className="text-foreground font-medium">
-                      {receiptData.exercises.length} Gerakan · {receiptData.exercises.reduce((a, c) => a + Number(c.sets || 0), 0)} Sets
+                      {receiptData.exercises.length} Gerakan ·{' '}
+                      {receiptData.exercises.reduce(
+                        (a, c) => a + (c.sets_detail?.length || Number(c.sets || 0)),
+                        0
+                      )}{' '}
+                      Sets
                     </span>
                   </div>
-                  <div className="space-y-1 rounded-lg bg-card/60 p-2 border border-border/40 max-h-36 overflow-y-auto">
-                    {receiptData.exercises.map((ex, i) => (
-                      <div key={i} className="flex justify-between text-[11px] py-0.5">
-                        <span className="text-foreground font-medium">{ex.name}</span>
-                        <span className="text-muted-foreground font-mono">
-                          {ex.sets}×{ex.reps} | <strong className="text-accent">{ex.weight_kg}kg</strong>
-                        </span>
-                      </div>
-                    ))}
+                  <div className="space-y-1.5 rounded-lg bg-card/60 p-2.5 border border-border/40 max-h-48 overflow-y-auto">
+                    {receiptData.exercises.map((ex, i) => {
+                      const isProgressive =
+                        ex.sets_detail &&
+                        ex.sets_detail.length > 0 &&
+                        ex.sets_detail.some(
+                          (s) =>
+                            s.weight_kg !== ex.sets_detail![0].weight_kg ||
+                            s.reps !== ex.sets_detail![0].reps
+                        )
+
+                      return (
+                        <div key={i} className="py-1 border-b border-border/30 last:border-none">
+                          <div className="flex justify-between items-center text-[11px] font-medium">
+                            <span className="text-foreground">{ex.name}</span>
+                            {!isProgressive && (
+                              <span className="text-muted-foreground font-mono">
+                                {ex.sets}×{ex.reps} |{' '}
+                                <strong className="text-accent">{ex.weight_kg}kg</strong>
+                              </span>
+                            )}
+                          </div>
+                          {isProgressive && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {ex.sets_detail!.map((s) => (
+                                <span
+                                  key={s.set_number}
+                                  className="inline-flex items-center gap-0.5 rounded bg-muted/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground border border-border/40"
+                                >
+                                  <strong className="text-primary font-bold">S{s.set_number}:</strong>{' '}
+                                  {s.reps}×{s.weight_kg}kg
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                   {receiptData.notes && (
                     <div className="text-[11px] text-muted-foreground italic bg-muted/20 p-2 rounded border-l-2 border-primary/50">
@@ -1627,7 +1861,8 @@ function LiveWorkoutContent() {
 
                 <div className="border-t border-dashed border-[#333] pt-2 text-center">
                   <p className="text-[10px] text-muted-foreground/60">
-                    {receiptData.dateStr} {receiptData.trainerName ? `· Coach ${receiptData.trainerName}` : ''} — Terima kasih!
+                    {receiptData.dateStr}{' '}
+                    {receiptData.trainerName ? `· Coach ${receiptData.trainerName}` : ''} — Terima kasih!
                   </p>
                 </div>
 
@@ -1639,7 +1874,8 @@ function LiveWorkoutContent() {
                       <span>PROGRAM PT TUNTAS 100%!</span>
                     </div>
                     <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                      Selamat untuk Kak <strong>{receiptData.memberName}</strong>! Seluruh kuota sesi paket telah selesai. Buka Laporan Kelulusan PDF (2 Halaman) sekarang.
+                      Selamat untuk Kak <strong>{receiptData.memberName}</strong>! Seluruh kuota sesi
+                      paket telah selesai. Buka Laporan Kelulusan PDF (2 Halaman) sekarang.
                     </p>
                     <Button
                       type="button"
@@ -1677,7 +1913,25 @@ function LiveWorkoutContent() {
                   onClick={() => {
                     const phone = receiptData.memberPhone?.replace(/[^0-9]/g, '').replace(/^0/, '62')
                     const list = receiptData.exercises
-                      .map((e) => `• *${e.name}*: ${e.sets} set × ${e.reps} reps | ${e.weight_kg}kg`)
+                      .map((e) => {
+                        const isProgressive =
+                          e.sets_detail &&
+                          e.sets_detail.length > 0 &&
+                          e.sets_detail.some(
+                            (s) =>
+                              s.weight_kg !== e.sets_detail![0].weight_kg ||
+                              s.reps !== e.sets_detail![0].reps
+                          )
+
+                        if (isProgressive) {
+                          const setsLines = e.sets_detail!
+                            .map((s) => `  ↳ S${s.set_number}: ${s.reps} reps × ${s.weight_kg}kg`)
+                            .join('\n')
+                          return `• *${e.name}* (${e.sets_detail!.length} set):\n${setsLines}`
+                        } else {
+                          return `• *${e.name}*: ${e.sets} set × ${e.reps} reps | ${e.weight_kg}kg`
+                        }
+                      })
                       .join('\n')
 
                     const graduationClosing =
@@ -1687,14 +1941,14 @@ function LiveWorkoutContent() {
 
                     const message = encodeURIComponent(
                       `Halo Kak *${receiptData.memberName}*! \n\n` +
-                      `Sesi latihan PT kamu di *Line Up Gym* baru saja selesai:\n` +
-                      (receiptData.trainerName ? `• Coach: *${receiptData.trainerName}*\n` : '') +
-                      `• Fokus: *${receiptData.category} Day*\n` +
-                      `• Durasi: *${receiptData.duration}*\n\n` +
-                      `*Daftar Latihan:*\n${list}\n\n` +
-                      (receiptData.notes ? `_Catatan Coach: "${receiptData.notes}"_\n\n` : '') +
-                      `${graduationClosing}\n` +
-                      `*LINEUP GYM PRAMBANAN*\nBe Strong Be Healthy!`
+                        `Sesi latihan PT kamu di *Line Up Gym* baru saja selesai:\n` +
+                        (receiptData.trainerName ? `• Coach: *${receiptData.trainerName}*\n` : '') +
+                        `• Fokus: *${receiptData.category} Day*\n` +
+                        `• Durasi: *${receiptData.duration}*\n\n` +
+                        `*Daftar Latihan:*\n${list}\n\n` +
+                        (receiptData.notes ? `_Catatan Coach: "${receiptData.notes}"_\n\n` : '') +
+                        `${graduationClosing}\n` +
+                        `*LINEUP GYM PRAMBANAN*\nBe Strong Be Healthy!`
                     )
                     if (phone) {
                       window.open(`https://wa.me/${phone}?text=${message}`, '_blank')

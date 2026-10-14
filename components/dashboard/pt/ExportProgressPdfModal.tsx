@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -70,8 +70,57 @@ export function ExportProgressPdfModal({
   const [includePhotos, setIncludePhotos] = useState(true)
   const [activePreviewPage, setActivePreviewPage] = useState<'p1' | 'p2'>('p1')
 
-  const initialMetric = bodyMetrics?.[0]
-  const lastMetric = bodyMetrics?.[bodyMetrics.length - 1]
+  // Temukan Baseline Day 1 dan Day Terakhir
+  const day1Record = useMemo(() => {
+    return (bodyMetrics || []).find((m) => m.phase === 'day_1') || bodyMetrics?.[0] || null
+  }, [bodyMetrics])
+
+  const dayFinalRecord = useMemo(() => {
+    return (bodyMetrics || []).find((m) => m.phase === 'day_final') || null
+  }, [bodyMetrics])
+
+  const progressRecords = useMemo(() => {
+    return (bodyMetrics || []).filter((m) => m.phase === 'progress')
+  }, [bodyMetrics])
+
+  // Mode Laporan: 'graduation' (Day 1 vs Akhir) atau 'milestone' (Day 1 vs Progress Berkala)
+  const [reportMode, setReportMode] = useState<'graduation' | 'milestone'>(() => {
+    return dayFinalRecord ? 'graduation' : 'milestone'
+  })
+  const [selectedMetricId, setSelectedMetricId] = useState<string>('')
+
+  // Sinkronkan default mode saat data berubah
+  useEffect(() => {
+    if (dayFinalRecord) {
+      setReportMode('graduation')
+    } else {
+      setReportMode('milestone')
+    }
+  }, [dayFinalRecord])
+
+  // Record target pembanding berdasarkan mode yang dipilih
+  const targetRecord = useMemo(() => {
+    if (selectedMetricId) {
+      const found = (bodyMetrics || []).find((m) => m.id === selectedMetricId)
+      if (found) return found
+    }
+    if (reportMode === 'graduation') {
+      return dayFinalRecord || (bodyMetrics && bodyMetrics.length > 1 ? bodyMetrics[bodyMetrics.length - 1] : null)
+    } else {
+      return progressRecords.length > 0
+        ? progressRecords[progressRecords.length - 1]
+        : (bodyMetrics && bodyMetrics.length > 1 ? bodyMetrics[bodyMetrics.length - 1] : null)
+    }
+  }, [selectedMetricId, reportMode, dayFinalRecord, progressRecords, bodyMetrics])
+
+  const hasAnyPhotos = useMemo(() => {
+    return (bodyMetrics || []).some(
+      (m) => m.photo_front_url || m.photo_side_url || m.photo_back_url
+    )
+  }, [bodyMetrics])
+
+  const initialMetric = day1Record || bodyMetrics?.[0]
+  const lastMetric = targetRecord || bodyMetrics?.[bodyMetrics?.length - 1]
   const weightDiff =
     initialMetric?.weight_kg && lastMetric?.weight_kg
       ? Number((lastMetric.weight_kg - initialMetric.weight_kg).toFixed(1))
@@ -87,24 +136,6 @@ export function ExportProgressPdfModal({
   }, [member?.full_name])
 
   const pdfFileName = `LINEUPGYM_PT_${cleanMemberName || 'MEMBER'}`
-
-  // Cari Foto Baseline Day 1 dan Day Terakhir
-  const { day1Record, dayFinalRecord, hasAnyPhotos } = useMemo(() => {
-    const withPhotos = (bodyMetrics || []).filter(
-      (m) => m.photo_front_url || m.photo_side_url || m.photo_back_url
-    )
-    const day1 =
-      withPhotos.find((m) => m.phase === 'day_1') || withPhotos[0] || null
-    const dayFinal =
-      withPhotos.find((m) => m.phase === 'day_final') ||
-      (withPhotos.length > 1 ? withPhotos[withPhotos.length - 1] : null)
-
-    return {
-      day1Record: day1,
-      dayFinalRecord: dayFinal,
-      hasAnyPhotos: withPhotos.length > 0,
-    }
-  }, [bodyMetrics])
 
   const latestTrainerName = useMemo(() => {
     const logWithTrainer = (workoutLogs || []).find((w) => w.trainer_name && w.trainer_name.trim())
@@ -129,13 +160,84 @@ export function ExportProgressPdfModal({
   }
 
   const generateHtmlContent = () => {
-
     const day1Front = sanitizeImageUrl(day1Record?.photo_front_url)
-    const finalFront = sanitizeImageUrl(dayFinalRecord?.photo_front_url)
+    const targetFront = sanitizeImageUrl(targetRecord?.photo_front_url)
     const day1Side = sanitizeImageUrl(day1Record?.photo_side_url)
-    const finalSide = sanitizeImageUrl(dayFinalRecord?.photo_side_url)
+    const targetSide = sanitizeImageUrl(targetRecord?.photo_side_url)
     const day1Back = sanitizeImageUrl(day1Record?.photo_back_url)
-    const finalBack = sanitizeImageUrl(dayFinalRecord?.photo_back_url)
+    const targetBack = sanitizeImageUrl(targetRecord?.photo_back_url)
+
+    const hasFront = Boolean(day1Front || targetFront)
+    const hasSide = Boolean(day1Side || targetSide)
+    const hasBack = Boolean(day1Back || targetBack)
+    const activeCount = (hasFront ? 1 : 0) + (hasSide ? 1 : 0) + (hasBack ? 1 : 0)
+    const gridClass = activeCount === 1 ? 'photo-grid-1' : activeCount === 2 ? 'photo-grid-2' : 'photo-grid-3'
+    const targetTagLabel = reportMode === 'graduation' ? 'Hasil Akhir' : 'Progress'
+    const targetTagClass = reportMode === 'graduation' ? 'photo-tag-final' : 'photo-tag-progress'
+
+    const photoCardsHtml = activeCount === 0
+      ? '<div style="text-align: center; padding: 40px; color: #64748b; font-size: 11px; border: 1px dashed #cbd5e1; border-radius: 8px;">Belum ada dokumentasi foto yang diunggah untuk sesi ini.</div>'
+      : [
+          hasFront
+            ? `
+            <div class="photo-card">
+              <div class="photo-card-title">1. Tampak Depan</div>
+              <div class="photo-pair">
+                <div class="photo-item">
+                  <span class="photo-tag-day1">Day 1</span>
+                  ${day1Front ? `<img src="${day1Front}" class="photo-img" />` : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'}
+                  <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
+                </div>
+                <div class="photo-item">
+                  <span class="${targetTagClass}">${targetTagLabel}</span>
+                  ${targetFront ? `<img src="${targetFront}" class="photo-img" />` : '<div class="photo-placeholder">Belum ada foto</div>'}
+                  <span class="photo-date">${formatShortDate(targetRecord?.recorded_at)}</span>
+                </div>
+              </div>
+            </div>
+          `
+            : '',
+          hasSide
+            ? `
+            <div class="photo-card">
+              <div class="photo-card-title">2. Tampak Samping</div>
+              <div class="photo-pair">
+                <div class="photo-item">
+                  <span class="photo-tag-day1">Day 1</span>
+                  ${day1Side ? `<img src="${day1Side}" class="photo-img" />` : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'}
+                  <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
+                </div>
+                <div class="photo-item">
+                  <span class="${targetTagClass}">${targetTagLabel}</span>
+                  ${targetSide ? `<img src="${targetSide}" class="photo-img" />` : '<div class="photo-placeholder">Belum ada foto</div>'}
+                  <span class="photo-date">${formatShortDate(targetRecord?.recorded_at)}</span>
+                </div>
+              </div>
+            </div>
+          `
+            : '',
+          hasBack
+            ? `
+            <div class="photo-card">
+              <div class="photo-card-title">3. Tampak Belakang</div>
+              <div class="photo-pair">
+                <div class="photo-item">
+                  <span class="photo-tag-day1">Day 1</span>
+                  ${day1Back ? `<img src="${day1Back}" class="photo-img" />` : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'}
+                  <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
+                </div>
+                <div class="photo-item">
+                  <span class="${targetTagClass}">${targetTagLabel}</span>
+                  ${targetBack ? `<img src="${targetBack}" class="photo-img" />` : '<div class="photo-placeholder">Belum ada foto</div>'}
+                  <span class="photo-date">${formatShortDate(targetRecord?.recorded_at)}</span>
+                </div>
+              </div>
+            </div>
+          `
+            : '',
+        ]
+          .filter(Boolean)
+          .join('')
 
     // Measurements Table Data
     const measureKeys = [
@@ -317,6 +419,32 @@ export function ExportProgressPdfModal({
             .badge-leg { background: #d1fae5; color: #065f46; }
             .badge-other { background: #f3f4f6; color: #374151; }
 
+            .ex-grid {
+              display: flex;
+              flex-direction: column;
+              gap: 2.5px;
+            }
+            .ex-pill {
+              display: inline-flex;
+              flex-wrap: wrap;
+              align-items: baseline;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 3px;
+              padding: 1.5px 5px;
+              font-size: 8px;
+              line-height: 1.3;
+            }
+            .ex-pill strong {
+              color: #0f172a;
+              margin-right: 4px;
+              font-weight: 700;
+            }
+            .ex-pill-detail {
+              color: #334155;
+              font-size: 7.5px;
+            }
+
             .digital-footer {
               border-top: 1px solid #cbd5e1;
               padding-top: 6px;
@@ -341,6 +469,18 @@ export function ExportProgressPdfModal({
               display: flex;
               justify-content: space-between;
               font-size: 10px;
+            }
+            .photo-grid-1 {
+              display: flex;
+              justify-content: center;
+              max-width: 360px;
+              margin: 0 auto 14px auto;
+            }
+            .photo-grid-2 {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 12px;
+              margin-bottom: 14px;
             }
             .photo-grid-3 {
               display: grid;
@@ -391,6 +531,17 @@ export function ExportProgressPdfModal({
               color: #047857;
               background: #ecfdf5;
               border: 1px solid #a7f3d0;
+              padding: 1px 4px;
+              border-radius: 3px;
+              margin-bottom: 3px;
+              text-transform: uppercase;
+            }
+            .photo-tag-progress {
+              font-size: 7.5px;
+              font-weight: 800;
+              color: #b45309;
+              background: #fffbeb;
+              border: 1px solid #fde68a;
               padding: 1px 4px;
               border-radius: 3px;
               margin-bottom: 3px;
@@ -541,10 +692,34 @@ export function ExportProgressPdfModal({
               day: 'numeric',
               month: 'short',
             })
-            const exList = (w.exercises || [])
-              .slice(0, 4)
-              .map((e) => `• <strong>${escapeHtml(e.name)}</strong>: ${e.sets}×${e.reps} @ ${e.weight_kg}kg`)
-              .join('<br>')
+            const exListHtml = (w.exercises || [])
+              .map((e) => {
+                const isProg =
+                  e.sets_detail &&
+                  e.sets_detail.length > 0 &&
+                  e.sets_detail.some(
+                    (s) =>
+                      s.weight_kg !== e.sets_detail![0].weight_kg ||
+                      s.reps !== e.sets_detail![0].reps
+                  )
+
+                let notation = ''
+                if (isProg && e.sets_detail) {
+                  notation = e.sets_detail
+                    .map((s) => {
+                      const wt = s.weight_kg > 0 ? `${s.weight_kg} kg` : 'Bodyweight'
+                      return `${wt} (${s.reps} reps)`
+                    })
+                    .join(' → ')
+                } else {
+                  const wtLabel = e.weight_kg > 0 ? `${e.weight_kg} kg` : 'Bodyweight'
+                  notation = `${e.sets} Set × ${e.reps} reps (${wtLabel})`
+                }
+
+                return `<span class="ex-pill"><strong>${escapeHtml(e.name)}:</strong> <span class="ex-pill-detail">${escapeHtml(notation)}</span></span>`
+              })
+              .join('')
+
             const badgeClass =
               w.category === 'Push'
                 ? 'badge-push'
@@ -559,7 +734,7 @@ export function ExportProgressPdfModal({
                             <td>${d}</td>
                             <td><span class="badge ${badgeClass}">${escapeHtml(w.category)}</span></td>
                             <td style="font-weight: 600; color: #111;">${escapeHtml(w.trainer_name) || '-'}</td>
-                            <td>${exList || '-'}</td>
+                            <td><div class="ex-grid">${exListHtml || '-'}</div></td>
                             <td>${w.notes ? '<em>"' + escapeHtml(w.notes) + '"</em>' : '-'}</td>
                           </tr>
                         `
@@ -575,104 +750,63 @@ export function ExportProgressPdfModal({
             </div>
           </div>
 
-          <!-- ================= HALAMAN 2: FOTO TRANSFORMASI (OPSI A) ================= -->
+          <!-- ================= HALAMAN 2: FOTO TRANSFORMASI / EVALUASI BERKALA (OPSI A + FLEKSIBEL) ================= -->
           ${includePhotos
         ? `
             <div class="page-container page-break">
               <div class="header">
                 <div class="gym-name">LineUp Gym Prambanan</div>
                 <div class="gym-tagline">Be Strong Be Healthy!</div>
-                <div class="doc-title">GALERI TRANSFORMASI FISIK (BEFORE vs AFTER)</div>
+                <div class="doc-title">${
+                  reportMode === 'graduation'
+                    ? 'GALERI TRANSFORMASI FISIK (BEFORE vs AFTER)'
+                    : 'DOKUMENTASI EVALUASI &amp; PROGRESS FISIK'
+                }</div>
               </div>
 
               <div class="transformation-banner">
                 <div>Member: <strong>${escapeHtml(member?.full_name) || '-'}</strong> (${escapeHtml(member?.pt_membership_name) || 'Personal Trainer'})</div>
-                <div>Status Program: <span class="cert-stamp">✓ Lulus / Selesai</span></div>
+                <div>Status Program: ${
+                  reportMode === 'graduation'
+                    ? '<span class="cert-stamp">✓ Lulus / Selesai</span>'
+                    : `<span class="cert-stamp" style="border-color: #2563eb; color: #2563eb;">⚡ Evaluasi Berkala (${member?.pt_remaining_sessions ?? 0} Sesi Tersisa)</span>`
+                }</div>
               </div>
 
-              <div class="photo-grid-3">
-                <!-- 1. DEPAN -->
-                <div class="photo-card">
-                  <div class="photo-card-title">1. Tampak Depan</div>
-                  <div class="photo-pair">
-                    <div class="photo-item">
-                      <span class="photo-tag-day1">Day 1</span>
-                      ${day1Front
-          ? `<img src="${day1Front}" class="photo-img" />`
-          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
-        }
-                      <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
-                    </div>
-                    <div class="photo-item">
-                      <span class="photo-tag-final">Hasil Akhir</span>
-                      ${finalFront
-          ? `<img src="${finalFront}" class="photo-img" />`
-          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
-        }
-                      <span class="photo-date">${formatShortDate(dayFinalRecord?.recorded_at)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 2. SAMPING -->
-                <div class="photo-card">
-                  <div class="photo-card-title">2. Tampak Samping</div>
-                  <div class="photo-pair">
-                    <div class="photo-item">
-                      <span class="photo-tag-day1">Day 1</span>
-                      ${day1Side
-          ? `<img src="${day1Side}" class="photo-img" />`
-          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
-        }
-                      <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
-                    </div>
-                    <div class="photo-item">
-                      <span class="photo-tag-final">Hasil Akhir</span>
-                      ${finalSide
-          ? `<img src="${finalSide}" class="photo-img" />`
-          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
-        }
-                      <span class="photo-date">${formatShortDate(dayFinalRecord?.recorded_at)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 3. BELAKANG -->
-                <div class="photo-card">
-                  <div class="photo-card-title">3. Tampak Belakang</div>
-                  <div class="photo-pair">
-                    <div class="photo-item">
-                      <span class="photo-tag-day1">Day 1</span>
-                      ${day1Back
-          ? `<img src="${day1Back}" class="photo-img" />`
-          : '<div class="photo-placeholder">Tidak ada foto Day 1</div>'
-        }
-                      <span class="photo-date">${formatShortDate(day1Record?.recorded_at)}</span>
-                    </div>
-                    <div class="photo-item">
-                      <span class="photo-tag-final">Hasil Akhir</span>
-                      ${finalBack
-          ? `<img src="${finalBack}" class="photo-img" />`
-          : '<div class="photo-placeholder">Belum ada foto akhir</div>'
-        }
-                      <span class="photo-date">${formatShortDate(dayFinalRecord?.recorded_at)}</span>
-                    </div>
-                  </div>
-                </div>
+              <div class="${gridClass}">
+                ${photoCardsHtml}
               </div>
 
-              <!-- Rekomendasi Program Lanjutan Coach (Peluang Closing Renewal) -->
-              <div class="renewal-box">
-                <div class="renewal-title">🏆 Evaluasi Kelulusan & Rekomendasi Coach:</div>
-                <div class="renewal-desc">
-                  Selamat atas konsistensi dan kerja keras Kak <strong>${escapeHtml(member?.full_name) || 'Member'}</strong> selama menyelesaikan program Personal Trainer di Line Up Gym! 
-                  Dokumentasi transformasi di atas membuktikan hasil nyata dari disiplin latihan dan pengaturan nutrisi. 
-                  Untuk mempertahankan hasil (*muscle retention*) dan melangkah ke fase berikutnya, coach menyarankan melanjutkan ke <strong>Program PT Lanjutan / Maintenance Fase 2</strong>.
-                </div>
-              </div>
+              <!-- Rekomendasi Coach / Closing Renewal / Milestone Motivation -->
+              ${
+                reportMode === 'graduation'
+                  ? `
+                    <div class="renewal-box">
+                      <div class="renewal-title">🏆 Evaluasi Kelulusan &amp; Rekomendasi Coach:</div>
+                      <div class="renewal-desc">
+                        Selamat atas konsistensi dan kerja keras Kak <strong>${escapeHtml(member?.full_name) || 'Member'}</strong> selama menyelesaikan program Personal Trainer di Line Up Gym! 
+                        Dokumentasi transformasi di atas membuktikan hasil nyata dari disiplin latihan dan pengaturan nutrisi. 
+                        Untuk mempertahankan hasil (*muscle retention*) dan melangkah ke fase berikutnya, coach menyarankan melanjutkan ke <strong>Program PT Lanjutan / Maintenance Fase 2</strong>.
+                      </div>
+                    </div>
+                  `
+                  : `
+                    <div class="renewal-box" style="border-color: #2563eb; background: #eff6ff;">
+                      <div class="renewal-title" style="color: #1d4ed8;">⚡ Evaluasi Perkembangan &amp; Feedback Coach:</div>
+                      <div class="renewal-desc" style="color: #1e3a8a;">
+                        Perkembangan latihan Kak <strong>${escapeHtml(member?.full_name) || 'Member'}</strong> berjalan on-track! Terlihat perubahan postur dan adaptasi beban yang semakin baik.
+                        Masih ada <strong>${member?.pt_remaining_sessions ?? 0} sesi tersisa</strong> untuk memaksimalkan target komposisi tubuh. Pertahankan intensitas dan konsistensi pola makan!
+                      </div>
+                    </div>
+                  `
+              }
 
               <div class="digital-footer" style="margin-top: 20px;">
-                <span>LINEUP GYM PRAMBANAN · Official Physical Transformation Certificate</span>
+                <span>LINEUP GYM PRAMBANAN · ${
+                  reportMode === 'graduation'
+                    ? 'Official Physical Transformation Certificate'
+                    : 'Official Progress Evaluation Certificate'
+                }</span>
                 <span>Coach: <strong>${escapeHtml(latestTrainerName) || 'LineUp Gym Team'}</strong> · Dicetak: ${todayStr}</span>
               </div>
             </div>
@@ -798,6 +932,61 @@ export function ExportProgressPdfModal({
             </button>
           </div>
         </DialogHeader>
+
+        {/* Mode Selector Bar: Kelulusan vs Evaluasi Berkala (Bagian 1 Opsi A) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-2 bg-muted/15 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-muted-foreground">Mode Laporan:</span>
+            <div className="flex items-center rounded-lg border border-border/60 bg-card p-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setReportMode('graduation')
+                  setSelectedMetricId('')
+                }}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
+                  reportMode === 'graduation'
+                    ? 'bg-amber-500 text-black shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                🏆 Kelulusan (Day 1 vs Akhir)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReportMode('milestone')
+                  setSelectedMetricId('')
+                }}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
+                  reportMode === 'milestone'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                ⚡ Evaluasi Berkala (Day 1 vs Progress)
+              </button>
+            </div>
+          </div>
+
+          {reportMode === 'milestone' && progressRecords.length > 1 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground text-[11px]">Sesi:</span>
+              <select
+                value={selectedMetricId}
+                onChange={(e) => setSelectedMetricId(e.target.value)}
+                className="rounded-md border border-border/60 bg-card px-2 py-1 text-[11px] font-semibold text-foreground outline-none focus:border-primary"
+              >
+                <option value="">Progress Terbaru ({formatShortDate(targetRecord?.recorded_at)})</option>
+                {progressRecords.map((rec, i) => (
+                  <option key={rec.id} value={rec.id}>
+                    Progress #{i + 1} ({formatShortDate(rec.recorded_at)}){rec.weight_kg ? ` · ${rec.weight_kg}kg` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
 
         {/* Paper Sheet Preview */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-muted/20">
@@ -934,14 +1123,40 @@ export function ExportProgressPdfModal({
                                 {w.trainer_name || '-'}
                               </td>
                               <td className="p-2 text-muted-foreground">
-                                {(w.exercises || [])
-                                  .slice(0, 3)
-                                  .map(
-                                    (e) =>
-                                      `${e.name} (${e.sets}×${e.reps} @ ${e.weight_kg}kg)`
-                                  )
-                                  .join(', ')}
-                                {(w.exercises || []).length > 3 && '...'}
+                                <div className="flex flex-col gap-1">
+                                  {(w.exercises || []).map((e, eIdx) => {
+                                    const isProg =
+                                      e.sets_detail &&
+                                      e.sets_detail.length > 0 &&
+                                      e.sets_detail.some(
+                                        (s) =>
+                                          s.weight_kg !== e.sets_detail![0].weight_kg ||
+                                          s.reps !== e.sets_detail![0].reps
+                                      )
+
+                                    const notation =
+                                      isProg && e.sets_detail
+                                        ? e.sets_detail
+                                            .map((s) => {
+                                              const wt = s.weight_kg > 0 ? `${s.weight_kg} kg` : 'Bodyweight'
+                                              return `${wt} (${s.reps} reps)`
+                                            })
+                                            .join(' → ')
+                                        : `${e.sets} Set × ${e.reps} reps (${e.weight_kg > 0 ? `${e.weight_kg} kg` : 'Bodyweight'})`
+
+                                    return (
+                                      <span
+                                        key={eIdx}
+                                        className="inline-flex flex-wrap items-baseline gap-1 rounded bg-muted/60 border border-border/50 px-2 py-0.5 text-[9px]"
+                                      >
+                                        <strong className="text-foreground">{e.name}:</strong>
+                                        <span className="text-muted-foreground">
+                                          {notation}
+                                        </span>
+                                      </span>
+                                    )
+                                  })}
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -961,106 +1176,116 @@ export function ExportProgressPdfModal({
               </>
             ) : (
               <>
-                {/* Halaman 2: Galeri Transformasi */}
+                {/* Halaman 2: Galeri Transformasi / Progress */}
                 <div className="text-center border-b-2 border-border/60 pb-3 space-y-0.5">
                   <div className="flex items-center justify-center gap-1.5 text-emerald-400">
                     <Award className="h-4 w-4" />
                     <span className="font-heading text-sm font-extrabold uppercase">
-                      Galeri Transformasi Before vs After
+                      {reportMode === 'graduation'
+                        ? 'Galeri Transformasi Before vs After'
+                        : 'Dokumentasi Progress Evaluasi Fisik'}
                     </span>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    Dokumentasi Resmi Kelulusan & Perkembangan Fisik Member
+                    {reportMode === 'graduation'
+                      ? 'Dokumentasi Resmi Kelulusan & Perkembangan Fisik Member'
+                      : `Evaluasi Berkala Progres Member · Sisa ${member?.pt_remaining_sessions ?? 0} Sesi`}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center pt-1">
                   {/* Depan */}
-                  <div className="rounded-lg border border-border/60 bg-muted/20 p-2 space-y-1">
-                    <span className="text-[10px] font-bold text-foreground block">
-                      Tampak Depan
-                    </span>
-                    <div className="grid grid-cols-2 gap-1 text-[9px]">
-                      <div className="rounded bg-background p-1 border border-border/40">
-                        <span className="text-blue-400 font-bold block text-[8px]">
-                          Day 1
-                        </span>
-                        {day1Record?.photo_front_url ? (
-                          <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
-                        ) : (
-                          <span className="text-[8px] text-muted-foreground">-</span>
-                        )}
-                      </div>
-                      <div className="rounded bg-background p-1 border border-border/40">
-                        <span className="text-emerald-400 font-bold block text-[8px]">
-                          Akhir
-                        </span>
-                        {dayFinalRecord?.photo_front_url ? (
-                          <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
-                        ) : (
-                          <span className="text-[8px] text-muted-foreground">-</span>
-                        )}
+                  {(day1Record?.photo_front_url || targetRecord?.photo_front_url) && (
+                    <div className="rounded-lg border border-border/60 bg-muted/20 p-2 space-y-1">
+                      <span className="text-[10px] font-bold text-foreground block">
+                        1. Tampak Depan
+                      </span>
+                      <div className="grid grid-cols-2 gap-1 text-[9px]">
+                        <div className="rounded bg-background p-1 border border-border/40">
+                          <span className="text-blue-400 font-bold block text-[8px]">
+                            Day 1
+                          </span>
+                          {day1Record?.photo_front_url ? (
+                            <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
+                          ) : (
+                            <span className="text-[8px] text-muted-foreground">-</span>
+                          )}
+                        </div>
+                        <div className="rounded bg-background p-1 border border-border/40">
+                          <span className="text-emerald-400 font-bold block text-[8px]">
+                            {reportMode === 'graduation' ? 'Akhir' : 'Progress'}
+                          </span>
+                          {targetRecord?.photo_front_url ? (
+                            <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
+                          ) : (
+                            <span className="text-[8px] text-muted-foreground">-</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Samping */}
-                  <div className="rounded-lg border border-border/60 bg-muted/20 p-2 space-y-1">
-                    <span className="text-[10px] font-bold text-foreground block">
-                      Tampak Samping
-                    </span>
-                    <div className="grid grid-cols-2 gap-1 text-[9px]">
-                      <div className="rounded bg-background p-1 border border-border/40">
-                        <span className="text-blue-400 font-bold block text-[8px]">
-                          Day 1
-                        </span>
-                        {day1Record?.photo_side_url ? (
-                          <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
-                        ) : (
-                          <span className="text-[8px] text-muted-foreground">-</span>
-                        )}
-                      </div>
-                      <div className="rounded bg-background p-1 border border-border/40">
-                        <span className="text-emerald-400 font-bold block text-[8px]">
-                          Akhir
-                        </span>
-                        {dayFinalRecord?.photo_side_url ? (
-                          <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
-                        ) : (
-                          <span className="text-[8px] text-muted-foreground">-</span>
-                        )}
+                  {(day1Record?.photo_side_url || targetRecord?.photo_side_url) && (
+                    <div className="rounded-lg border border-border/60 bg-muted/20 p-2 space-y-1">
+                      <span className="text-[10px] font-bold text-foreground block">
+                        2. Tampak Samping
+                      </span>
+                      <div className="grid grid-cols-2 gap-1 text-[9px]">
+                        <div className="rounded bg-background p-1 border border-border/40">
+                          <span className="text-blue-400 font-bold block text-[8px]">
+                            Day 1
+                          </span>
+                          {day1Record?.photo_side_url ? (
+                            <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
+                          ) : (
+                            <span className="text-[8px] text-muted-foreground">-</span>
+                          )}
+                        </div>
+                        <div className="rounded bg-background p-1 border border-border/40">
+                          <span className="text-emerald-400 font-bold block text-[8px]">
+                            {reportMode === 'graduation' ? 'Akhir' : 'Progress'}
+                          </span>
+                          {targetRecord?.photo_side_url ? (
+                            <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
+                          ) : (
+                            <span className="text-[8px] text-muted-foreground">-</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Belakang */}
-                  <div className="rounded-lg border border-border/60 bg-muted/20 p-2 space-y-1">
-                    <span className="text-[10px] font-bold text-foreground block">
-                      Tampak Belakang
-                    </span>
-                    <div className="grid grid-cols-2 gap-1 text-[9px]">
-                      <div className="rounded bg-background p-1 border border-border/40">
-                        <span className="text-blue-400 font-bold block text-[8px]">
-                          Day 1
-                        </span>
-                        {day1Record?.photo_back_url ? (
-                          <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
-                        ) : (
-                          <span className="text-[8px] text-muted-foreground">-</span>
-                        )}
-                      </div>
-                      <div className="rounded bg-background p-1 border border-border/40">
-                        <span className="text-emerald-400 font-bold block text-[8px]">
-                          Akhir
-                        </span>
-                        {dayFinalRecord?.photo_back_url ? (
-                          <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
-                        ) : (
-                          <span className="text-[8px] text-muted-foreground">-</span>
-                        )}
+                  {(day1Record?.photo_back_url || targetRecord?.photo_back_url) && (
+                    <div className="rounded-lg border border-border/60 bg-muted/20 p-2 space-y-1">
+                      <span className="text-[10px] font-bold text-foreground block">
+                        3. Tampak Belakang
+                      </span>
+                      <div className="grid grid-cols-2 gap-1 text-[9px]">
+                        <div className="rounded bg-background p-1 border border-border/40">
+                          <span className="text-blue-400 font-bold block text-[8px]">
+                            Day 1
+                          </span>
+                          {day1Record?.photo_back_url ? (
+                            <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
+                          ) : (
+                            <span className="text-[8px] text-muted-foreground">-</span>
+                          )}
+                        </div>
+                        <div className="rounded bg-background p-1 border border-border/40">
+                          <span className="text-emerald-400 font-bold block text-[8px]">
+                            {reportMode === 'graduation' ? 'Akhir' : 'Progress'}
+                          </span>
+                          {targetRecord?.photo_back_url ? (
+                            <span className="text-[8px] text-emerald-400 font-medium">✓ Ada</span>
+                          ) : (
+                            <span className="text-[8px] text-muted-foreground">-</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Box Rekomendasi Renewal */}
