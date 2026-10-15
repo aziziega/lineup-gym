@@ -7,6 +7,7 @@ import { usePtActiveMembers } from '@/hooks/usePtSessions'
 import {
   useMemberBodyMetrics,
   useCreateBodyMetric,
+  useRemoveBodyMetricPhoto,
   uploadProgressPhoto,
 } from '@/hooks/usePtProgress'
 import MemberCombobox from '@/components/dashboard/MemberCombobox'
@@ -194,6 +195,7 @@ function MetricsFormContent() {
   const { data: historicalMetrics, isLoading: historyLoading } =
     useMemberBodyMetrics(selectedMemberId || undefined)
   const createMetric = useCreateBodyMetric()
+  const removePhoto = useRemoveBodyMetricPhoto()
 
   // Ambil member yang sedang dipilih
   const currentMember = useMemo(
@@ -410,25 +412,52 @@ function MetricsFormContent() {
     e.target.value = ''
   }
 
-  // Handle Remove Photo Confirmation
-  const handleConfirmDeletePhoto = () => {
-    if (photoToDelete === 'front') {
+  // Handle Remove Photo Confirmation (vuln-0001)
+  const handleConfirmDeletePhoto = async () => {
+    if (!photoToDelete) return
+
+    const angle = photoToDelete
+    const isExistingStoredPhoto = Boolean(existingPhotos[angle])
+    const label =
+      angle === 'front'
+        ? 'Tampak Depan'
+        : angle === 'side'
+        ? 'Tampak Samping'
+        : 'Tampak Belakang'
+
+    // 1. Reset file baru & preview lokal
+    if (angle === 'front') {
       if (frontPhoto.preview) URL.revokeObjectURL(frontPhoto.preview)
       setFrontPhoto({ file: null, preview: null })
       setExistingPhotos((prev) => ({ ...prev, front: null }))
-      toast.info('Foto Tampak Depan dibatalkan / dihapus')
-    } else if (photoToDelete === 'side') {
+    } else if (angle === 'side') {
       if (sidePhoto.preview) URL.revokeObjectURL(sidePhoto.preview)
       setSidePhoto({ file: null, preview: null })
       setExistingPhotos((prev) => ({ ...prev, side: null }))
-      toast.info('Foto Tampak Samping dibatalkan / dihapus')
-    } else if (photoToDelete === 'back') {
+    } else if (angle === 'back') {
       if (backPhoto.preview) URL.revokeObjectURL(backPhoto.preview)
       setBackPhoto({ file: null, preview: null })
       setExistingPhotos((prev) => ({ ...prev, back: null }))
-      toast.info('Foto Tampak Belakang dibatalkan / dihapus')
     }
+
     setPhotoToDelete(null)
+
+    // 2. Jika foto merupakan foto yang sudah tersimpan di database, hapus langsung dari DB & storage fisik
+    if (isExistingStoredPhoto && existingRecordId && selectedMemberId) {
+      try {
+        await removePhoto.mutateAsync({
+          metricId: existingRecordId,
+          angle,
+          memberId: selectedMemberId,
+        })
+        toast.success(`Foto ${label} berhasil dihapus permanen dari server`)
+      } catch (err: any) {
+        console.error('Gagal menghapus foto dari server:', err)
+        toast.error(`Gagal menghapus foto dari server: ${err.message || 'Unknown error'}`)
+      }
+    } else {
+      toast.info(`Foto ${label} dibatalkan`)
+    }
   }
 
   // Live Delta Calculations
@@ -2237,7 +2266,9 @@ function MetricsFormContent() {
               ?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-center text-xs text-muted-foreground">
-              Foto yang baru Anda pilih / ambil akan dihapus dari slot ini dan tidak akan diunggah ke profil member.
+              {photoToDelete && existingPhotos[photoToDelete]
+                ? 'Foto ini tersimpan di sistem. Menghapus foto ini akan menghapusnya secara permanen dari database dan penyimpanan server.'
+                : 'Foto yang baru Anda pilih / ambil akan dibatalkan dari slot ini dan tidak akan diunggah ke profil member.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex gap-2 sm:justify-center">

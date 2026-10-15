@@ -462,6 +462,7 @@ export function useCreateBodyMetric() {
         phase: payload.phase || 'regular',
         notes: payload.notes || null,
         recorded_at: payload.recorded_at || new Date().toISOString(),
+        recorded_by: user?.id || null,
       }
 
       if (payload.photo_front_url !== undefined) recordData.photo_front_url = payload.photo_front_url
@@ -469,6 +470,19 @@ export function useCreateBodyMetric() {
       if (payload.photo_back_url !== undefined) recordData.photo_back_url = payload.photo_back_url
 
       if (payload.id) {
+        // Server-side ownership pre-check before update (vuln-0002)
+        const { data: ownedRow, error: fetchError } = await supabase
+          .from('member_body_metrics')
+          .select('id')
+          .eq('id', payload.id)
+          .eq('member_id', payload.member_id)
+          .maybeSingle()
+
+        if (fetchError) throw fetchError
+        if (!ownedRow) {
+          throw new Error('Metrik tidak ditemukan untuk member ini')
+        }
+
         const { data, error } = await supabase
           .from('member_body_metrics')
           .update(recordData)
@@ -480,7 +494,6 @@ export function useCreateBodyMetric() {
         if (error) throw error
         return data
       } else {
-        recordData.recorded_by = user?.id || null
         const { data, error } = await supabase
           .from('member_body_metrics')
           .insert(recordData)
@@ -515,7 +528,7 @@ export function useDeleteBodyMetric() {
   })
 }
 
-// 8. MUTATION: Hapus Foto Spesifik pada Metrik Tubuh (Depan, Samping, atau Belakang)
+// 8. MUTATION: Hapus Foto Spesifik pada Metrik Tubuh (Depan, Samping, atau Belakang) & Storage Cleanup (vuln-0001)
 export function useRemoveBodyMetricPhoto() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -535,12 +548,44 @@ export function useRemoveBodyMetricPhoto() {
           ? 'photo_side_url'
           : 'photo_back_url'
 
-      const { error } = await supabase
+      // 1. Ambil URL foto SEBELUM dinull untuk penghapusan file fisik dari storage
+      const { data: existingRow, error: fetchError } = await supabase
+        .from('member_body_metrics')
+        .select(`id, ${field}`)
+        .eq('id', metricId)
+        .eq('member_id', memberId)
+        .maybeSingle()
+
+      if (fetchError) throw fetchError
+      if (!existingRow) {
+        throw new Error('Metrik tidak ditemukan untuk member ini')
+      }
+
+      const photoUrlBeforeNull = (existingRow as any)?.[field] as string | null
+
+      // 2. Set kolom foto ke null di database (scoped id & member_id)
+      const { error: updateError } = await supabase
         .from('member_body_metrics')
         .update({ [field]: null })
         .eq('id', metricId)
+        .eq('member_id', memberId)
 
-      if (error) throw error
+      if (updateError) throw updateError
+
+      // 3. Hapus file fisik dari Supabase Storage jika ada
+      if (photoUrlBeforeNull) {
+        try {
+          const pathSegments = photoUrlBeforeNull.split('/pt-progress/')
+          if (pathSegments.length > 1) {
+            const storagePath = decodeURIComponent(pathSegments[1].split('?')[0])
+            if (storagePath) {
+              await supabase.storage.from('pt-progress').remove([storagePath])
+            }
+          }
+        } catch (e) {
+          console.warn('Gagal menghapus file dari storage:', e)
+        }
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['member-body-metrics', variables.memberId] })
