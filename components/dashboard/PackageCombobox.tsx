@@ -94,7 +94,11 @@ export default function PackageCombobox({
         render={<button type="button" />}
       >
         <span className="truncate">
-          {selectedPackage ? selectedPackage.name : placeholder}
+          {selectedPackage
+            ? selectedPackage.category === 'pt' && selectedPackage.total_sessions
+              ? `${selectedPackage.name} (${selectedPackage.total_sessions} Sesi)`
+              : selectedPackage.name
+            : placeholder}
         </span>
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground/60" />
       </PopoverTrigger>
@@ -167,7 +171,9 @@ export default function PackageCombobox({
                       )}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{p.name}</p>
+                      <p className="truncate font-medium">
+                        {p.category === 'pt' && p.total_sessions ? `${p.name} (${p.total_sessions} Sesi)` : p.name}
+                      </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <p className="truncate text-[11px] text-muted-foreground/60">{formatRupiah(p.price)}</p>
                         <span className="shrink-0 rounded bg-[#2A2A2A] px-1.5 py-0.5 text-[10px] text-primary">
