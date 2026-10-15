@@ -456,13 +456,11 @@ export function useCreateBodyMetric() {
 
       const recordData: any = {
         gym_id: GYM_ID,
-        member_id: payload.member_id,
         weight_kg: payload.weight_kg,
         measurements: payload.measurements || {},
         phase: payload.phase || 'regular',
         notes: payload.notes || null,
         recorded_at: payload.recorded_at || new Date().toISOString(),
-        recorded_by: user?.id || null,
       }
 
       if (payload.photo_front_url !== undefined) recordData.photo_front_url = payload.photo_front_url
@@ -470,7 +468,7 @@ export function useCreateBodyMetric() {
       if (payload.photo_back_url !== undefined) recordData.photo_back_url = payload.photo_back_url
 
       if (payload.id) {
-        // Server-side ownership pre-check before update (vuln-0002)
+        // Ownership pre-check before update (vuln-0002)
         const { data: ownedRow, error: fetchError } = await supabase
           .from('member_body_metrics')
           .select('id')
@@ -483,6 +481,7 @@ export function useCreateBodyMetric() {
           throw new Error('Metrik tidak ditemukan untuk member ini')
         }
 
+        // NOTE (vuln-0004): On UPDATE, do NOT include member_id (immutable) or recorded_by (preserve creator audit trail)
         const { data, error } = await supabase
           .from('member_body_metrics')
           .update(recordData)
@@ -494,6 +493,10 @@ export function useCreateBodyMetric() {
         if (error) throw error
         return data
       } else {
+        // On INSERT, set immutable member_id and creator recorded_by
+        recordData.member_id = payload.member_id
+        recordData.recorded_by = user?.id || null
+
         const { data, error } = await supabase
           .from('member_body_metrics')
           .insert(recordData)
@@ -510,7 +513,7 @@ export function useCreateBodyMetric() {
   })
 }
 
-// 7. MUTATION: Hapus Metrik Tubuh
+// 7. MUTATION: Hapus Metrik Tubuh (scoped by id & memberId)
 export function useDeleteBodyMetric() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -519,6 +522,7 @@ export function useDeleteBodyMetric() {
         .from('member_body_metrics')
         .delete()
         .eq('id', id)
+        .eq('member_id', memberId)
 
       if (error) throw error
     },
@@ -528,7 +532,7 @@ export function useDeleteBodyMetric() {
   })
 }
 
-// 8. MUTATION: Hapus Foto Spesifik pada Metrik Tubuh (Depan, Samping, atau Belakang) & Storage Cleanup (vuln-0001)
+// 8. MUTATION: Hapus Foto Spesifik pada Metrik Tubuh (Depan, Samping, atau Belakang) & Storage Cleanup (vuln-0001, vuln-0005)
 export function useRemoveBodyMetricPhoto() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -572,14 +576,17 @@ export function useRemoveBodyMetricPhoto() {
 
       if (updateError) throw updateError
 
-      // 3. Hapus file fisik dari Supabase Storage jika ada
+      // 3. Hapus file fisik dari Supabase Storage jika ada (dengan isolasi prefix path folder member - vuln-0005)
       if (photoUrlBeforeNull) {
         try {
           const pathSegments = photoUrlBeforeNull.split('/pt-progress/')
           if (pathSegments.length > 1) {
             const storagePath = decodeURIComponent(pathSegments[1].split('?')[0])
-            if (storagePath) {
+            const expectedPrefix = `${GYM_ID}/${memberId}/`
+            if (storagePath && storagePath.startsWith(expectedPrefix)) {
               await supabase.storage.from('pt-progress').remove([storagePath])
+            } else {
+              console.warn('[Security Guard] Storage path prefix tidak sesuai dengan member:', storagePath)
             }
           }
         } catch (e) {

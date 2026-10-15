@@ -113,8 +113,9 @@ function MetricsFormContent() {
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false)
   const [photoToDelete, setPhotoToDelete] = useState<'front' | 'side' | 'back' | null>(null)
+  const [pendingPhase, setPendingPhase] = useState<BodyMetricPhase | null>(null)
 
-  // Pembersihan menyeluruh seluruh state form untuk mencegah kebocoran data lintas member (vuln-0007)
+  // Pembersihan menyeluruh seluruh state form untuk mencegah kebocoran data lintas member (vuln-0007, vuln-0002)
   const resetAllFormState = useCallback(() => {
     // 1. Cabut URL blob preview foto baru agar tidak bocor di browser memory
     setFrontPhoto((prev) => {
@@ -134,6 +135,7 @@ function MetricsFormContent() {
     setExistingPhotos({ front: null, side: null, back: null })
     setExistingRecordId(null)
     setPhotoToDelete(null)
+    setPendingPhase(null)
 
     // 3. Reset seluruh field input fisik & kembalikan fase ke default 'progress'
     setWeightKg('')
@@ -247,8 +249,9 @@ function MetricsFormContent() {
   }, [historicalMetrics])
 
   // Logika State-Aware Milestone Switching
-  const handlePhaseChange = (newPhase: BodyMetricPhase) => {
+  const executePhaseChange = (newPhase: BodyMetricPhase) => {
     setPhase(newPhase)
+    setPendingPhase(null)
 
     // Bersihkan preview file lokal baru yang belum diunggah
     if (frontPhoto.preview && frontPhoto.file) URL.revokeObjectURL(frontPhoto.preview)
@@ -444,6 +447,15 @@ function MetricsFormContent() {
 
     // 2. Jika foto merupakan foto yang sudah tersimpan di database, hapus langsung dari DB & storage fisik
     if (isExistingStoredPhoto && existingRecordId && selectedMemberId) {
+      // Security Guard (vuln-0002): Pastikan existingRecordId benar-benar terdaftar sebagai milik selectedMemberId aktif
+      const isOwned = (historicalMetrics || []).some(
+        (m) => m.id === existingRecordId && m.member_id === selectedMemberId
+      )
+      if (!isOwned) {
+        toast.error('Operasi dibatalkan: ID metrik tidak valid untuk member ini')
+        return
+      }
+
       try {
         await removePhoto.mutateAsync({
           metricId: existingRecordId,
@@ -509,6 +521,16 @@ function MetricsFormContent() {
     backPhoto.file,
     notes,
   ])
+
+  // Trigger pergantian fase dengan proteksi dirty form (vuln-0003)
+  const handlePhaseChangeClick = (newPhase: BodyMetricPhase) => {
+    if (newPhase === phase) return
+    if (isFormDirty) {
+      setPendingPhase(newPhase)
+    } else {
+      executePhaseChange(newPhase)
+    }
+  }
 
   // Reset form
   const handleResetForm = () => {
@@ -831,7 +853,7 @@ function MetricsFormContent() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <button
                   type="button"
-                  onClick={() => handlePhaseChange('day_1')}
+                  onClick={() => handlePhaseChangeClick('day_1')}
                   className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all ${phase === 'day_1'
                     ? 'border-blue-500 bg-blue-500/10 text-blue-400 ring-2 ring-blue-500/20'
                     : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -854,7 +876,7 @@ function MetricsFormContent() {
 
                 <button
                   type="button"
-                  onClick={() => handlePhaseChange('progress')}
+                  onClick={() => handlePhaseChangeClick('progress')}
                   className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all ${phase === 'progress'
                     ? 'border-amber-500 bg-amber-500/10 text-amber-400 ring-2 ring-amber-500/20'
                     : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -879,7 +901,7 @@ function MetricsFormContent() {
 
                 <button
                   type="button"
-                  onClick={() => handlePhaseChange('day_final')}
+                  onClick={() => handlePhaseChangeClick('day_final')}
                   className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all ${phase === 'day_final'
                     ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 ring-2 ring-emerald-500/20'
                     : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -2027,6 +2049,31 @@ function MetricsFormContent() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-bold"
             >
               Ya, Kosongkan Form
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* MODAL 1.5: Konfirmasi Pergantian Fase saat Form Dirty (vuln-0003) */}
+      <AlertDialog open={!!pendingPhase} onOpenChange={(open) => !open && setPendingPhase(null)}>
+        <AlertDialogContent className="border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold">
+              Ganti Fase Evaluasi?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              Anda memiliki angka timbangan, ukuran fisik, atau foto yang belum disimpan. Beralih ke fase lain akan mengosongkan perubahan yang sedang Anda isi saat ini.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs">Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingPhase) executePhaseChange(pendingPhase)
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-bold"
+            >
+              Ya, Ganti Fase
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
