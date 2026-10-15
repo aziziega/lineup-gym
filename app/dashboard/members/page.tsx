@@ -97,6 +97,9 @@ function MembersContent() {
   }, [searchParams])
   const [editOpen, setEditOpen] = useState(false)
   const [editMemberData, setEditMemberData] = useState<ActiveSubscriptionView | null>(null)
+  const [isEditPackageEnabled, setIsEditPackageEnabled] = useState(false)
+  const [formPtRemainingSessions, setFormPtRemainingSessions] = useState<number | ''>('')
+  const [initialPtMembershipId, setInitialPtMembershipId] = useState('')
   const [renewOpen, setRenewOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<ActiveSubscriptionView | null>(null)
 
@@ -464,78 +467,102 @@ function MembersContent() {
         }
       })
 
-      // 2. Override Subscription (Bypass Payment)
-      const startDate = formStartDate || toLocalISOString(new Date())
-      const subPromises = []
+      // 2. Override Subscription (HANYA JIKA MODE KOREKSI PAKET DIAKTIFKAN ADMIN)
+      if (isEditPackageEnabled) {
+        const startDate = formStartDate || toLocalISOString(new Date())
+        const subPromises = []
 
-      // Persiapkan Update Gym Package
-      if (formMembership) {
-        const gymPkg = gymPackages.find(p => p.id === formMembership)
-        if (gymPkg) {
-          const endDate = toLocalISOString(hitungEndDate(startDate, gymPkg.duration_days))
+        // Persiapkan Update Gym Package
+        if (formMembership) {
+          const gymPkg = gymPackages.find(p => p.id === formMembership)
+          if (gymPkg) {
+            const endDate = toLocalISOString(hitungEndDate(startDate, gymPkg.duration_days))
 
-          if (editMemberData.subscription_id) {
-            subPromises.push(
-              supabase.from('subscriptions').update({
-                membership_id: gymPkg.id,
-                start_date: startDate,
-                end_date: endDate,
-                status: 'active'
-              }).eq('id', editMemberData.subscription_id)
-            )
-          } else {
-            subPromises.push(
-              supabase.from('subscriptions').insert({
-                member_id: editMemberData.member_id,
-                membership_id: gymPkg.id,
-                start_date: startDate,
-                end_date: endDate,
-                status: 'active'
-              })
-            )
+            if (editMemberData.subscription_id) {
+              subPromises.push(
+                supabase.from('subscriptions').update({
+                  membership_id: gymPkg.id,
+                  start_date: startDate,
+                  end_date: endDate,
+                  status: 'active'
+                }).eq('id', editMemberData.subscription_id)
+              )
+            } else {
+              subPromises.push(
+                supabase.from('subscriptions').insert({
+                  member_id: editMemberData.member_id,
+                  membership_id: gymPkg.id,
+                  start_date: startDate,
+                  end_date: endDate,
+                  status: 'active'
+                })
+              )
+            }
+          }
+        }
+
+        // Persiapkan Update PT Package
+        if (formPtMembership) {
+          const ptPkg = ptPackages.find(p => p.id === formPtMembership)
+          if (ptPkg) {
+            const endDate = toLocalISOString(hitungEndDate(startDate, ptPkg.duration_days))
+
+            const isPtPackageChanged = formPtMembership !== initialPtMembershipId
+
+            // Tentukan sisa sesi secara aman: jika admin mengisi input sisa sesi, gunakan nilai tersebut;
+            // Jika paket diubah staf dan input kosong, gunakan kuota paket baru; jika paket sama, pertahankan sisa sesi member
+            const safeRemainingSessions = 
+              formPtRemainingSessions !== '' && !isNaN(Number(formPtRemainingSessions))
+                ? Math.max(0, Number(formPtRemainingSessions))
+                : (isPtPackageChanged ? (ptPkg.total_sessions ?? 0) : (editMemberData.pt_remaining_sessions ?? ptPkg.total_sessions ?? 0))
+
+            const ptUpdatePayload: Record<string, any> = {
+              membership_id: ptPkg.id,
+              start_date: startDate,
+              end_date: endDate,
+              remaining_sessions: safeRemainingSessions,
+              status: safeRemainingSessions > 0 ? 'active' : 'expired'
+            }
+
+            // Security & Data Consistency Fix (vuln-0008):
+            // Jika paket PT diganti, bersihkan total_sessions_override lama (set null)
+            // agar active_subscriptions_view membaca kuota total dari paket baru, bukan override lama!
+            if (isPtPackageChanged) {
+              ptUpdatePayload.total_sessions_override = null
+            }
+
+            if (editMemberData.pt_subscription_id) {
+              subPromises.push(
+                supabase.from('subscriptions').update(ptUpdatePayload).eq('id', editMemberData.pt_subscription_id)
+              )
+            } else {
+              subPromises.push(
+                supabase.from('subscriptions').insert({
+                  member_id: editMemberData.member_id,
+                  membership_id: ptPkg.id,
+                  start_date: startDate,
+                  end_date: endDate,
+                  remaining_sessions: safeRemainingSessions,
+                  total_sessions_override: null,
+                  status: safeRemainingSessions > 0 ? 'active' : 'expired'
+                })
+              )
+            }
+          }
+        }
+
+        // Jalankan semua update paket secara paralel agar cepat
+        if (subPromises.length > 0) {
+          const results = await Promise.all(subPromises)
+          for (const res of results) {
+            if (res.error) throw new Error(`Gagal update paket: ${res.error.message}`)
           }
         }
       }
 
-      // Persiapkan Update PT Package
-      if (formPtMembership) {
-        const ptPkg = ptPackages.find(p => p.id === formPtMembership)
-        if (ptPkg) {
-          const endDate = toLocalISOString(hitungEndDate(startDate, ptPkg.duration_days))
-
-          if (editMemberData.pt_subscription_id) {
-            subPromises.push(
-              supabase.from('subscriptions').update({
-                membership_id: ptPkg.id,
-                start_date: startDate,
-                end_date: endDate,
-                remaining_sessions: ptPkg.total_sessions,
-                status: 'active'
-              }).eq('id', editMemberData.pt_subscription_id)
-            )
-          } else {
-            subPromises.push(
-              supabase.from('subscriptions').insert({
-                member_id: editMemberData.member_id,
-                membership_id: ptPkg.id,
-                start_date: startDate,
-                end_date: endDate,
-                remaining_sessions: ptPkg.total_sessions,
-                status: 'active'
-              })
-            )
-          }
-        }
-      }
-
-      // Jalankan semua update paket secara paralel agar cepat
-      const results = await Promise.all(subPromises)
-      for (const res of results) {
-        if (res.error) throw new Error(`Gagal update paket: ${res.error.message}`)
-      }
-
-      toast.success('Member dan Paket berhasil diperbarui!')
+      toast.success(isEditPackageEnabled ? 'Profil dan Paket berhasil diperbarui!' : 'Profil Member berhasil diperbarui!')
       setEditOpen(false)
+      setIsEditPackageEnabled(false)
       resetForm()
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members-with-subscription'] }),
@@ -871,8 +898,11 @@ function MembersContent() {
     setFormEmergency('')
     setFormMembership('')
     setFormPtMembership('')
+    setInitialPtMembershipId('')
     setFormStartDate(new Date().toISOString().split('T')[0])
     setFormNotes('')
+    setIsEditPackageEnabled(false)
+    setFormPtRemainingSessions('')
   }
 
   const selectedPkg = memberships?.find((m) => m.id === formMembership)
@@ -1099,34 +1129,107 @@ function MembersContent() {
                   <Label className="text-xs text-muted-foreground">Kontak Darurat</Label>
                   <Input value={formEmergency} onChange={(e) => setFormEmergency(e.target.value)} className="border-border bg-background text-foreground" />
                 </div>
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Ubah Paket Gym</Label>
-                    <PackageCombobox
-                      packages={gymPackages}
-                      value={formMembership}
-                      onValueChange={setFormMembership}
-                      placeholder="Pilih paket gym"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Ubah Paket PT</Label>
-                    <PackageCombobox
-                      packages={ptPackages}
-                      value={formPtMembership}
-                      onValueChange={setFormPtMembership}
-                      placeholder="Pilih paket PT"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Tanggal Mulai (Jika paket diubah)</Label>
-                  <Input type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} className="border-border bg-background text-foreground" />
-                </div>
-                <div className="p-2 border border-red-500/20 bg-red-500/5 rounded-lg">
-                  <p className="text-[10px] text-red-400 font-medium">
-                    PERHATIAN: Mengubah paket di sini murni untuk koreksi data awal. Transaksi ini TIDAK AKAN ditambahkan ke Laporan Keuangan (Income Rp0).
-                  </p>
+                {/* Toggle Koreksi Paket (Default OFF / Terproteksi Aman) */}
+                <div className="rounded-xl border border-border/70 bg-card/60 p-3.5 space-y-3">
+                  <label className="flex items-center justify-between cursor-pointer select-none">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isEditPackageEnabled}
+                        onChange={(e) => setIsEditPackageEnabled(e.target.checked)}
+                        className="h-4 w-4 rounded border-border bg-background accent-[#FF2A2A] text-primary focus:ring-primary/20"
+                      />
+                      <div>
+                        <span className="text-xs font-semibold text-foreground">
+                          Koreksi Paket Langganan (Staff & Admin)
+                        </span>
+                        <p className="text-[10px] text-muted-foreground">
+                          {isEditPackageEnabled 
+                            ? 'Perhatian: Paket gym & PT akan disesuaikan sesuai pilihan di bawah.'
+                            : 'Default Aman: Paket & sisa sesi PT tidak akan disentuh jika opsi ini mati.'}
+                        </p>
+                      </div>
+                    </div>
+                    {isEditPackageEnabled && (
+                      <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold px-1.5 py-0.5 rounded">
+                        Aktif
+                      </span>
+                    )}
+                  </label>
+
+                  {isEditPackageEnabled && (
+                    <div className="space-y-3 pt-2 border-t border-border/50">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Paket Gym</Label>
+                          <PackageCombobox
+                            packages={gymPackages}
+                            value={formMembership}
+                            onValueChange={setFormMembership}
+                            placeholder="Pilih paket gym"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Paket PT</Label>
+                          <PackageCombobox
+                            packages={ptPackages}
+                            value={formPtMembership}
+                            onValueChange={(val) => {
+                              setFormPtMembership(val)
+                              const pkg = ptPackages.find(p => p.id === val)
+                              if (pkg) {
+                                // Jika staf memilih paket PT baru yang berbeda dari paket berjalan,
+                                // otomatis sesuaikan sisa sesi ke kuota paket baru (mencegah angka stale dari paket lama - vuln-0008)
+                                if (val !== initialPtMembershipId) {
+                                  setFormPtRemainingSessions(pkg.total_sessions || 0)
+                                } else {
+                                  // Kembalikan ke sisa sesi asli member jika memilih kembali paket yang sedang berjalan
+                                  setFormPtRemainingSessions(editMemberData?.pt_remaining_sessions ?? pkg.total_sessions ?? 0)
+                                }
+                              }
+                            }}
+                            placeholder="Pilih paket PT"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Input Sisa Sesi PT Berjalan (Mencegah Reset Diam-diam) */}
+                      {formPtMembership && (
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground">Sisa Sesi PT Sekarang</Label>
+                            {editMemberData?.pt_remaining_sessions !== undefined && (
+                              <span className="text-[10px] text-muted-foreground">
+                                Sisa saat ini: <strong className="text-foreground">{editMemberData.pt_remaining_sessions ?? 0} sesi</strong>
+                              </span>
+                            )}
+                          </div>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={formPtRemainingSessions}
+                            onChange={(e) => setFormPtRemainingSessions(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                            placeholder="Contoh: 9"
+                            className="border-border bg-background text-foreground mt-1"
+                          />
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            Staff dapat mengatur sisa kuota sesi member secara manual jika diperlukan (tidak akan ter-reset otomatis).
+                          </p>
+                        </div>
+                      )}
+
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Tanggal Mulai Paket Baru</Label>
+                        <Input type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} className="border-border bg-background text-foreground" />
+                      </div>
+
+                      <div className="p-2 border border-amber-500/20 bg-amber-500/5 rounded-lg">
+                        <p className="text-[10px] text-amber-400 font-medium leading-relaxed">
+                          ⚠️ PANDUAN STAFF & ADMIN: Fitur ini digunakan untuk koreksi data awal atau penyesuaian kuota sesi. Perubahan di sini tidak dicatat sebagai transaksi kasir baru (Income Rp0).
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Catatan</Label>
@@ -1253,7 +1356,10 @@ function MembersContent() {
                     variant="ghost"
                     onClick={() => {
                       const mGymId = gymPackages.find(p => p.name.toUpperCase().trim() === (m.membership_name || '').toUpperCase().trim())?.id || ''
-                      const mPtId = ptPackages.find(p => p.name.toUpperCase().trim() === (m.pt_membership_name || '').toUpperCase().trim())?.id || ''
+                      const targetSessions = m.total_sessions_override || m.pt_total_sessions
+                      const mPtId = ptPackages.find(p => targetSessions && p.total_sessions === targetSessions)?.id
+                        || ptPackages.find(p => p.name.toUpperCase().trim() === (m.pt_membership_name || '').toUpperCase().trim())?.id
+                        || ''
                       setEditMemberData(m)
                       setFormName(m.full_name)
                       setFormPhone(m.phone)
@@ -1262,6 +1368,9 @@ function MembersContent() {
                       setFormNotes(m.notes || '')
                       setFormMembership(mGymId)
                       setFormPtMembership(mPtId)
+                      setInitialPtMembershipId(mPtId)
+                      setFormPtRemainingSessions(m.pt_remaining_sessions !== null && m.pt_remaining_sessions !== undefined ? m.pt_remaining_sessions : '')
+                      setIsEditPackageEnabled(false)
                       setFormStartDate(m.start_date || toLocalISOString(new Date()))
                       setEditOpen(true)
                     }}

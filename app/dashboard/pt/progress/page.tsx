@@ -20,6 +20,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -45,6 +53,8 @@ import {
   ClipboardList,
   Flame,
   CheckCircle2,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { PtProgressCategory } from '@/lib/types'
@@ -76,6 +86,8 @@ function ProgressTrackingContent() {
   const [workoutToDelete, setWorkoutToDelete] = useState<any | null>(null)
   const [metricToDelete, setMetricToDelete] = useState<any | null>(null)
   const [exportPdfOpen, setExportPdfOpen] = useState(false)
+  const [waModalOpen, setWaModalOpen] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
 
   // Data fetching
   const todayStr = useMemo(() => new Date().toLocaleDateString('sv-SE'), [])
@@ -156,40 +168,73 @@ function ProgressTrackingContent() {
     }
   }, [searchParams])
 
-  // Generate WA share progress summary
-  const handleShareWhatsApp = () => {
-    if (!currentMember) return
+  const lastWorkout = workoutLogs && workoutLogs[0]
 
-    const phone = currentMember.phone.replace(/[^0-9]/g, '').replace(/^0/, '62')
-    const totalWorkouts = (workoutLogs || []).length
-    const lastWorkout = workoutLogs && workoutLogs[0]
-    const lastMetric = bodyMetrics && bodyMetrics[bodyMetrics.length - 1]
-    const initialMetric = bodyMetrics && bodyMetrics[0]
+  // Format pesan WhatsApp berdasarkan sesi latihan TERAKHIR saja (sesuai format live workout)
+  const waMessageText = useMemo(() => {
+    if (!currentMember || !lastWorkout) return ''
 
-    let weightChangeMsg = ''
-    if (initialMetric?.weight_kg && lastMetric?.weight_kg) {
-      const diff = Number((lastMetric.weight_kg - initialMetric.weight_kg).toFixed(1))
-      weightChangeMsg = `\n- Berat Awal: ${initialMetric.weight_kg} kg\n- Berat Sekarang: ${lastMetric.weight_kg} kg (${diff < 0 ? diff : '+' + diff} kg)`
-    }
+    const list = (lastWorkout.exercises || [])
+      .map((e) => {
+        // Cek apakah ada variasi perbedaan beban atau repetisi antar set
+        const isProgressive =
+          e.sets_detail &&
+          e.sets_detail.length > 1 &&
+          e.sets_detail.some(
+            (s) =>
+              s.weight_kg !== e.sets_detail![0].weight_kg ||
+              s.reps !== e.sets_detail![0].reps
+          )
 
-    const message = encodeURIComponent(
-      `Halo Kak *${currentMember.full_name}*! \n\nBerikut ringkasan progress latihan Personal Trainer kamu di *Line Up Gym*:\n` +
-      `- Paket: ${currentMember.pt_membership_name}\n` +
-      `- Sisa Sesi: *${currentMember.pt_remaining_sessions} sesi*\n` +
-      `- Total Latihan Tercatat: *${totalWorkouts} sesi*` +
-      weightChangeMsg +
-      (lastWorkout
-        ? `\n\n*Latihan Terakhir (${new Date(lastWorkout.created_at).toLocaleDateString('id-ID')} - ${lastWorkout.category}):*\n` +
-        (lastWorkout.trainer_name ? `• Coach: *${lastWorkout.trainer_name}*\n` : '') +
-        lastWorkout.exercises
-          .map((e) => `• ${e.name}: ${e.sets}×${e.reps} | ${e.weight_kg}kg`)
-          .join('\n') +
-        (lastWorkout.notes ? `\n_Catatan Coach: "${lastWorkout.notes}"_` : '')
-        : '') +
-      `\n\nTetap konsisten dan semangat mencapai fitness goals kamu! \n\n*LINEUP GYM PRAMBANAN*\nBe Strong Be Healthy!`
+        if (isProgressive && e.sets_detail) {
+          // 1. Jika beban/reps berbeda antar set: tampilkan rincian per set
+          const setsLines = e.sets_detail
+            .map((s, idx) => `  ↳ Set ${idx + 1}: ${s.reps} reps | ${s.weight_kg}kg`)
+            .join('\n')
+          return `• *${e.name}* (${e.sets_detail.length} set):\n${setsLines}`
+        } else {
+          // 2. Jika beban & reps sama (flat): tampilkan 1 baris ringkas
+          const totalSets = e.sets_detail?.length || e.sets || 1
+          const reps = e.sets_detail?.[0]?.reps ?? e.reps
+          const weight = e.sets_detail?.[0]?.weight_kg ?? e.weight_kg
+          return `• *${e.name}*: ${totalSets} set × ${reps} reps | ${weight}kg`
+        }
+      })
+      .join('\n')
+
+    const graduationClosing =
+      currentMember.pt_remaining_sessions === 0
+        ? `*SELAMAT KELULUSAN PROGRAM PT!* Seluruh kuota sesi paket kamu telah selesai 100%. Untuk mempertahankan progres & mencapai target berikutnya, tanyakan ke Coach untuk rekomendasi perpanjangan paket (renewal) ya!\n`
+        : `Sisa Kuota PT Kamu: *${currentMember.pt_remaining_sessions ?? 0} sesi*\nTetap semangat dan konsisten latihannya!\n`
+
+    const formattedDate = new Date(lastWorkout.created_at).toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+
+    return (
+      `Halo Kak *${currentMember.full_name}*! \n\n` +
+      `Berikut catatan sesi latihan Personal Trainer terakhir kamu di *Line Up Gym*:\n` +
+      `• Tanggal: *${formattedDate}*\n` +
+      `• Fokus: *${lastWorkout.category} Day*\n` +
+      (lastWorkout.trainer_name ? `• Coach: *${lastWorkout.trainer_name}*\n` : '') +
+      `\n*Daftar Latihan:*\n${list || '- Tidak ada gerakan tercatat -'}\n\n` +
+      (lastWorkout.notes ? `_Catatan Coach: "${lastWorkout.notes}"_\n\n` : '') +
+      `${graduationClosing}\n` +
+      `*LINEUP GYM PRAMBANAN*\nBe Strong Be Healthy!`
     )
+  }, [currentMember, lastWorkout])
 
-    window.open(`https://wa.me/${phone}?text=${message}`, '_blank')
+  const handleOpenWhatsAppModal = () => {
+    if (!currentMember) return
+    if (!workoutLogs || workoutLogs.length === 0) {
+      toast.info('Member ini belum memiliki catatan sesi latihan untuk dikirim ke WhatsApp.')
+      return
+    }
+    setIsCopied(false)
+    setWaModalOpen(true)
   }
 
   const handleConfirmDeleteWorkout = async () => {
@@ -321,11 +366,10 @@ function ProgressTrackingContent() {
                 size="sm"
                 variant={currentMember?.pt_remaining_sessions === 0 ? 'default' : 'outline'}
                 onClick={() => setExportPdfOpen(true)}
-                className={`flex-1 sm:flex-initial text-xs ${
-                  currentMember?.pt_remaining_sessions === 0
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black font-extrabold hover:from-amber-400 hover:to-amber-500 shadow-md shadow-amber-500/20'
-                    : 'border-border bg-card hover:bg-muted/50 text-foreground'
-                }`}
+                className={`flex-1 sm:flex-initial text-xs ${currentMember?.pt_remaining_sessions === 0
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black font-extrabold hover:from-amber-400 hover:to-amber-500 shadow-md shadow-amber-500/20'
+                  : 'border-border bg-card hover:bg-muted/50 text-foreground'
+                  }`}
               >
                 <FileDown className="h-3.5 w-3.5 mr-1.5" />
                 {currentMember?.pt_remaining_sessions === 0
@@ -336,7 +380,7 @@ function ProgressTrackingContent() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleShareWhatsApp}
+                onClick={handleOpenWhatsAppModal}
                 className="flex-1 sm:flex-initial text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
               >
                 <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
@@ -350,18 +394,16 @@ function ProgressTrackingContent() {
             <button
               type="button"
               onClick={() => setActiveTab('workout')}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === 'workout'
-                  ? 'bg-primary text-black font-bold shadow-sm shadow-primary/20'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-xs sm:text-sm font-semibold transition-all ${activeTab === 'workout'
+                ? 'bg-primary text-black font-bold shadow-sm shadow-primary/20'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+                }`}
             >
               <Dumbbell className="h-4 w-4" />
               <span>Catatan Sesi</span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                  activeTab === 'workout' ? 'bg-black/20 text-black' : 'bg-muted text-muted-foreground'
-                }`}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${activeTab === 'workout' ? 'bg-black/20 text-black' : 'bg-muted text-muted-foreground'
+                  }`}
               >
                 {workoutLogs?.length || 0}
               </span>
@@ -370,18 +412,16 @@ function ProgressTrackingContent() {
             <button
               type="button"
               onClick={() => setActiveTab('metrics')}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === 'metrics'
-                  ? 'bg-primary text-black font-bold shadow-sm shadow-primary/20'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 px-3 text-xs sm:text-sm font-semibold transition-all ${activeTab === 'metrics'
+                ? 'bg-primary text-black font-bold shadow-sm shadow-primary/20'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+                }`}
             >
               <Scale className="h-4 w-4" />
               <span>Body Metrics & Foto</span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                  activeTab === 'metrics' ? 'bg-black/20 text-black' : 'bg-muted text-muted-foreground'
-                }`}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${activeTab === 'metrics' ? 'bg-black/20 text-black' : 'bg-muted text-muted-foreground'
+                  }`}
               >
                 {bodyMetrics?.length || 0}
               </span>
@@ -405,11 +445,10 @@ function ProgressTrackingContent() {
                   <button
                     type="button"
                     onClick={() => setWorkoutViewMode('calendar')}
-                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all ${
-                      workoutViewMode === 'calendar'
-                        ? 'bg-primary font-bold text-black shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                    }`}
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all ${workoutViewMode === 'calendar'
+                      ? 'bg-primary font-bold text-black shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+                      }`}
                   >
                     <Calendar className="h-3.5 w-3.5" />
                     <span>Kalender Bulanan</span>
@@ -417,11 +456,10 @@ function ProgressTrackingContent() {
                   <button
                     type="button"
                     onClick={() => setWorkoutViewMode('list')}
-                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all ${
-                      workoutViewMode === 'list'
-                        ? 'bg-primary font-bold text-black shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                    }`}
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all ${workoutViewMode === 'list'
+                      ? 'bg-primary font-bold text-black shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+                      }`}
                   >
                     <ClipboardList className="h-3.5 w-3.5" />
                     <span>Daftar List</span>
@@ -531,22 +569,50 @@ function ProgressTrackingContent() {
 
                           {/* Exercise List Chips / Grid */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                            {log.exercises.map((ex, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between rounded-lg border border-border/50 bg-background/50 px-3 py-2 text-xs"
-                              >
-                                <span className="font-semibold text-foreground">{ex.name}</span>
-                                <div className="flex items-center gap-1.5 font-medium">
-                                  <span className="text-muted-foreground">
-                                    {ex.sets}×{ex.reps}
-                                  </span>
-                                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
-                                    {ex.weight_kg}kg
-                                  </span>
+                            {log.exercises.map((ex, idx) => {
+                              const isProg =
+                                ex.sets_detail &&
+                                ex.sets_detail.length > 0 &&
+                                ex.sets_detail.some(
+                                  (s) =>
+                                    s.weight_kg !== ex.sets_detail![0].weight_kg ||
+                                    s.reps !== ex.sets_detail![0].reps
+                                )
+
+                              return (
+                                <div
+                                  key={idx}
+                                  className="rounded-lg border border-border/50 bg-background/50 p-2.5 text-xs space-y-1.5"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-foreground">{ex.name}</span>
+                                    {!isProg && (
+                                      <div className="flex items-center gap-1.5 font-medium">
+                                        <span className="text-muted-foreground font-mono">
+                                          {ex.sets}×{ex.reps}
+                                        </span>
+                                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
+                                          {ex.weight_kg}kg
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {isProg && (
+                                    <div className="flex flex-wrap gap-1">
+                                      {ex.sets_detail!.map((s) => (
+                                        <span
+                                          key={s.set_number}
+                                          className="inline-flex items-center gap-0.5 rounded bg-muted/40 border border-border/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
+                                        >
+                                          <strong className="text-primary font-bold">S{s.set_number}:</strong>{' '}
+                                          {s.reps}×{s.weight_kg}kg
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
 
                           {/* Notes */}
@@ -669,6 +735,113 @@ function ProgressTrackingContent() {
             workoutLogs={workoutLogs || []}
             bodyMetrics={bodyMetrics || []}
           />
+
+          {/* Modal Konfirmasi Kirim Update WA (Latihan Terakhir) */}
+          <Dialog open={waModalOpen} onOpenChange={setWaModalOpen}>
+            <DialogContent className="max-w-md border-border bg-card text-foreground sm:max-w-lg">
+              <DialogHeader>
+                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366]/10 text-[#25D366]">
+                  <MessageCircle className="h-6 w-6" />
+                </div>
+                <DialogTitle className="text-center font-heading text-lg">
+                  Kirim Catatan Latihan ke WhatsApp
+                </DialogTitle>
+                <DialogDescription className="text-center text-xs text-muted-foreground">
+                  Pratinjau ringkasan sesi latihan terakhir yang akan dikirimkan kepada{' '}
+                  <span className="font-semibold text-foreground">{currentMember?.full_name}</span>{' '}
+                  ({currentMember?.phone || 'Tanpa nomor HP'}).
+                </DialogDescription>
+              </DialogHeader>
+
+              {lastWorkout ? (
+                <div className="space-y-3">
+                  {/* Info Chip Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Sesi Terakhir:</span>
+                      <Badge variant="outline" className={`text-[10px] ${CATEGORY_STYLES[lastWorkout.category]?.bg || ''} ${CATEGORY_STYLES[lastWorkout.category]?.text || ''} ${CATEGORY_STYLES[lastWorkout.category]?.border || ''}`}>
+                        {lastWorkout.category} Day
+                      </Badge>
+                      <span className="text-muted-foreground">•</span>
+                      <span className="font-medium text-foreground">
+                        {new Date(lastWorkout.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                    {lastWorkout.trainer_name && (
+                      <span className="text-[11px] text-muted-foreground">
+                        Coach: <strong className="text-foreground">{lastWorkout.trainer_name}</strong>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* WhatsApp Chat Bubble Preview (Read-Only) */}
+                  <div>
+                    <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                      Pratinjau Pesan (Read-Only):
+                    </span>
+                    <div className="max-h-72 overflow-y-auto rounded-xl border border-[#202C33] bg-[#0B141A] p-3.5 font-mono text-[11px] leading-relaxed text-[#E9EDEF] shadow-inner selection:bg-[#00A884]/30 whitespace-pre-wrap">
+                      {waMessageText}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground space-y-1">
+                  <p className="font-semibold text-foreground">Belum Ada Sesi Latihan</p>
+                  <p>Member ini belum memiliki catatan latihan yang tersimpan. Silakan mulai sesi latihan di Live Workout terlebih dahulu.</p>
+                </div>
+              )}
+
+              <DialogFooter className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setWaModalOpen(false)}
+                  className="text-xs text-muted-foreground hover:bg-muted"
+                >
+                  Tutup
+                </Button>
+
+                {lastWorkout && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(waMessageText)
+                        setIsCopied(true)
+                        toast.success('Pesan WhatsApp disalin!')
+                        setTimeout(() => setIsCopied(false), 2000)
+                      }}
+                      className="text-xs border-border text-foreground hover:bg-muted"
+                    >
+                      {isCopied ? <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-400" /> : <Copy className="mr-1.5 h-3.5 w-3.5" />}
+                      {isCopied ? 'Tersalin' : 'Salin Teks'}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        const phone = currentMember?.phone?.replace(/[^0-9]/g, '').replace(/^0/, '62')
+                        if (!phone) {
+                          toast.error('Nomor telepon member tidak valid atau belum terdaftar')
+                          return
+                        }
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(waMessageText)}`, '_blank')
+                        setWaModalOpen(false)
+                      }}
+                      className="bg-[#25D366] text-black font-bold hover:bg-[#1DA851] text-xs shadow-md shadow-[#25D366]/20"
+                    >
+                      <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                      Buka WhatsApp
+                    </Button>
+                  </>
+                )}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Modal Konfirmasi Hapus Sesi Latihan & Rollback Kuota */}
           <AlertDialog open={!!workoutToDelete} onOpenChange={(open) => !open && setWorkoutToDelete(null)}>

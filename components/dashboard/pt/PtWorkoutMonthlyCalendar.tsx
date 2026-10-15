@@ -485,22 +485,50 @@ export default function PtWorkoutMonthlyCalendar({
                         Daftar Gerakan ({log.exercises.length} Gerakan):
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                        {log.exercises.map((ex, exIdx) => (
-                          <div
-                            key={exIdx}
-                            className="flex items-center justify-between rounded-lg border border-border/50 bg-card px-3 py-2 text-xs"
-                          >
-                            <span className="font-semibold text-foreground">{ex.name}</span>
-                            <div className="flex items-center gap-1.5 font-medium font-mono">
-                              <span className="text-muted-foreground">
-                                {ex.sets}×{ex.reps}
-                              </span>
-                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
-                                {ex.weight_kg}kg
-                              </span>
+                        {log.exercises.map((ex, exIdx) => {
+                          const isProg =
+                            ex.sets_detail &&
+                            ex.sets_detail.length > 0 &&
+                            ex.sets_detail.some(
+                              (s) =>
+                                s.weight_kg !== ex.sets_detail![0].weight_kg ||
+                                s.reps !== ex.sets_detail![0].reps
+                            )
+
+                          return (
+                            <div
+                              key={exIdx}
+                              className="rounded-lg border border-border/50 bg-card p-2.5 text-xs space-y-1.5"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-foreground">{ex.name}</span>
+                                {!isProg && (
+                                  <div className="flex items-center gap-1.5 font-medium font-mono">
+                                    <span className="text-muted-foreground">
+                                      {ex.sets}×{ex.reps}
+                                    </span>
+                                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
+                                      {ex.weight_kg}kg
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              {isProg && (
+                                <div className="flex flex-wrap gap-1">
+                                  {ex.sets_detail!.map((s) => (
+                                    <span
+                                      key={s.set_number}
+                                      className="inline-flex items-center gap-0.5 rounded bg-muted/40 border border-border/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
+                                    >
+                                      <strong className="text-primary font-bold">S{s.set_number}:</strong>{' '}
+                                      {s.reps}×{s.weight_kg}kg
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
 
