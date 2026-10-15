@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect, Suspense } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { usePtActiveMembers } from '@/hooks/usePtSessions'
@@ -69,21 +69,6 @@ function MetricsFormContent() {
 
   const [selectedMemberId, setSelectedMemberId] = useState<string>(initialMemberId)
 
-  // Sinkronkan pilihan member ke URL browser secara halus tanpa reload
-  const handleMemberChange = (newMemberId: string) => {
-    setSelectedMemberId(newMemberId)
-    const params = new URLSearchParams(searchParams.toString())
-    if (newMemberId && newMemberId.trim() !== '') {
-      params.set('memberId', newMemberId)
-    } else {
-      params.delete('memberId')
-    }
-    const query = params.toString()
-    router.replace(`/dashboard/pt/progress/metrics${query ? `?${query}` : ''}`, {
-      scroll: false,
-    })
-  }
-
   // Form State
   const [phase, setPhase] = useState<BodyMetricPhase>('progress')
   const [recordedAt, setRecordedAt] = useState<string>(
@@ -127,6 +112,66 @@ function MetricsFormContent() {
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false)
   const [photoToDelete, setPhotoToDelete] = useState<'front' | 'side' | 'back' | null>(null)
+
+  // Pembersihan menyeluruh seluruh state form untuk mencegah kebocoran data lintas member (vuln-0007)
+  const resetAllFormState = useCallback(() => {
+    // 1. Cabut URL blob preview foto baru agar tidak bocor di browser memory
+    setFrontPhoto((prev) => {
+      if (prev.preview && prev.file) URL.revokeObjectURL(prev.preview)
+      return { file: null, preview: null }
+    })
+    setSidePhoto((prev) => {
+      if (prev.preview && prev.file) URL.revokeObjectURL(prev.preview)
+      return { file: null, preview: null }
+    })
+    setBackPhoto((prev) => {
+      if (prev.preview && prev.file) URL.revokeObjectURL(prev.preview)
+      return { file: null, preview: null }
+    })
+
+    // 2. Kosongkan referensi foto lama & record ID tersimpan
+    setExistingPhotos({ front: null, side: null, back: null })
+    setExistingRecordId(null)
+    setPhotoToDelete(null)
+
+    // 3. Reset seluruh field input fisik & kembalikan fase ke default 'progress'
+    setWeightKg('')
+    setPerut('')
+    setLengan('')
+    setDada('')
+    setPaha('')
+    setPinggul('')
+    setBodyFat('')
+    setNotes('')
+    setRecordedAt(new Date().toLocaleDateString('sv-SE'))
+    setPhase('progress')
+  }, [])
+
+  // Sinkronkan pilihan member ke URL browser secara halus tanpa reload,
+  // sambil mereset total state form lama agar tidak terbawa ke member baru (vuln-0007)
+  const handleMemberChange = (newMemberId: string) => {
+    resetAllFormState()
+    setSelectedMemberId(newMemberId)
+    const params = new URLSearchParams(searchParams.toString())
+    if (newMemberId && newMemberId.trim() !== '') {
+      params.set('memberId', newMemberId)
+    } else {
+      params.delete('memberId')
+    }
+    const query = params.toString()
+    router.replace(`/dashboard/pt/progress/metrics${query ? `?${query}` : ''}`, {
+      scroll: false,
+    })
+  }
+
+  // Sinkronkan state jika URL param memberId berubah (misal dari tombol back/forward browser)
+  useEffect(() => {
+    const urlMemberId = searchParams.get('memberId') || ''
+    if (urlMemberId !== selectedMemberId) {
+      resetAllFormState()
+      setSelectedMemberId(urlMemberId)
+    }
+  }, [searchParams, selectedMemberId, resetAllFormState])
 
   // Post-submission Celebration Dialog state
   const [successDialogOpen, setSuccessDialogOpen] = useState(false)
@@ -438,23 +483,7 @@ function MetricsFormContent() {
 
   // Reset form
   const handleResetForm = () => {
-    setWeightKg('')
-    setPerut('')
-    setLengan('')
-    setDada('')
-    setPaha('')
-    setPinggul('')
-    setBodyFat('')
-    setNotes('')
-    setRecordedAt(new Date().toLocaleDateString('sv-SE'))
-    if (frontPhoto.preview && frontPhoto.file) URL.revokeObjectURL(frontPhoto.preview)
-    if (sidePhoto.preview && sidePhoto.file) URL.revokeObjectURL(sidePhoto.preview)
-    if (backPhoto.preview && backPhoto.file) URL.revokeObjectURL(backPhoto.preview)
-    setFrontPhoto({ file: null, preview: null })
-    setSidePhoto({ file: null, preview: null })
-    setBackPhoto({ file: null, preview: null })
-    setExistingPhotos({ front: null, side: null, back: null })
-    setExistingRecordId(null)
+    resetAllFormState()
     setConfirmResetOpen(false)
   }
 
@@ -467,10 +496,14 @@ function MetricsFormContent() {
       return
     }
 
-    if (!weightKg && !perut && !frontPhoto.file && !existingPhotos.front) {
-      toast.error(
-        'Isi minimal Berat Badan, Lingkar Perut, atau unggah Foto Dokumentasi'
-      )
+    if (!weightKg || !weightKg.trim()) {
+      toast.error('Mohon isi Berat Badan (Kg) terlebih dahulu')
+      return
+    }
+
+    const parsedWeight = parseFloat(weightKg)
+    if (isNaN(parsedWeight) || parsedWeight <= 0) {
+      toast.error('Mohon masukkan angka Berat Badan (Kg) yang valid')
       return
     }
 
@@ -517,8 +550,21 @@ function MetricsFormContent() {
       if (pinggul) measurementsObj.pinggul = parseFloat(pinggul)
       if (bodyFat) measurementsObj.body_fat = parseFloat(bodyFat)
 
-      await createMetric.mutateAsync({
-        ...(existingRecordId ? { id: existingRecordId } : {}),
+      // Security Guard (vuln-0007): Pastikan existingRecordId benar-benar terdaftar sebagai milik selectedMemberId aktif
+      let verifiedRecordId: string | undefined = undefined
+      if (existingRecordId) {
+        const isOwned = (historicalMetrics || []).some(
+          (m) => m.id === existingRecordId && m.member_id === selectedMemberId
+        )
+        if (isOwned) {
+          verifiedRecordId = existingRecordId
+        } else {
+          console.warn('[Security Guard] Stale existingRecordId diabaikan:', existingRecordId)
+        }
+      }
+
+      const savedMetric = await createMetric.mutateAsync({
+        ...(verifiedRecordId ? { id: verifiedRecordId } : {}),
         member_id: selectedMemberId,
         weight_kg: weightKg ? parseFloat(weightKg) : null,
         measurements: measurementsObj as BodyMeasurements,
@@ -530,8 +576,11 @@ function MetricsFormContent() {
         recorded_at: new Date(recordedAt).toISOString(),
       })
 
-      // Jika fase Day 1 atau Day Terakhir, perbarui state existingPhotos
+      // Jika fase Day 1 atau Day Terakhir, perbarui state existingPhotos dan existingRecordId
       if (phase === 'day_1' || phase === 'day_final') {
+        if (savedMetric?.id) {
+          setExistingRecordId(savedMetric.id)
+        }
         setExistingPhotos({
           front: frontUrl,
           side: sideUrl,
@@ -755,8 +804,8 @@ function MetricsFormContent() {
                   type="button"
                   onClick={() => handlePhaseChange('day_1')}
                   className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all ${phase === 'day_1'
-                      ? 'border-blue-500 bg-blue-500/10 text-blue-400 ring-2 ring-blue-500/20'
-                      : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                    ? 'border-blue-500 bg-blue-500/10 text-blue-400 ring-2 ring-blue-500/20'
+                    : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                     }`}
                 >
                   <div className="flex items-center justify-between w-full font-bold text-xs">
@@ -778,8 +827,8 @@ function MetricsFormContent() {
                   type="button"
                   onClick={() => handlePhaseChange('progress')}
                   className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all ${phase === 'progress'
-                      ? 'border-amber-500 bg-amber-500/10 text-amber-400 ring-2 ring-amber-500/20'
-                      : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                    ? 'border-amber-500 bg-amber-500/10 text-amber-400 ring-2 ring-amber-500/20'
+                    : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                     }`}
                 >
                   <div className="flex items-center justify-between w-full font-bold text-xs">
@@ -803,8 +852,8 @@ function MetricsFormContent() {
                   type="button"
                   onClick={() => handlePhaseChange('day_final')}
                   className={`flex flex-col items-start rounded-xl border p-3 text-left transition-all ${phase === 'day_final'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 ring-2 ring-emerald-500/20'
-                      : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 ring-2 ring-emerald-500/20'
+                    : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
                     }`}
                 >
                   <div className="flex items-center justify-between w-full font-bold text-xs">
@@ -846,17 +895,17 @@ function MetricsFormContent() {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-foreground">
-                      Berat Badan (Kg)
+                      Berat Badan (Kg) <span className="text-destructive">*</span>
                     </span>
                     {/* LIVE DELTA BADGE */}
                     {weightDeltaVsLast !== null && (
                       <Badge
                         variant="outline"
                         className={`text-[10px] font-bold flex items-center gap-1 ${weightDeltaVsLast < 0
-                            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
-                            : weightDeltaVsLast > 0
-                              ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                              : 'border-border bg-muted/30 text-muted-foreground'
+                          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                          : weightDeltaVsLast > 0
+                            ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                            : 'border-border bg-muted/30 text-muted-foreground'
                           }`}
                       >
                         {weightDeltaVsLast < 0 ? (
@@ -955,8 +1004,8 @@ function MetricsFormContent() {
                     {getMeasurementDelta(perut, 'perut') !== null && (
                       <span
                         className={`text-[10px] font-bold ${(getMeasurementDelta(perut, 'perut') ?? 0) <= 0
-                            ? 'text-emerald-400'
-                            : 'text-amber-400'
+                          ? 'text-emerald-400'
+                          : 'text-amber-400'
                           }`}
                       >
                         {(getMeasurementDelta(perut, 'perut') ?? 0) > 0 ? '+' : ''}
@@ -992,8 +1041,8 @@ function MetricsFormContent() {
                     {getMeasurementDelta(lengan, 'lengan') !== null && (
                       <span
                         className={`text-[10px] font-bold ${(getMeasurementDelta(lengan, 'lengan') ?? 0) > 0
-                            ? 'text-emerald-400'
-                            : 'text-blue-400'
+                          ? 'text-emerald-400'
+                          : 'text-blue-400'
                           }`}
                       >
                         {(getMeasurementDelta(lengan, 'lengan') ?? 0) > 0 ? '+' : ''}
@@ -1125,8 +1174,8 @@ function MetricsFormContent() {
                     {getMeasurementDelta(bodyFat, 'body_fat') !== null && (
                       <span
                         className={`text-[10px] font-bold ${(getMeasurementDelta(bodyFat, 'body_fat') ?? 0) <= 0
-                            ? 'text-emerald-400'
-                            : 'text-amber-400'
+                          ? 'text-emerald-400'
+                          : 'text-amber-400'
                           }`}
                       >
                         {(getMeasurementDelta(bodyFat, 'body_fat') ?? 0) > 0 ? '+' : ''}
@@ -2032,8 +2081,8 @@ function MetricsFormContent() {
                       {summaryData.prevWeightKg && (
                         <span
                           className={`text-[11px] font-semibold ${summaryData.weightKg < summaryData.prevWeightKg
-                              ? 'text-emerald-400'
-                              : 'text-amber-400'
+                            ? 'text-emerald-400'
+                            : 'text-amber-400'
                             }`}
                         >
                           (
@@ -2115,10 +2164,10 @@ function MetricsFormContent() {
 
                     const phaseLabel =
                       summaryData.phase === 'day_1'
-                        ? '🏁 Day 1 (Awal Program)'
+                        ? 'Day 1 (Awal Program)'
                         : summaryData.phase === 'day_final'
-                          ? '🏆 Evaluasi Akhir Kelulusan'
-                          : '⚡ Progress Berkala'
+                          ? 'Evaluasi Akhir Kelulusan'
+                          : 'Progress Berkala'
 
                     const message = encodeURIComponent(
                       `Halo Kak *${summaryData.memberName}*! \n\n` +

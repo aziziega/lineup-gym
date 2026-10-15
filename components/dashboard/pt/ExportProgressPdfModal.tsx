@@ -27,6 +27,8 @@ interface ExportProgressPdfModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   member: {
+    id?: string
+    member_id?: string
     full_name: string
     phone?: string
     pt_membership_name?: string
@@ -84,19 +86,28 @@ export function ExportProgressPdfModal({
   }, [bodyMetrics])
 
   // Mode Laporan: 'graduation' (Day 1 vs Akhir) atau 'milestone' (Day 1 vs Progress Berkala)
-  const [reportMode, setReportMode] = useState<'graduation' | 'milestone'>(() => {
-    return dayFinalRecord ? 'graduation' : 'milestone'
-  })
+  const [userSelectedMode, setUserSelectedMode] = useState<'graduation' | 'milestone'>('milestone')
   const [selectedMetricId, setSelectedMetricId] = useState<string>('')
 
-  // Sinkronkan default mode saat data berubah
-  useEffect(() => {
-    if (dayFinalRecord) {
-      setReportMode('graduation')
-    } else {
-      setReportMode('milestone')
+  // Mode Efektif (Derived): Kelulusan HANYA bisa aktif jika member BENAR-BENAR memiliki catatan Day Final (vuln-0009)
+  const reportMode: 'graduation' | 'milestone' = useMemo(() => {
+    if (userSelectedMode === 'graduation' && dayFinalRecord) {
+      return 'graduation'
     }
-  }, [dayFinalRecord])
+    return 'milestone'
+  }, [userSelectedMode, dayFinalRecord])
+
+  // Sinkronkan default mode dan bersihkan selectedMetricId saat modal dibuka (open) atau saat member berganti
+  useEffect(() => {
+    if (open) {
+      setSelectedMetricId('')
+      if (dayFinalRecord) {
+        setUserSelectedMode('graduation')
+      } else {
+        setUserSelectedMode('milestone')
+      }
+    }
+  }, [open, member?.member_id, member?.id, member?.full_name, Boolean(dayFinalRecord)])
 
   // Record target pembanding berdasarkan mode yang dipilih
   const targetRecord = useMemo(() => {
@@ -940,22 +951,26 @@ export function ExportProgressPdfModal({
             <div className="flex items-center rounded-lg border border-border/60 bg-card p-0.5">
               <button
                 type="button"
+                disabled={!dayFinalRecord}
                 onClick={() => {
-                  setReportMode('graduation')
+                  setUserSelectedMode('graduation')
                   setSelectedMetricId('')
                 }}
                 className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
-                  reportMode === 'graduation'
-                    ? 'bg-amber-500 text-black shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
+                  !dayFinalRecord
+                    ? 'opacity-40 cursor-not-allowed text-muted-foreground'
+                    : reportMode === 'graduation'
+                      ? 'bg-amber-500 text-black shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
                 }`}
+                title={!dayFinalRecord ? 'Member belum memiliki catatan Day Terakhir / Kelulusan' : undefined}
               >
                 🏆 Kelulusan (Day 1 vs Akhir)
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setReportMode('milestone')
+                  setUserSelectedMode('milestone')
                   setSelectedMetricId('')
                 }}
                 className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${

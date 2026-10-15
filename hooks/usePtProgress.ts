@@ -473,6 +473,7 @@ export function useCreateBodyMetric() {
           .from('member_body_metrics')
           .update(recordData)
           .eq('id', payload.id)
+          .eq('member_id', payload.member_id)
           .select()
           .single()
 

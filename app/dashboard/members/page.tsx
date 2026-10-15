@@ -99,6 +99,7 @@ function MembersContent() {
   const [editMemberData, setEditMemberData] = useState<ActiveSubscriptionView | null>(null)
   const [isEditPackageEnabled, setIsEditPackageEnabled] = useState(false)
   const [formPtRemainingSessions, setFormPtRemainingSessions] = useState<number | ''>('')
+  const [initialPtMembershipId, setInitialPtMembershipId] = useState('')
   const [renewOpen, setRenewOpen] = useState(false)
   const [renewMember, setRenewMember] = useState<ActiveSubscriptionView | null>(null)
 
@@ -506,22 +507,33 @@ function MembersContent() {
           if (ptPkg) {
             const endDate = toLocalISOString(hitungEndDate(startDate, ptPkg.duration_days))
 
+            const isPtPackageChanged = formPtMembership !== initialPtMembershipId
+
             // Tentukan sisa sesi secara aman: jika admin mengisi input sisa sesi, gunakan nilai tersebut;
-            // Jika tidak diisi, pertahankan sisa sesi yang sudah ada, atau fallback ke kuota paket
+            // Jika paket diubah staf dan input kosong, gunakan kuota paket baru; jika paket sama, pertahankan sisa sesi member
             const safeRemainingSessions = 
               formPtRemainingSessions !== '' && !isNaN(Number(formPtRemainingSessions))
                 ? Math.max(0, Number(formPtRemainingSessions))
-                : (editMemberData.pt_remaining_sessions ?? ptPkg.total_sessions ?? 0)
+                : (isPtPackageChanged ? (ptPkg.total_sessions ?? 0) : (editMemberData.pt_remaining_sessions ?? ptPkg.total_sessions ?? 0))
+
+            const ptUpdatePayload: Record<string, any> = {
+              membership_id: ptPkg.id,
+              start_date: startDate,
+              end_date: endDate,
+              remaining_sessions: safeRemainingSessions,
+              status: safeRemainingSessions > 0 ? 'active' : 'expired'
+            }
+
+            // Security & Data Consistency Fix (vuln-0008):
+            // Jika paket PT diganti, bersihkan total_sessions_override lama (set null)
+            // agar active_subscriptions_view membaca kuota total dari paket baru, bukan override lama!
+            if (isPtPackageChanged) {
+              ptUpdatePayload.total_sessions_override = null
+            }
 
             if (editMemberData.pt_subscription_id) {
               subPromises.push(
-                supabase.from('subscriptions').update({
-                  membership_id: ptPkg.id,
-                  start_date: startDate,
-                  end_date: endDate,
-                  remaining_sessions: safeRemainingSessions,
-                  status: safeRemainingSessions > 0 ? 'active' : 'expired'
-                }).eq('id', editMemberData.pt_subscription_id)
+                supabase.from('subscriptions').update(ptUpdatePayload).eq('id', editMemberData.pt_subscription_id)
               )
             } else {
               subPromises.push(
@@ -531,6 +543,7 @@ function MembersContent() {
                   start_date: startDate,
                   end_date: endDate,
                   remaining_sessions: safeRemainingSessions,
+                  total_sessions_override: null,
                   status: safeRemainingSessions > 0 ? 'active' : 'expired'
                 })
               )
@@ -885,6 +898,7 @@ function MembersContent() {
     setFormEmergency('')
     setFormMembership('')
     setFormPtMembership('')
+    setInitialPtMembershipId('')
     setFormStartDate(new Date().toISOString().split('T')[0])
     setFormNotes('')
     setIsEditPackageEnabled(false)
@@ -1163,8 +1177,15 @@ function MembersContent() {
                             onValueChange={(val) => {
                               setFormPtMembership(val)
                               const pkg = ptPackages.find(p => p.id === val)
-                              if (pkg && (formPtRemainingSessions === '' || formPtRemainingSessions === null)) {
-                                setFormPtRemainingSessions(pkg.total_sessions || 0)
+                              if (pkg) {
+                                // Jika staf memilih paket PT baru yang berbeda dari paket berjalan,
+                                // otomatis sesuaikan sisa sesi ke kuota paket baru (mencegah angka stale dari paket lama - vuln-0008)
+                                if (val !== initialPtMembershipId) {
+                                  setFormPtRemainingSessions(pkg.total_sessions || 0)
+                                } else {
+                                  // Kembalikan ke sisa sesi asli member jika memilih kembali paket yang sedang berjalan
+                                  setFormPtRemainingSessions(editMemberData?.pt_remaining_sessions ?? pkg.total_sessions ?? 0)
+                                }
                               }
                             }}
                             placeholder="Pilih paket PT"
@@ -1347,6 +1368,7 @@ function MembersContent() {
                       setFormNotes(m.notes || '')
                       setFormMembership(mGymId)
                       setFormPtMembership(mPtId)
+                      setInitialPtMembershipId(mPtId)
                       setFormPtRemainingSessions(m.pt_remaining_sessions !== null && m.pt_remaining_sessions !== undefined ? m.pt_remaining_sessions : '')
                       setIsEditPackageEnabled(false)
                       setFormStartDate(m.start_date || toLocalISOString(new Date()))

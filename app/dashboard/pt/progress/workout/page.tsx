@@ -1923,20 +1923,23 @@ function LiveWorkoutContent() {
                               s.reps !== e.sets_detail![0].reps
                           )
 
-                        if (isProgressive) {
-                          const setsLines = e.sets_detail!
-                            .map((s) => `  ↳ S${s.set_number}: ${s.reps} reps × ${s.weight_kg}kg`)
+                        if (isProgressive && e.sets_detail) {
+                          const setsLines = e.sets_detail
+                            .map((s, idx) => `  ↳ Set ${idx + 1}: ${s.reps} reps | ${s.weight_kg}kg`)
                             .join('\n')
-                          return `• *${e.name}* (${e.sets_detail!.length} set):\n${setsLines}`
+                          return `• *${e.name}* (${e.sets_detail.length} set):\n${setsLines}`
                         } else {
-                          return `• *${e.name}*: ${e.sets} set × ${e.reps} reps | ${e.weight_kg}kg`
+                          const totalSets = e.sets_detail?.length || e.sets || 1
+                          const reps = e.sets_detail?.[0]?.reps ?? e.reps
+                          const weight = e.sets_detail?.[0]?.weight_kg ?? e.weight_kg
+                          return `• *${e.name}*: ${totalSets} set × ${reps} reps | ${weight}kg`
                         }
                       })
                       .join('\n')
 
                     const graduationClosing =
                       receiptData.remainingSessions === 0
-                        ? `🏆 *SELAMAT KELULUSAN PROGRAM PT!* Seluruh kuota sesi paket kamu telah selesai 100%. Untuk mempertahankan progres & mencapai target berikutnya, tanyakan ke Coach untuk rekomendasi perpanjangan paket (renewal) ya!\n`
+                        ? `*SELAMAT KELULUSAN PROGRAM PT!* Seluruh kuota sesi paket kamu telah selesai 100%. Untuk mempertahankan progres & mencapai target berikutnya, tanyakan ke Coach untuk rekomendasi perpanjangan paket (renewal) ya!\n`
                         : `Sisa Kuota PT Kamu: *${receiptData.remainingSessions} sesi*\nTetap semangat dan konsisten latihannya!\n`
 
                     const message = encodeURIComponent(
