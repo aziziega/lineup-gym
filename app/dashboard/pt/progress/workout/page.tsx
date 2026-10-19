@@ -872,32 +872,32 @@ function LiveWorkoutContent() {
   return (
     <div className="min-h-screen bg-background pb-32">
       {/* Top Navigation Bar: Anti-tersenggol dengan back alert */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border/40 bg-background/95 px-4 lg:px-8 py-3.5 backdrop-blur-md w-full">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center justify-between border-b border-border/40 bg-background/95 px-3.5 sm:px-6 lg:px-8 backdrop-blur-md w-full">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setExitDialogOpen(true)}
-            className="h-9 w-9 text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground shrink-0"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-heading text-lg text-foreground">Live Workout</span>
-              <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+              <span className="font-heading text-base sm:text-lg text-foreground whitespace-nowrap">Live Workout</span>
+              <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary shrink-0">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                 LIVE
               </span>
             </div>
-            <p className="text-[11px] text-muted-foreground">Catat sesi live langsung dari HP/TAB/IPAD</p>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate max-w-[140px] xs:max-w-[200px] sm:max-w-none">Catat sesi live langsung dari HP/TAB/IPAD</p>
           </div>
         </div>
 
         {/* Stopwatch Sesi */}
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-card px-3 py-1.5">
-          <Clock className="h-4 w-4 text-primary" />
-          <span className="font-mono text-sm font-bold text-foreground">
+        <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-border/50 bg-card px-2.5 sm:px-3 py-1 sm:py-1.5 shrink-0">
+          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+          <span className="font-mono text-xs sm:text-sm font-bold text-foreground">
             {formatTimer(timerSeconds)}
           </span>
           <button
@@ -1039,129 +1039,132 @@ function LiveWorkoutContent() {
           </CardContent>
         </Card>
 
-        {/* Kategori Latihan (Horizontal Chips) */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Fokus Kategori Latihan
-          </label>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {CATEGORIES.map((c) => {
-              const active = category === c.label
-              return (
-                <button
-                  key={c.label}
-                  type="button"
-                  onClick={() => setCategory(c.label)}
-                  className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${active
-                    ? `${c.bg} ${c.border} ${c.color} border shadow-sm`
-                    : 'border border-border/40 bg-card text-muted-foreground hover:bg-muted/50'
-                    }`}
-                >
-                  {c.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Quick Exercise Chips (1-Tap Add dari Kategori Aktif) */}
-        <div className="rounded-xl border border-border/40 bg-card/60 p-3 space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              <span className="font-medium">Preset Cepat {category}:</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setNewPresetCategory(category)
-                  setAddPresetModalOpen(true)
-                }}
-                className="text-[11px] font-bold text-accent hover:underline flex items-center gap-1 bg-accent/10 px-2 py-0.5 rounded-md active:scale-95 transition-all"
-              >
-                <Plus className="h-3 w-3" />
-                <span>+ Tambah Preset</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCatalogOpen(true)}
-                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
-              >
-                <Zap className="h-3 w-3" />
-                <span>Katalog</span>
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {/* Presets bawaan sistem */}
-            {currentCategoryData.presets.map((preset) => {
-              const isSelected = exercises.some(
-                (ex) => ex.name.trim().toLowerCase() === preset.trim().toLowerCase()
-              )
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => handleAddExercise(preset)}
-                  className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all active:scale-95 ${
-                    isSelected
-                      ? 'border-primary/60 bg-primary/15 text-primary font-bold shadow-xs'
-                      : 'border-border/50 bg-background/80 text-foreground hover:border-primary/50 hover:bg-primary/10'
-                  }`}
-                  title={isSelected ? `${preset} sudah dipilih` : `Tambah ${preset}`}
-                >
-                  {isSelected ? (
-                    <CheckCircle2 className="h-3 w-3 text-primary" />
-                  ) : (
-                    <Plus className="h-3 w-3 text-primary" />
-                  )}
-                  <span>{preset}</span>
-                </button>
-              )
-            })}
-
-            {/* Presets Kustom Gym dari Supabase Database */}
-            {activeCustomPresets.map((custom) => {
-              const isSelected = exercises.some(
-                (ex) => ex.name.trim().toLowerCase() === custom.name.trim().toLowerCase()
-              )
-              return (
-                <div
-                  key={custom.id}
-                  className={`inline-flex items-center rounded-lg border pr-1 transition-all ${
-                    isSelected
-                      ? 'border-accent bg-accent/20'
-                      : 'border-accent/40 bg-accent/10 hover:border-accent'
-                  }`}
-                >
+        {/* Sticky Container Kategori & Preset (Mempertahankan 100% Tampilan Asli) */}
+        <div className="sticky top-14 sm:top-16 z-20 bg-background/95 backdrop-blur-md pt-3 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 space-y-3">
+          {/* Kategori Latihan (Horizontal Chips) */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Fokus Kategori Latihan
+            </label>
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {CATEGORIES.map((c) => {
+                const active = category === c.label
+                return (
                   <button
+                    key={c.label}
                     type="button"
-                    onClick={() => handleAddExercise(custom.name)}
-                    className="flex items-center gap-1 pl-2.5 py-1.5 text-xs text-accent font-semibold active:scale-95"
-                    title={isSelected ? `${custom.name} sudah dipilih` : `Tambah ${custom.name}`}
+                    onClick={() => setCategory(c.label)}
+                    className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${active
+                      ? `${c.bg} ${c.border} ${c.color} border shadow-sm`
+                      : 'border border-border/40 bg-card text-muted-foreground hover:bg-muted/50'
+                      }`}
+                  >
+                    {c.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Quick Exercise Chips (1-Tap Add dari Kategori Aktif) */}
+          <div className="rounded-xl border border-border/40 bg-card/60 p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="font-medium">Preset Cepat {category}:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewPresetCategory(category)
+                    setAddPresetModalOpen(true)
+                  }}
+                  className="text-[11px] font-bold text-accent hover:underline flex items-center gap-1 bg-accent/10 px-2 py-0.5 rounded-md active:scale-95 transition-all"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>+ Tambah Preset</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogOpen(true)}
+                  className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <Zap className="h-3 w-3" />
+                  <span>Katalog</span>
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {/* Presets bawaan sistem */}
+              {currentCategoryData.presets.map((preset) => {
+                const isSelected = exercises.some(
+                  (ex) => ex.name.trim().toLowerCase() === preset.trim().toLowerCase()
+                )
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => handleAddExercise(preset)}
+                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all active:scale-95 ${
+                      isSelected
+                        ? 'border-primary/60 bg-primary/15 text-primary font-bold shadow-xs'
+                        : 'border-border/50 bg-background/80 text-foreground hover:border-primary/50 hover:bg-primary/10'
+                    }`}
+                    title={isSelected ? `${preset} sudah dipilih` : `Tambah ${preset}`}
                   >
                     {isSelected ? (
-                      <CheckCircle2 className="h-3 w-3 text-accent" />
+                      <CheckCircle2 className="h-3 w-3 text-primary" />
                     ) : (
-                      <Plus className="h-3 w-3 text-accent" />
+                      <Plus className="h-3 w-3 text-primary" />
                     )}
-                    <span>{custom.name}</span>
+                    <span>{preset}</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setPresetToDelete({ id: custom.id, name: custom.name })
-                    }}
-                    className="p-1 text-accent/60 hover:text-red-400 transition-colors"
-                    title="Hapus Preset"
+                )
+              })}
+
+              {/* Presets Kustom Gym dari Supabase Database */}
+              {activeCustomPresets.map((custom) => {
+                const isSelected = exercises.some(
+                  (ex) => ex.name.trim().toLowerCase() === custom.name.trim().toLowerCase()
+                )
+                return (
+                  <div
+                    key={custom.id}
+                    className={`inline-flex items-center rounded-lg border pr-1 transition-all ${
+                      isSelected
+                        ? 'border-accent bg-accent/20'
+                        : 'border-accent/40 bg-accent/10 hover:border-accent'
+                    }`}
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              )
-            })}
+                    <button
+                      type="button"
+                      onClick={() => handleAddExercise(custom.name)}
+                      className="flex items-center gap-1 pl-2.5 py-1.5 text-xs text-accent font-semibold active:scale-95"
+                      title={isSelected ? `${custom.name} sudah dipilih` : `Tambah ${custom.name}`}
+                    >
+                      {isSelected ? (
+                        <CheckCircle2 className="h-3 w-3 text-accent" />
+                      ) : (
+                        <Plus className="h-3 w-3 text-accent" />
+                      )}
+                      <span>{custom.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPresetToDelete({ id: custom.id, name: custom.name })
+                      }}
+                      className="p-1 text-accent/60 hover:text-red-400 transition-colors"
+                      title="Hapus Preset"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
