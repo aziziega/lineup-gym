@@ -505,10 +505,10 @@ export default function PtWorkoutMonthlyCalendar({
                                 {!isProg && (
                                   <div className="flex items-center gap-1.5 font-medium font-mono">
                                     <span className="text-muted-foreground">
-                                      {ex.sets}×{ex.reps}
+                                      {(ex.sets_detail?.length || ex.sets)}×{ex.sets_detail?.[0]?.reps ?? ex.reps}
                                     </span>
                                     <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
-                                      {ex.weight_kg}kg
+                                      {ex.sets_detail?.[0]?.weight_kg ?? ex.weight_kg}kg
                                     </span>
                                   </div>
                                 )}
