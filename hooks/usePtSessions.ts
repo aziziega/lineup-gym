@@ -241,7 +241,6 @@ export function useAllPtMembers() {
         .from('active_subscriptions_view')
         .select('member_id, full_name, phone, pt_membership_name, pt_subscription_id, pt_remaining_sessions, pt_total_sessions, pt_status')
         .eq('gym_id', GYM_ID)
-        .gt('pt_remaining_sessions', 0)
         .not('pt_subscription_id', 'is', null)
 
       if (error) throw error

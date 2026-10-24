@@ -810,7 +810,26 @@ function LiveWorkoutContent() {
       return
     }
 
-    const validExercises = exercises.filter((ex) => ex.name.trim() !== '')
+    // Normalisasi: Pastikan data root (sets, reps, weight_kg) selalu sinkron dengan sets_detail[0]
+    const validExercises = exercises
+      .filter((ex) => ex.name.trim() !== '')
+      .map((ex) => {
+        const details = ex.sets_detail || []
+        const totalSets = details.length || ex.sets || 1
+        const reps = details[0]?.reps ?? ex.reps ?? 10
+        const weight = details[0]?.weight_kg ?? ex.weight_kg ?? 0
+        return {
+          ...ex,
+          sets: totalSets,
+          reps: reps,
+          weight_kg: weight,
+          sets_detail: details.length > 0 ? details : Array.from({ length: totalSets }, (_, i) => ({
+            set_number: i + 1,
+            reps: reps,
+            weight_kg: weight,
+          })),
+        }
+      })
     if (validExercises.length === 0) return
 
     try {

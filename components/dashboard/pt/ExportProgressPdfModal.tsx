@@ -723,8 +723,11 @@ export function ExportProgressPdfModal({
                     })
                     .join(' → ')
                 } else {
-                  const wtLabel = e.weight_kg > 0 ? `${e.weight_kg} kg` : 'Bodyweight'
-                  notation = `${e.sets} Set × ${e.reps} reps (${wtLabel})`
+                  const totalSets = e.sets_detail?.length || e.sets || 1
+                  const reps = e.sets_detail?.[0]?.reps ?? e.reps
+                  const weight = e.sets_detail?.[0]?.weight_kg ?? e.weight_kg
+                  const wtLabel = weight > 0 ? `${weight} kg` : 'Bodyweight'
+                  notation = `${totalSets} Set × ${reps} reps (${wtLabel})`
                 }
 
                 return `<span class="ex-pill"><strong>${escapeHtml(e.name)}:</strong> <span class="ex-pill-detail">${escapeHtml(notation)}</span></span>`
@@ -1149,6 +1152,11 @@ export function ExportProgressPdfModal({
                                           s.reps !== e.sets_detail![0].reps
                                       )
 
+                                    const totalSets = e.sets_detail?.length || e.sets || 1
+                                    const reps = e.sets_detail?.[0]?.reps ?? e.reps
+                                    const weight = e.sets_detail?.[0]?.weight_kg ?? e.weight_kg
+                                    const wtLabel = weight > 0 ? `${weight} kg` : 'Bodyweight'
+
                                     const notation =
                                       isProg && e.sets_detail
                                         ? e.sets_detail
@@ -1157,7 +1165,7 @@ export function ExportProgressPdfModal({
                                               return `${wt} (${s.reps} reps)`
                                             })
                                             .join(' → ')
-                                        : `${e.sets} Set × ${e.reps} reps (${e.weight_kg > 0 ? `${e.weight_kg} kg` : 'Bodyweight'})`
+                                        : `${totalSets} Set × ${reps} reps (${wtLabel})`
 
                                     return (
                                       <span
