@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
-import { usePtActiveMembers } from '@/hooks/usePtSessions'
+import { usePtActiveMembers, usePtMemberCycles } from '@/hooks/usePtSessions'
 import {
   useMemberBodyMetrics,
   useCreateBodyMetric,
@@ -196,6 +196,7 @@ function MetricsFormContent() {
   const { data: ptMembers, isLoading: membersLoading } = usePtActiveMembers()
   const { data: historicalMetrics, isLoading: historyLoading } =
     useMemberBodyMetrics(selectedMemberId || undefined)
+  const { data: memberCycles } = usePtMemberCycles(selectedMemberId || undefined)
   const createMetric = useCreateBodyMetric()
   const removePhoto = useRemoveBodyMetricPhoto()
 
@@ -204,6 +205,50 @@ function MetricsFormContent() {
     () => (ptMembers || []).find((m) => m.member_id === selectedMemberId),
     [ptMembers, selectedMemberId]
   )
+
+  // Siklus aktif saat ini (prioritas is_active atau cycle paling baru)
+  const activeCycle = useMemo(() => {
+    if (!memberCycles || memberCycles.length === 0) return null
+    return memberCycles.find((c) => c.is_active) || memberCycles[0] || null
+  }, [memberCycles])
+
+  // Filter metrik fisik khusus untuk siklus aktif saat ini (Opsi A + B)
+  const activeCycleMetrics = useMemo(() => {
+    if (!historicalMetrics || historicalMetrics.length === 0) return []
+    if (!activeCycle) return historicalMetrics
+
+    const cycleStart = new Date(activeCycle.created_at).getTime()
+    const cycleEnd = activeCycle.next_cycle_created_at
+      ? new Date(activeCycle.next_cycle_created_at).getTime()
+      : Infinity
+
+    return historicalMetrics.filter((m) => {
+      const t = new Date(m.created_at || m.recorded_at).getTime()
+      return t >= cycleStart && t < cycleEnd
+    })
+  }, [historicalMetrics, activeCycle])
+
+  // Metrik pengukuran terakhir secara historis lintas seluruh siklus (untuk smart-prefill helper)
+  const mostRecentHistoricalMetric = useMemo(() => {
+    if (!historicalMetrics || historicalMetrics.length === 0) return null
+    return historicalMetrics[historicalMetrics.length - 1]
+  }, [historicalMetrics])
+
+  // Helper untuk menyalin ukuran terakhir dari siklus sebelumnya ke Day 1 siklus baru
+  const handleCopyPreviousMeasurements = () => {
+    if (!mostRecentHistoricalMetric) return
+    if (mostRecentHistoricalMetric.weight_kg) {
+      setWeightKg(String(mostRecentHistoricalMetric.weight_kg))
+    }
+    const m = mostRecentHistoricalMetric.measurements || {}
+    if (m.perut !== undefined) setPerut(String(m.perut))
+    if (m.lengan !== undefined) setLengan(String(m.lengan))
+    if (m.dada !== undefined) setDada(String(m.dada))
+    if (m.paha !== undefined) setPaha(String(m.paha))
+    if (m.pinggul !== undefined) setPinggul(String(m.pinggul))
+    if (m.body_fat !== undefined) setBodyFat(String(m.body_fat))
+    toast.success('Ukuran tubuh dari siklus sebelumnya berhasil disalin sebagai acuan awal!')
+  }
 
   const memberOptions = useMemo(() => {
     return (ptMembers || []).map((m) => ({
@@ -224,9 +269,9 @@ function MetricsFormContent() {
     return map
   }, [ptMembers])
 
-  // Cari Baseline Day 1, Day Terakhir, dan Evaluasi Berkala
+  // Cari Baseline Day 1, Day Terakhir, dan Evaluasi Berkala KHUSUS SIKLUS AKTIF
   const { day1Metric, dayFinalMetric, progressMetrics, lastMetric, totalRecordCount } = useMemo(() => {
-    if (!historicalMetrics || historicalMetrics.length === 0) {
+    if (!activeCycleMetrics || activeCycleMetrics.length === 0) {
       return {
         day1Metric: null,
         dayFinalMetric: null,
@@ -235,18 +280,18 @@ function MetricsFormContent() {
         totalRecordCount: 0,
       }
     }
-    const day1 = historicalMetrics.find((m) => m.phase === 'day_1') || null
-    const dayFinal = historicalMetrics.find((m) => m.phase === 'day_final') || null
-    const prog = historicalMetrics.filter((m) => m.phase === 'progress')
-    const last = historicalMetrics[historicalMetrics.length - 1]
+    const day1 = activeCycleMetrics.find((m) => m.phase === 'day_1') || null
+    const dayFinal = activeCycleMetrics.find((m) => m.phase === 'day_final') || null
+    const prog = activeCycleMetrics.filter((m) => m.phase === 'progress')
+    const last = activeCycleMetrics[activeCycleMetrics.length - 1]
     return {
       day1Metric: day1,
       dayFinalMetric: dayFinal,
       progressMetrics: prog,
       lastMetric: last,
-      totalRecordCount: historicalMetrics.length,
+      totalRecordCount: activeCycleMetrics.length,
     }
-  }, [historicalMetrics])
+  }, [activeCycleMetrics])
 
   // Logika State-Aware Milestone Switching
   const executePhaseChange = (newPhase: BodyMetricPhase) => {
@@ -1031,7 +1076,7 @@ function MetricsFormContent() {
           {/* 4. Ukuran Lingkar Tubuh (6 Titik - Opsi 4A) */}
           <Card className="border-border/50 bg-card shadow-sm">
             <CardContent className="p-4 sm:p-5 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     Ukuran Lingkar Tubuh (Opsional)
@@ -1040,9 +1085,24 @@ function MetricsFormContent() {
                     4 titik standar + Lingkar Pinggul & Estimasi Body Fat (%)
                   </p>
                 </div>
-                <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                  Satuan cm & %
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {phase === 'day_1' && !day1Metric && mostRecentHistoricalMetric && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCopyPreviousMeasurements}
+                      className="text-xs border-primary/40 text-primary hover:bg-primary/10 gap-1.5 h-7 px-2.5 font-semibold"
+                      title="Salin ukuran terakhir dari siklus sebelumnya sebagai acuan awal"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      <span>Salin Ukuran Terakhir ({mostRecentHistoricalMetric.weight_kg ? `${mostRecentHistoricalMetric.weight_kg}kg` : 'Lalu'})</span>
+                    </Button>
+                  )}
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                    Satuan cm & %
+                  </Badge>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">

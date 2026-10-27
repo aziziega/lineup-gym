@@ -947,6 +947,14 @@ function LiveWorkoutContent() {
           </div>
         )}
 
+        {/* Banner Melengkapi Sesi Absensi */}
+        {initialSessionId && (
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-400">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>Melengkapi detail gerakan untuk sesi yang telah diabsen. Kuota member tidak akan dipotong ulang.</span>
+          </div>
+        )}
+
         {/* Pilih Member Card */}
         <Card className="border-border/50 bg-card">
           <CardContent className="p-4 space-y-3">

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { useAllPtMembers, usePtSessionsByWeek, usePendingPtSessions } from '@/hooks/usePtSessions'
+import { useAllPtMembers, usePtSessionsByWeek, usePendingPtSessions, usePtMemberCycles, type PtSubscriptionCycle } from '@/hooks/usePtSessions'
 import {
   usePtProgressLogs,
   useDeletePtProgressLog,
@@ -14,6 +14,7 @@ import { BodyMetricModal } from '@/components/dashboard/pt/BodyMetricModal'
 import { WeightProgressChart } from '@/components/dashboard/pt/WeightProgressChart'
 import { PhotoComparisonGallery } from '@/components/dashboard/pt/PhotoComparisonGallery'
 import { ExportProgressPdfModal } from '@/components/dashboard/pt/ExportProgressPdfModal'
+import { PtCycleSelector } from '@/components/dashboard/pt/PtCycleSelector'
 import PtWorkoutMonthlyCalendar from '@/components/dashboard/pt/PtWorkoutMonthlyCalendar'
 import PtProgressEmptyDashboard from '@/components/dashboard/pt/PtProgressEmptyDashboard'
 import { Button } from '@/components/ui/button'
@@ -50,7 +51,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Sparkles,
-  ClipboardList,
   Flame,
   CheckCircle2,
   Copy,
@@ -79,7 +79,6 @@ function ProgressTrackingContent() {
 
   const [selectedMemberId, setSelectedMemberId] = useState<string>(initialMemberId)
   const [activeTab, setActiveTab] = useState<'workout' | 'metrics'>('workout')
-  const [workoutViewMode, setWorkoutViewMode] = useState<'calendar' | 'list'>('calendar')
 
   // Modals state
   const [metricModalOpen, setMetricModalOpen] = useState(false)
@@ -113,6 +112,79 @@ function ProgressTrackingContent() {
     () => (ptMembers || []).find((m) => m.member_id === selectedMemberId),
     [ptMembers, selectedMemberId]
   )
+
+  // Riwayat siklus paket PT member (Opsi B)
+  const { data: memberCycles, isLoading: cyclesLoading } = usePtMemberCycles(
+    selectedMemberId || undefined
+  )
+  const [selectedCycleId, setSelectedCycleId] = useState<string>('')
+
+  // Sinkronkan selectedCycleId dengan siklus aktif atau siklus terbaru
+  useEffect(() => {
+    if (memberCycles && memberCycles.length > 0) {
+      const exists = memberCycles.some((c) => c.id === selectedCycleId)
+      if (!exists) {
+        const active = memberCycles.find((c) => c.is_active) || memberCycles[0]
+        setSelectedCycleId(active?.id || '')
+      }
+    } else {
+      setSelectedCycleId('')
+    }
+  }, [memberCycles, selectedCycleId])
+
+  const currentCycle = useMemo(() => {
+    if (!memberCycles || memberCycles.length === 0) return null
+    return memberCycles.find((c) => c.id === selectedCycleId) || memberCycles[0] || null
+  }, [memberCycles, selectedCycleId])
+
+  // Data member efektif disesuaikan dengan siklus yang sedang dipilih
+  const effectiveMember = useMemo(() => {
+    if (!currentMember) return null
+    if (!currentCycle) return currentMember
+    return {
+      ...currentMember,
+      pt_membership_name: currentCycle.membership_name,
+      pt_remaining_sessions: currentCycle.remaining_sessions,
+      pt_total_sessions: currentCycle.total_sessions,
+      pt_start_date: currentCycle.start_date,
+      pt_end_date: currentCycle.end_date,
+    }
+  }, [currentMember, currentCycle])
+
+  // Filter riwayat latihan per siklus paket (Opsi A + B)
+  const filteredWorkoutLogs = useMemo(() => {
+    if (!workoutLogs) return []
+    if (!currentCycle) return workoutLogs
+
+    const cycleStart = new Date(currentCycle.created_at).getTime()
+    const cycleEnd = currentCycle.next_cycle_created_at
+      ? new Date(currentCycle.next_cycle_created_at).getTime()
+      : Infinity
+
+    return workoutLogs.filter((w) => {
+      if (w.subscription_id) {
+        return w.subscription_id === currentCycle.id
+      }
+      const t = new Date(w.created_at).getTime()
+      return t >= cycleStart && t < cycleEnd
+    })
+  }, [workoutLogs, currentCycle])
+
+  // Filter metrik tubuh & foto per siklus paket (Opsi A + B)
+  const filteredBodyMetrics = useMemo(() => {
+    if (!bodyMetrics) return []
+    if (!currentCycle) return bodyMetrics
+
+    const cycleStart = new Date(currentCycle.created_at).getTime()
+    const cycleEnd = currentCycle.next_cycle_created_at
+      ? new Date(currentCycle.next_cycle_created_at).getTime()
+      : Infinity
+
+    return bodyMetrics.filter((m) => {
+      const t = new Date(m.created_at || m.recorded_at).getTime()
+      return t >= cycleStart && t < cycleEnd
+    })
+  }, [bodyMetrics, currentCycle])
 
   // Options for MemberCombobox
   const memberOptions = useMemo(
@@ -154,6 +226,7 @@ function ProgressTrackingContent() {
   // Sync state dengan URL param jika berubah
   const handleSelectMember = (id: string) => {
     setSelectedMemberId(id)
+    setSelectedCycleId('')
     if (id) {
       router.replace(`/dashboard/pt/progress?memberId=${id}`, { scroll: false })
     } else {
@@ -168,11 +241,11 @@ function ProgressTrackingContent() {
     }
   }, [searchParams])
 
-  const lastWorkout = workoutLogs && workoutLogs[0]
+  const lastWorkout = filteredWorkoutLogs && filteredWorkoutLogs[0]
 
   // Format pesan WhatsApp berdasarkan sesi latihan TERAKHIR saja (sesuai format live workout)
   const waMessageText = useMemo(() => {
-    if (!currentMember || !lastWorkout) return ''
+    if (!effectiveMember || !lastWorkout) return ''
 
     const list = (lastWorkout.exercises || [])
       .map((e) => {
@@ -203,9 +276,9 @@ function ProgressTrackingContent() {
       .join('\n')
 
     const graduationClosing =
-      currentMember.pt_remaining_sessions === 0
+      effectiveMember.pt_remaining_sessions === 0
         ? `*SELAMAT KELULUSAN PROGRAM PT!* Seluruh kuota sesi paket kamu telah selesai 100%. Untuk mempertahankan progres & mencapai target berikutnya, tanyakan ke Coach untuk rekomendasi perpanjangan paket (renewal) ya!\n`
-        : `Sisa Kuota PT Kamu: *${currentMember.pt_remaining_sessions ?? 0} sesi*\nTetap semangat dan konsisten latihannya!\n`
+        : `Sisa Kuota PT Kamu: *${effectiveMember.pt_remaining_sessions ?? 0} sesi*\nTetap semangat dan konsisten latihannya!\n`
 
     const formattedDate = new Date(lastWorkout.created_at).toLocaleDateString('id-ID', {
       weekday: 'long',
@@ -215,7 +288,7 @@ function ProgressTrackingContent() {
     })
 
     return (
-      `Halo Kak *${currentMember.full_name}*! \n\n` +
+      `Halo Kak *${effectiveMember.full_name}*! \n\n` +
       `Berikut catatan sesi latihan Personal Trainer terakhir kamu di *Line Up Gym*:\n` +
       `• Tanggal: *${formattedDate}*\n` +
       `• Fokus: *${lastWorkout.category} Day*\n` +
@@ -225,12 +298,12 @@ function ProgressTrackingContent() {
       `${graduationClosing}\n` +
       `*LINEUP GYM PRAMBANAN*\nBe Strong Be Healthy!`
     )
-  }, [currentMember, lastWorkout])
+  }, [effectiveMember, lastWorkout])
 
   const handleOpenWhatsAppModal = () => {
-    if (!currentMember) return
-    if (!workoutLogs || workoutLogs.length === 0) {
-      toast.info('Member ini belum memiliki catatan sesi latihan untuk dikirim ke WhatsApp.')
+    if (!effectiveMember) return
+    if (!filteredWorkoutLogs || filteredWorkoutLogs.length === 0) {
+      toast.info('Member ini belum memiliki catatan sesi latihan pada siklus ini untuk dikirim ke WhatsApp.')
       return
     }
     setIsCopied(false)
@@ -326,67 +399,93 @@ function ProgressTrackingContent() {
       ) : (
         <>
           {/* Member Info Card Banner */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-border/60 bg-card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/20 text-primary font-heading font-bold text-base">
-                {currentMember?.full_name?.charAt(0) || 'M'}
+          <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/20 text-primary font-heading font-bold text-base">
+                  {effectiveMember?.full_name?.charAt(0) || 'M'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading text-base font-bold text-foreground">
+                      {effectiveMember?.full_name}
+                    </h3>
+                    <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
+                      {effectiveMember?.pt_membership_name || 'Member PT'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                    <span>Telp: {effectiveMember?.phone || '-'}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-accent">
+                      Sisa {effectiveMember?.pt_remaining_sessions} sesi
+                    </span>
+                    {currentCycle && (
+                      <>
+                        <span>•</span>
+                        <span className="text-muted-foreground">
+                          Siklus {currentCycle.cycle_number} ({currentCycle.is_active ? 'Aktif' : currentCycle.remaining_sessions === 0 ? 'Lulus' : 'Selesai'})
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-heading text-base font-bold text-foreground">
-                    {currentMember?.full_name}
-                  </h3>
-                  <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">
-                    {currentMember?.pt_membership_name || 'Member PT'}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                  <span>Telp: {currentMember?.phone}</span>
-                  <span>•</span>
-                  <span className="font-semibold text-accent">
-                    Sisa {currentMember?.pt_remaining_sessions} sesi
-                  </span>
-                </div>
+
+              <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleSelectMember('')}
+                  className="text-xs text-muted-foreground hover:text-foreground gap-1.5 h-9 px-2 sm:px-2.5 shrink-0"
+                  title="Tutup detail member & kembali ke ringkasan"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Overview Hub</span>
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant={effectiveMember?.pt_remaining_sessions === 0 ? 'default' : 'outline'}
+                  onClick={() => setExportPdfOpen(true)}
+                  className={`flex-1 sm:flex-initial text-xs h-9 px-2.5 sm:px-3 whitespace-nowrap font-medium ${effectiveMember?.pt_remaining_sessions === 0
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black font-extrabold hover:from-amber-400 hover:to-amber-500 shadow-md shadow-amber-500/20'
+                    : 'border-border bg-card hover:bg-muted/50 text-foreground'
+                    }`}
+                >
+                  <FileDown className="h-3.5 w-3.5 mr-1 sm:mr-1.5 shrink-0" />
+                  {effectiveMember?.pt_remaining_sessions === 0 ? (
+                    <>
+                      <span className="sm:hidden">🏆 Laporan PDF</span>
+                      <span className="hidden sm:inline">🏆 Laporan Kelulusan PDF</span>
+                    </>
+                  ) : (
+                    <span>Export PDF</span>
+                  )}
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenWhatsAppModal}
+                  className="flex-1 sm:flex-initial text-xs h-9 px-2.5 sm:px-3 whitespace-nowrap font-medium border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                >
+                  <MessageCircle className="h-3.5 w-3.5 mr-1 sm:mr-1.5 shrink-0" />
+                  <span className="sm:hidden">Update WA</span>
+                  <span className="hidden sm:inline">Kirim Update WA</span>
+                </Button>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleSelectMember('')}
-                className="text-xs text-muted-foreground hover:text-foreground gap-1.5 h-8 px-2.5"
-                title="Tutup detail member & kembali ke ringkasan"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Overview Hub</span>
-              </Button>
-
-              <Button
-                size="sm"
-                variant={currentMember?.pt_remaining_sessions === 0 ? 'default' : 'outline'}
-                onClick={() => setExportPdfOpen(true)}
-                className={`flex-1 sm:flex-initial text-xs ${currentMember?.pt_remaining_sessions === 0
-                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black font-extrabold hover:from-amber-400 hover:to-amber-500 shadow-md shadow-amber-500/20'
-                  : 'border-border bg-card hover:bg-muted/50 text-foreground'
-                  }`}
-              >
-                <FileDown className="h-3.5 w-3.5 mr-1.5" />
-                {currentMember?.pt_remaining_sessions === 0
-                  ? '🏆 Laporan Kelulusan PDF'
-                  : 'Export PDF'}
-              </Button>
-
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleOpenWhatsAppModal}
-                className="flex-1 sm:flex-initial text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
-              >
-                <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
-                Kirim Update WA
-              </Button>
-            </div>
+            {/* Cycle Selector Bar: Pilih Siklus Paket PT (Opsi A Smart Switcher) */}
+            {memberCycles && memberCycles.length > 1 && (
+              <PtCycleSelector
+                cycles={memberCycles}
+                selectedCycleId={selectedCycleId}
+                onSelectCycle={(cycleId) => setSelectedCycleId(cycleId)}
+                className="pt-2 border-t border-border/40"
+              />
+            )}
           </div>
 
           {/* 1. Custom Segmented Tabs (Gaya Dashboard Finance — Full Width di Atas) */}
@@ -405,7 +504,7 @@ function ProgressTrackingContent() {
                 className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${activeTab === 'workout' ? 'bg-black/20 text-black' : 'bg-muted text-muted-foreground'
                   }`}
               >
-                {workoutLogs?.length || 0}
+                {filteredWorkoutLogs?.length || 0}
               </span>
             </button>
 
@@ -423,7 +522,7 @@ function ProgressTrackingContent() {
                 className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${activeTab === 'metrics' ? 'bg-black/20 text-black' : 'bg-muted text-muted-foreground'
                   }`}
               >
-                {bodyMetrics?.length || 0}
+                {filteredBodyMetrics?.length || 0}
               </span>
             </button>
           </div>
@@ -439,46 +538,18 @@ function ProgressTrackingContent() {
             </div>
 
             {activeTab === 'workout' ? (
-              <div className="flex flex-wrap items-center gap-2">
-                {/* View Mode Segmented Control: Kalender vs List */}
-                <div className="flex items-center rounded-lg border border-border/60 bg-card p-0.5 shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => setWorkoutViewMode('calendar')}
-                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all ${workoutViewMode === 'calendar'
-                      ? 'bg-primary font-bold text-black shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                      }`}
-                  >
-                    <Calendar className="h-3.5 w-3.5" />
-                    <span>Kalender Bulanan</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWorkoutViewMode('list')}
-                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all ${workoutViewMode === 'list'
-                      ? 'bg-primary font-bold text-black shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                      }`}
-                  >
-                    <ClipboardList className="h-3.5 w-3.5" />
-                    <span>Daftar List</span>
-                  </button>
-                </div>
-
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const url = selectedMemberId
-                      ? `/dashboard/pt/progress/workout?memberId=${selectedMemberId}`
-                      : '/dashboard/pt/progress/workout'
-                    router.push(url)
-                  }}
-                  className="h-9 px-4 bg-primary text-black font-bold hover:bg-primary/90 text-xs shadow-md shadow-primary/20 active:scale-[0.98] transition-all"
-                >
-                  <Plus className="h-4 w-4 mr-1.5" /> Catat Latihan Live
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const url = selectedMemberId
+                    ? `/dashboard/pt/progress/workout?memberId=${selectedMemberId}`
+                    : '/dashboard/pt/progress/workout'
+                  router.push(url)
+                }}
+                className="h-9 px-4 bg-primary text-black font-bold hover:bg-primary/90 text-xs shadow-md shadow-primary/20 active:scale-[0.98] transition-all"
+              >
+                <Plus className="h-4 w-4 mr-1.5" /> Catat Latihan Live
+              </Button>
             ) : (
               <Button
                 size="sm"
@@ -495,18 +566,18 @@ function ProgressTrackingContent() {
             )}
           </div>
 
-          {/* 3. KONTEN TAB: Mengalir vertikal full-width */}
+          {/* 3. KONTEN TAB: Kalender Bulanan Progres Latihan */}
           {activeTab === 'workout' && (
             <div className="space-y-4">
               {logsLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-28 rounded-xl bg-card border border-border animate-pulse" />
+                    <div key={i} className="h-32 rounded-xl bg-card border border-border animate-pulse" />
                   ))}
                 </div>
-              ) : workoutViewMode === 'calendar' ? (
+              ) : (
                 <PtWorkoutMonthlyCalendar
-                  workoutLogs={workoutLogs || []}
+                  workoutLogs={filteredWorkoutLogs || []}
                   onDeleteWorkout={(log) => setWorkoutToDelete(log)}
                   onAddWorkoutClick={() => {
                     const url = selectedMemberId
@@ -514,119 +585,8 @@ function ProgressTrackingContent() {
                       : '/dashboard/pt/progress/workout'
                     router.push(url)
                   }}
-                  memberName={currentMember?.full_name}
+                  memberName={effectiveMember?.full_name}
                 />
-              ) : !workoutLogs || workoutLogs.length === 0 ? (
-                <div className="flex h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-card/40 p-6 text-center">
-                  <ClipboardList className="h-8 w-8 text-muted-foreground/40 mb-2" />
-                  <p className="text-sm font-medium text-muted-foreground">Belum ada catatan latihan</p>
-                  <p className="text-xs text-muted-foreground/60 mt-0.5">
-                    Klik tombol &quot;+ Catat Latihan Baru&quot; untuk mencatat gerakan, beban, dan repetisi sesi ini.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {workoutLogs.map((log) => {
-                    const style = CATEGORY_STYLES[log.category] || CATEGORY_STYLES.Lainnya
-                    const formattedDate = new Date(log.created_at).toLocaleDateString('id-ID', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    })
-
-                    return (
-                      <Card key={log.id} className="bg-card border-border/60 overflow-hidden">
-                        <CardContent className="p-4 sm:p-5">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border/40 pb-3 mb-3">
-                            <div className="flex items-center gap-2.5">
-                              <span
-                                className={`rounded-md border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider ${style.border} ${style.bg} ${style.text}`}
-                              >
-                                {log.category}
-                              </span>
-                              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                {formattedDate}
-                              </span>
-                              {log.trainer_name && (
-                                <Badge variant="outline" className="border-border/60 bg-muted/40 text-[10px] text-muted-foreground font-medium">
-                                  Coach: {log.trainer_name}
-                                </Badge>
-                              )}
-                            </div>
-
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setWorkoutToDelete(log)}
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive self-end sm:self-auto"
-                              title="Hapus Catatan Latihan"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-
-                          {/* Exercise List Chips / Grid */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                            {log.exercises.map((ex, idx) => {
-                              const isProg =
-                                ex.sets_detail &&
-                                ex.sets_detail.length > 0 &&
-                                ex.sets_detail.some(
-                                  (s) =>
-                                    s.weight_kg !== ex.sets_detail![0].weight_kg ||
-                                    s.reps !== ex.sets_detail![0].reps
-                                )
-
-                              return (
-                                <div
-                                  key={idx}
-                                  className="rounded-lg border border-border/50 bg-background/50 p-2.5 text-xs space-y-1.5"
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-semibold text-foreground">{ex.name}</span>
-                                    {!isProg && (
-                                      <div className="flex items-center gap-1.5 font-medium">
-                                        <span className="text-muted-foreground font-mono">
-                                          {(ex.sets_detail?.length || ex.sets)}×{ex.sets_detail?.[0]?.reps ?? ex.reps}
-                                        </span>
-                                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
-                                          {ex.sets_detail?.[0]?.weight_kg ?? ex.weight_kg}kg
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  {isProg && (
-                                    <div className="flex flex-wrap gap-1">
-                                      {ex.sets_detail!.map((s) => (
-                                        <span
-                                          key={s.set_number}
-                                          className="inline-flex items-center gap-0.5 rounded bg-muted/40 border border-border/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
-                                        >
-                                          <strong className="text-primary font-bold">S{s.set_number}:</strong>{' '}
-                                          {s.reps}×{s.weight_kg}kg
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-
-                          {/* Notes */}
-                          {log.notes && (
-                            <div className="mt-3 rounded-lg bg-muted/20 p-2.5 text-xs text-muted-foreground border-l-2 border-primary/50">
-                              <span className="font-semibold text-foreground mr-1">Evaluasi:</span>
-                              {log.notes}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
               )}
             </div>
           )}
@@ -644,22 +604,22 @@ function ProgressTrackingContent() {
                       <Scale className="h-4 w-4 text-primary" />
                       Grafik Perkembangan Berat Badan
                     </h4>
-                    <WeightProgressChart metrics={bodyMetrics || []} />
+                    <WeightProgressChart metrics={filteredBodyMetrics || []} />
                   </div>
 
                   {/* Galeri Perbandingan Foto Before vs After */}
                   <div>
-                    <PhotoComparisonGallery metrics={bodyMetrics || []} />
+                    <PhotoComparisonGallery metrics={filteredBodyMetrics || []} />
                   </div>
 
                   {/* Riwayat Catatan Ukuran Tubuh */}
-                  {bodyMetrics && bodyMetrics.length > 0 && (
+                  {filteredBodyMetrics && filteredBodyMetrics.length > 0 && (
                     <div className="space-y-2">
                       <h4 className="font-heading text-sm font-semibold text-foreground">
                         Riwayat Pengukuran Fisik
                       </h4>
                       <div className="space-y-2">
-                        {bodyMetrics
+                        {filteredBodyMetrics
                           .slice()
                           .reverse()
                           .map((m) => (
@@ -724,16 +684,19 @@ function ProgressTrackingContent() {
             open={metricModalOpen}
             onOpenChange={setMetricModalOpen}
             memberId={selectedMemberId}
-            memberName={currentMember?.full_name || ''}
+            memberName={effectiveMember?.full_name || ''}
           />
 
           {/* Modal Export Laporan PDF Progress PT */}
           <ExportProgressPdfModal
             open={exportPdfOpen}
             onOpenChange={setExportPdfOpen}
-            member={currentMember || null}
+            member={effectiveMember || null}
             workoutLogs={workoutLogs || []}
             bodyMetrics={bodyMetrics || []}
+            currentCycle={currentCycle}
+            cycles={memberCycles || []}
+            onSelectCycle={(cycleId) => setSelectedCycleId(cycleId)}
           />
 
           {/* Modal Konfirmasi Kirim Update WA (Latihan Terakhir) */}
@@ -748,8 +711,8 @@ function ProgressTrackingContent() {
                 </DialogTitle>
                 <DialogDescription className="text-center text-xs text-muted-foreground">
                   Pratinjau ringkasan sesi latihan terakhir yang akan dikirimkan kepada{' '}
-                  <span className="font-semibold text-foreground">{currentMember?.full_name}</span>{' '}
-                  ({currentMember?.phone || 'Tanpa nomor HP'}).
+                  <span className="font-semibold text-foreground">{effectiveMember?.full_name}</span>{' '}
+                  ({effectiveMember?.phone || 'Tanpa nomor HP'}).
                 </DialogDescription>
               </DialogHeader>
 
@@ -787,7 +750,7 @@ function ProgressTrackingContent() {
               ) : (
                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground space-y-1">
                   <p className="font-semibold text-foreground">Belum Ada Sesi Latihan</p>
-                  <p>Member ini belum memiliki catatan latihan yang tersimpan. Silakan mulai sesi latihan di Live Workout terlebih dahulu.</p>
+                  <p>Member ini belum memiliki catatan latihan pada siklus ini. Silakan mulai sesi latihan di Live Workout terlebih dahulu.</p>
                 </div>
               )}
 
@@ -824,7 +787,7 @@ function ProgressTrackingContent() {
                       type="button"
                       size="sm"
                       onClick={() => {
-                        const phone = currentMember?.phone?.replace(/[^0-9]/g, '').replace(/^0/, '62')
+                        const phone = effectiveMember?.phone?.replace(/[^0-9]/g, '').replace(/^0/, '62')
                         if (!phone) {
                           toast.error('Nomor telepon member tidak valid atau belum terdaftar')
                           return

@@ -49,6 +49,7 @@ interface WorkoutLogModalProps {
   memberId: string
   memberName: string
   sessionId?: string | null
+  sessionCreatedAt?: string | null
   onSuccess?: () => void
 }
 
@@ -58,6 +59,7 @@ export function WorkoutLogModal({
   memberId,
   memberName,
   sessionId,
+  sessionCreatedAt,
   onSuccess,
 }: WorkoutLogModalProps) {
   const [category, setCategory] = useState<PtProgressCategory>('Push')
@@ -110,9 +112,10 @@ export function WorkoutLogModal({
         exercises: validExercises,
         notes: notes.trim() || null,
         pt_session_id: sessionId || null,
+        created_at: sessionCreatedAt || null,
       })
 
-      toast.success(`Catatan latihan ${category} untuk ${memberName} berhasil disimpan!`)
+      toast.success(`Daftar gerakan ${category} untuk ${memberName} berhasil disimpan!`)
       onOpenChange(false)
       setNotes('')
       onSuccess?.()
@@ -121,6 +124,15 @@ export function WorkoutLogModal({
       toast.error(err.message || 'Gagal menyimpan catatan latihan')
     }
   }
+
+  const formattedSessionDate = sessionCreatedAt
+    ? new Date(sessionCreatedAt).toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -131,10 +143,19 @@ export function WorkoutLogModal({
               <Dumbbell className="h-5 w-5" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold">Catat Latihan Sesi PT</DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                Member: <span className="font-semibold text-foreground">{memberName}</span>
-              </p>
+              <DialogTitle className="text-lg font-bold">
+                {sessionId ? 'Tambah Daftar Gerakan' : 'Catat Latihan Sesi PT'}
+              </DialogTitle>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                <span>
+                  Member: <strong className="font-semibold text-foreground">{memberName}</strong>
+                </span>
+                {formattedSessionDate && (
+                  <span className="rounded bg-primary/10 px-1.5 py-0.2 font-medium text-primary text-[11px]">
+                    Sesi: {formattedSessionDate}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </DialogHeader>

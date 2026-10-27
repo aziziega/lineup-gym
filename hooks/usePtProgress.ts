@@ -9,32 +9,120 @@ const supabase = createClient()
 export interface PtProgressLogWithMember extends PtProgressLog {
   member_name?: string
   member_phone?: string
+  is_attendance_only?: boolean
+  subscription_id?: string | null
 }
 
-// 1. QUERY: Ambil Catatan Latihan Sesi PT
+// 1. QUERY: Ambil Catatan Latihan Sesi PT (Detail Latihan + Absensi Sesi Selesai)
 export function usePtProgressLogs(memberId?: string) {
   return useQuery({
     queryKey: ['pt-progress-logs', memberId],
     queryFn: async () => {
       if (!memberId) return []
 
-      const { data, error } = await supabase
+      // 1. Ambil catatan latihan detail dari pt_progress_logs (join ke pt_sessions untuk tanggal sesi asli)
+      const { data: logsData, error: logsError } = await supabase
         .from('pt_progress_logs')
+        .select(`
+          *,
+          members (full_name, phone),
+          pt_sessions (id, session_date, session_time, subscription_id)
+        `)
+        .eq('gym_id', GYM_ID)
+        .eq('member_id', memberId)
+        .order('created_at', { ascending: false })
+
+      if (logsError) throw logsError
+
+      // 2. Ambil sesi kehadiran selesai dari pt_sessions
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from('pt_sessions')
         .select(`
           *,
           members (full_name, phone)
         `)
         .eq('gym_id', GYM_ID)
         .eq('member_id', memberId)
-        .order('created_at', { ascending: false })
+        .eq('is_completed', true)
+        .order('session_date', { ascending: false })
 
-      if (error) throw error
+      if (sessionsError) throw sessionsError
 
-      return (data || []).map((log: any) => ({
-        ...log,
-        member_name: log.members?.full_name,
-        member_phone: log.members?.phone,
-      })) as PtProgressLogWithMember[]
+      const formattedLogs: PtProgressLogWithMember[] = (logsData || []).map((log: any) => {
+        // Jika log terhubung dengan sesi jadwal tertentu yang memiliki session_date,
+        // gunakan session_date tersebut sebagai created_at agar selalu tampil di hari jadwalnya
+        let effectiveCreatedAt = log.created_at
+        if (log.pt_sessions?.session_date) {
+          const timeStr = log.pt_sessions.session_time
+            ? (log.pt_sessions.session_time.length === 5 ? `${log.pt_sessions.session_time}:00` : log.pt_sessions.session_time)
+            : '10:00:00'
+          effectiveCreatedAt = `${log.pt_sessions.session_date}T${timeStr}`
+        }
+
+        return {
+          ...log,
+          created_at: effectiveCreatedAt,
+          member_name: log.members?.full_name,
+          member_phone: log.members?.phone,
+          is_attendance_only: false,
+          subscription_id: log.pt_sessions?.subscription_id || null,
+        }
+      })
+
+      // Lacak relasi agar sesi yang sudah memiliki catatan latihan detail tidak dobel
+      const linkedSessionIds = new Set<string>()
+      const dateLogsCount: Record<string, number> = {}
+
+      formattedLogs.forEach((log) => {
+        if (log.pt_session_id) {
+          linkedSessionIds.add(log.pt_session_id)
+        } else {
+          const d = new Date(log.created_at)
+          const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+          dateLogsCount[dateKey] = (dateLogsCount[dateKey] || 0) + 1
+        }
+      })
+
+      // Sintesis log absensi fallback untuk sesi completed tanpa catatan gerakan detail
+      const synthesizedLogs: PtProgressLogWithMember[] = []
+      for (const session of (sessionsData || []) as any[]) {
+        if (linkedSessionIds.has(session.id)) {
+          continue
+        }
+
+        // Jika pada tanggal yang sama sudah ada catatan latihan mandiri/live tanpa id sesi, pasangkan
+        if (dateLogsCount[session.session_date] && dateLogsCount[session.session_date] > 0) {
+          dateLogsCount[session.session_date]--
+          continue
+        }
+
+        const timeStr = session.session_time
+          ? (session.session_time.length === 5 ? `${session.session_time}:00` : session.session_time)
+          : '10:00:00'
+        const createdAt = `${session.session_date}T${timeStr}`
+
+        synthesizedLogs.push({
+          id: `session-${session.id}`,
+          gym_id: session.gym_id,
+          pt_session_id: session.id,
+          member_id: session.member_id,
+          category: 'Lainnya',
+          exercises: [],
+          notes: session.notes || 'Sesi selesai via jadwal absensi PT',
+          trainer_name: session.trainer_name || null,
+          recorded_by: null,
+          created_at: createdAt,
+          member_name: session.members?.full_name,
+          member_phone: session.members?.phone,
+          is_attendance_only: true,
+          subscription_id: session.subscription_id || null,
+        })
+      }
+
+      const combined = [...formattedLogs, ...synthesizedLogs]
+      combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+      return combined
     },
     enabled: !!memberId,
   })
@@ -76,50 +164,29 @@ export function useCreatePtProgressLog() {
       notes?: string | null
       pt_session_id?: string | null
       trainer_name?: string | null
+      created_at?: string | null
     }) => {
       const user = (await supabase.auth.getUser()).data.user
       const todayStr = new Date().toLocaleDateString('sv-SE')
       const nowTimeStr = new Date().toTimeString().slice(0, 5)
 
-      // 1. Dapatkan subscription PT aktif untuk member ini
-      const { data: activeSub } = await supabase
-        .from('active_subscriptions_view')
-        .select('pt_subscription_id, pt_remaining_sessions')
-        .eq('gym_id', GYM_ID)
-        .eq('member_id', payload.member_id)
-        .gt('pt_remaining_sessions', 0)
-        .not('pt_subscription_id', 'is', null)
-        .maybeSingle()
-
-      const subscriptionId = activeSub?.pt_subscription_id
       let targetSessionId = payload.pt_session_id
+      let targetSubscriptionId: string | null = null
       let shouldDecrement = true
+      let sessionData: any = null
 
-      // 2. Jika tidak ada pt_session_id yang dipassing, cari sesi terjadwal hari ini yang belum selesai
-      if (!targetSessionId) {
-        const { data: todaySession } = await supabase
-          .from('pt_sessions')
-          .select('id, is_completed, subscription_id')
-          .eq('gym_id', GYM_ID)
-          .eq('member_id', payload.member_id)
-          .eq('session_date', todayStr)
-          .eq('is_completed', false)
-          .order('session_time', { ascending: true })
-          .limit(1)
-          .maybeSingle()
-
-        if (todaySession) {
-          targetSessionId = todaySession.id
-        }
-      }
-
-      // 3. Cek apakah sesi ini sudah pernah diselesaikan sebelumnya (cegah double decrement)
+      // 1. Jika ada targetSessionId yang dipassing (misal dari jadwal tertentu):
       if (targetSessionId) {
         const { data: sessCheck } = await supabase
           .from('pt_sessions')
-          .select('id, is_completed, subscription_id')
+          .select('id, is_completed, subscription_id, session_date, session_time')
           .eq('id', targetSessionId)
           .maybeSingle()
+
+        sessionData = sessCheck
+        if (sessCheck?.subscription_id) {
+          targetSubscriptionId = sessCheck.subscription_id
+        }
 
         if (sessCheck?.is_completed) {
           // Sesi sudah selesai sebelumnya, jangan potong kuota lagi
@@ -134,45 +201,117 @@ export function useCreatePtProgressLog() {
             })
             .eq('id', targetSessionId)
         }
-      } else if (subscriptionId) {
-        // Kasus Walk-in: Tidak ada jadwal hari ini, otomatis buat record sesi selesai
-        const { data: newSession, error: createSessErr } = await supabase
-          .from('pt_sessions')
-          .insert({
-            gym_id: GYM_ID,
-            member_id: payload.member_id,
-            subscription_id: subscriptionId,
-            session_date: todayStr,
-            session_time: nowTimeStr,
-            is_completed: true,
-            completed_at: new Date().toISOString(),
-            notes: 'Sesi Walk-in (Live Workout)',
-          })
-          .select('id')
-          .single()
+      }
 
-        if (!createSessErr && newSession) {
-          targetSessionId = newSession.id
+      // 2. Jika targetSubscriptionId belum didapat, cari subscription PT aktif langsung dari tabel subscriptions
+      if (!targetSubscriptionId) {
+        const { data: activeSub } = await supabase
+          .from('subscriptions')
+          .select('id, remaining_sessions, status, memberships!inner(category)')
+          .eq('member_id', payload.member_id)
+          .eq('memberships.category', 'pt')
+          .gt('remaining_sessions', 0)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (activeSub?.id) {
+          targetSubscriptionId = activeSub.id
         }
       }
 
-      // 4. Potong kuota sesi di subscriptions (jika belum pernah dipotong)
-      if (shouldDecrement && subscriptionId) {
-        const { data: subData } = await supabase
+      // 3. Fallback jika masih belum ada: cek active_subscriptions_view
+      if (!targetSubscriptionId) {
+        const { data: viewSub } = await supabase
+          .from('active_subscriptions_view')
+          .select('pt_subscription_id, pt_remaining_sessions')
+          .eq('gym_id', GYM_ID)
+          .eq('member_id', payload.member_id)
+          .gt('pt_remaining_sessions', 0)
+          .not('pt_subscription_id', 'is', null)
+          .maybeSingle()
+
+        if (viewSub?.pt_subscription_id) {
+          targetSubscriptionId = viewSub.pt_subscription_id
+        }
+      }
+
+      // Validasi ketat: Jika subscription PT tidak ditemukan atau sisa sesi habis, tolak simpan
+      if (!targetSubscriptionId) {
+        throw new Error('Member tidak memiliki paket PT aktif atau sisa kuota sesi telah habis.')
+      }
+
+      // 4. Jika tidak ada targetSessionId yang dipassing, cari sesi terjadwal hari ini yang belum selesai
+      if (!targetSessionId) {
+        const { data: todaySession } = await supabase
+          .from('pt_sessions')
+          .select('id, is_completed, subscription_id, session_date, session_time')
+          .eq('gym_id', GYM_ID)
+          .eq('member_id', payload.member_id)
+          .eq('session_date', todayStr)
+          .eq('is_completed', false)
+          .order('session_time', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+
+        if (todaySession) {
+          targetSessionId = todaySession.id
+          sessionData = todaySession
+          if (!targetSubscriptionId && todaySession.subscription_id) {
+            targetSubscriptionId = todaySession.subscription_id
+          }
+          await supabase
+            .from('pt_sessions')
+            .update({
+              is_completed: true,
+              completed_at: new Date().toISOString(),
+            })
+            .eq('id', targetSessionId)
+        } else if (targetSubscriptionId) {
+          // Kasus Walk-in: Tidak ada jadwal hari ini, otomatis buat record sesi selesai
+          const { data: newSession, error: createSessErr } = await supabase
+            .from('pt_sessions')
+            .insert({
+              gym_id: GYM_ID,
+              member_id: payload.member_id,
+              subscription_id: targetSubscriptionId,
+              session_date: todayStr,
+              session_time: nowTimeStr,
+              is_completed: true,
+              completed_at: new Date().toISOString(),
+              notes: 'Sesi Walk-in (Live Workout)',
+            })
+            .select('id')
+            .single()
+
+          if (createSessErr) throw createSessErr
+          if (newSession) {
+            targetSessionId = newSession.id
+          }
+        }
+      }
+
+      // 5. Potong kuota sesi di subscriptions (jika belum pernah dipotong)
+      if (shouldDecrement && targetSubscriptionId) {
+        const { data: subData, error: subFetchErr } = await supabase
           .from('subscriptions')
           .select('remaining_sessions')
-          .eq('id', subscriptionId)
+          .eq('id', targetSubscriptionId)
           .single()
+
+        if (subFetchErr) throw subFetchErr
 
         if (subData && subData.remaining_sessions !== null && subData.remaining_sessions > 0) {
           const newRemaining = subData.remaining_sessions - 1
-          await supabase
+          const { error: subUpdateErr } = await supabase
             .from('subscriptions')
             .update({
               remaining_sessions: newRemaining,
               ...(newRemaining === 0 ? { status: 'expired' as const } : {}),
             })
-            .eq('id', subscriptionId)
+            .eq('id', targetSubscriptionId)
+
+          if (subUpdateErr) throw subUpdateErr
 
           // Catat audit log pemotongan kuota
           await supabase.from('activity_logs').insert({
@@ -182,7 +321,7 @@ export function useCreatePtProgressLog() {
             table_name: 'pt_sessions',
             record_id: targetSessionId || payload.member_id,
             details: {
-              subscription_id: subscriptionId,
+              subscription_id: targetSubscriptionId,
               remaining_sessions: newRemaining,
               source: 'live_workout',
             },
@@ -190,7 +329,18 @@ export function useCreatePtProgressLog() {
         }
       }
 
-      // 5. Simpan catatan latihan ke pt_progress_logs
+      // 6. Tanggal efektif log latihan:
+      // Jika sesi berasal dari jadwal tanggal tertentu (misal 21 atau 22 Oktober),
+      // gunakan session_date tersebut agar tercatat pada hari yang tepat di kalender
+      let effectiveCreatedAt = payload.created_at || null
+      if (!effectiveCreatedAt && sessionData?.session_date) {
+        const timeStr = sessionData.session_time
+          ? (sessionData.session_time.length === 5 ? `${sessionData.session_time}:00` : sessionData.session_time)
+          : '10:00:00'
+        effectiveCreatedAt = `${sessionData.session_date}T${timeStr}`
+      }
+
+      // 7. Simpan catatan latihan ke pt_progress_logs
       const insertData: Record<string, any> = {
         gym_id: GYM_ID,
         member_id: payload.member_id,
@@ -199,6 +349,7 @@ export function useCreatePtProgressLog() {
         notes: payload.notes || null,
         pt_session_id: targetSessionId || null,
         recorded_by: user?.id || null,
+        created_at: effectiveCreatedAt || new Date().toISOString(),
       }
 
       if (payload.trainer_name && payload.trainer_name.trim()) {
@@ -238,12 +389,140 @@ export function useCreatePtProgressLog() {
   })
 }
 
+// Helper internal rollback kuota subscription (+1 sesi)
+async function rollbackQuota(
+  targetSubscriptionId: string,
+  recordId: string,
+  memberId: string,
+  isSession: boolean,
+  ptSessionId?: string | null
+) {
+  const { data: currentSub, error: fetchSubErr } = await supabase
+    .from('subscriptions')
+    .select(`
+      id,
+      remaining_sessions,
+      status,
+      total_sessions_override,
+      memberships (
+        total_sessions
+      )
+    `)
+    .eq('id', targetSubscriptionId)
+    .single()
+
+  if (fetchSubErr) {
+    console.warn('Gagal mengambil subscription untuk rollback:', fetchSubErr)
+    return
+  }
+
+  if (currentSub && currentSub.remaining_sessions !== null) {
+    const totalAllowed =
+      currentSub.total_sessions_override ??
+      (currentSub.memberships as any)?.total_sessions ??
+      null
+
+    const currentRemaining = currentSub.remaining_sessions ?? 0
+
+    // Invariant Check: Cegah inflasi kuota jika sudah mencapai atau melebihi total paket yang dibeli
+    if (totalAllowed !== null && currentRemaining >= totalAllowed) {
+      console.warn('Rollback kuota dibatalkan: Kuota member sudah mencapai batas maksimal paket yang dibeli.', {
+        currentRemaining,
+        totalAllowed,
+      })
+    } else {
+      // Clamping: Kuota baru tidak boleh melebihi total paket yang dibeli
+      const newRemaining =
+        totalAllowed !== null
+          ? Math.min(totalAllowed, currentRemaining + 1)
+          : currentRemaining + 1
+
+      // Invariant Check: Status hanya diubah ke 'active' jika kuota > 0
+      const newStatus = newRemaining > 0 ? 'active' : currentSub.status
+
+      const { error: subUpdateErr } = await supabase
+        .from('subscriptions')
+        .update({
+          remaining_sessions: newRemaining,
+          status: newStatus,
+        })
+        .eq('id', currentSub.id)
+
+      if (subUpdateErr) {
+        console.error('Gagal mengembalikan kuota sesi:', subUpdateErr)
+        throw subUpdateErr
+      }
+
+      // Catat activity log audit
+      const user = (await supabase.auth.getUser()).data.user
+      await supabase.from('activity_logs').insert({
+        gym_id: GYM_ID,
+        admin_id: user?.id || null,
+        action_type: 'delete_pt_session_and_refund',
+        table_name: isSession ? 'pt_sessions' : 'pt_progress_logs',
+        record_id: recordId,
+        details: {
+          member_id: memberId,
+          pt_session_id: ptSessionId || null,
+          subscription_id: targetSubscriptionId,
+          refunded_sessions: 1,
+          new_remaining: newRemaining,
+          total_allowed: totalAllowed,
+        },
+      })
+    }
+  }
+}
+
 // 3. MUTATION: Hapus Catatan Latihan & Rollback Kuota (+1 Sesi & Hapus Jadwal Terkait Opsi A)
 export function useDeletePtProgressLog() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (logId: string) => {
-      // 1. Ambil data log sebelum dihapus untuk mengetahui pt_session_id dan member_id
+      // Kasus A: Log disintesis dari pt_sessions (attendance only)
+      if (logId.startsWith('session-')) {
+        const sessionId = logId.replace('session-', '')
+
+        const { data: sessionData, error: sessErr } = await supabase
+          .from('pt_sessions')
+          .select('id, gym_id, member_id, subscription_id, is_completed')
+          .eq('id', sessionId)
+          .single()
+
+        if (sessErr) throw sessErr
+
+        let targetSubscriptionId = sessionData?.subscription_id
+
+        const { error: delSessionErr } = await supabase
+          .from('pt_sessions')
+          .delete()
+          .eq('id', sessionId)
+
+        if (delSessionErr) throw delSessionErr
+
+        if (!targetSubscriptionId && sessionData?.member_id) {
+          const { data: subData } = await supabase
+            .from('subscriptions')
+            .select('id, remaining_sessions, status, memberships!inner(category)')
+            .eq('member_id', sessionData.member_id)
+            .eq('memberships.category', 'pt')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (subData?.id) {
+            targetSubscriptionId = subData.id
+          }
+        }
+
+        if (targetSubscriptionId && sessionData?.member_id) {
+          await rollbackQuota(targetSubscriptionId, sessionId, sessionData.member_id, true, sessionId)
+        }
+
+        return
+      }
+
+      // Kasus B: Log detail dari pt_progress_logs
       const { data: log, error: fetchErr } = await supabase
         .from('pt_progress_logs')
         .select('id, member_id, pt_session_id')
@@ -275,102 +554,31 @@ export function useDeletePtProgressLog() {
         if (delSessionErr) console.warn('Gagal menghapus pt_sessions terkait:', delSessionErr)
       }
 
-      // 3. Jika targetSubscriptionId belum didapat, cari subscription PT member
-      if (!targetSubscriptionId && log?.member_id) {
-        const { data: subData, error: findSubErr } = await supabase
-          .from('subscriptions')
-          .select('id, remaining_sessions, status, memberships!inner(category)')
-          .eq('member_id', log.member_id)
-          .eq('memberships.category', 'pt')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
+      // 3. Rollback kuota HANYA JIKA catatan latihan ini terhubung dengan sesi PT (pt_session_id ada).
+      // Catatan mandiri/tanpa sesi (pt_session_id null) tidak pernah memotong kuota sehingga tidak boleh di-refund!
+      if (log?.pt_session_id) {
+        if (!targetSubscriptionId && log?.member_id) {
+          const { data: subData, error: findSubErr } = await supabase
+            .from('subscriptions')
+            .select('id, remaining_sessions, status, memberships!inner(category)')
+            .eq('member_id', log.member_id)
+            .eq('memberships.category', 'pt')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
 
-        if (findSubErr) console.warn('Gagal mencari subscription PT member:', findSubErr)
-        if (subData?.id) {
-          targetSubscriptionId = subData.id
-        }
-      }
-
-      // 4. Rollback kuota: kembalikan 1 sesi ke subscription member (+1 dengan batas maksimal total_sessions)
-      if (targetSubscriptionId) {
-        const { data: currentSub, error: fetchSubErr } = await supabase
-          .from('subscriptions')
-          .select(`
-            id,
-            remaining_sessions,
-            status,
-            total_sessions_override,
-            memberships (
-              total_sessions
-            )
-          `)
-          .eq('id', targetSubscriptionId)
-          .single()
-
-        if (fetchSubErr) {
-          console.warn('Gagal mengambil subscription untuk rollback:', fetchSubErr)
-        }
-
-        if (currentSub && currentSub.remaining_sessions !== null) {
-          const totalAllowed =
-            currentSub.total_sessions_override ??
-            (currentSub.memberships as any)?.total_sessions ??
-            null
-
-          const currentRemaining = currentSub.remaining_sessions ?? 0
-
-          // Invariant Check: Cegah inflasi kuota jika sudah mencapai atau melebihi total paket yang dibeli
-          if (totalAllowed !== null && currentRemaining >= totalAllowed) {
-            console.warn('Rollback kuota dibatalkan: Kuota member sudah mencapai batas maksimal paket yang dibeli.', {
-              currentRemaining,
-              totalAllowed,
-            })
-          } else {
-            // Clamping: Kuota baru tidak boleh melebihi total paket yang dibeli
-            const newRemaining =
-              totalAllowed !== null
-                ? Math.min(totalAllowed, currentRemaining + 1)
-                : currentRemaining + 1
-
-            // Invariant Check: Status hanya diubah ke 'active' jika kuota > 0
-            const newStatus = newRemaining > 0 ? 'active' : currentSub.status
-
-            const { error: subUpdateErr } = await supabase
-              .from('subscriptions')
-              .update({
-                remaining_sessions: newRemaining,
-                status: newStatus,
-              })
-              .eq('id', currentSub.id)
-
-            if (subUpdateErr) {
-              console.error('Gagal mengembalikan kuota sesi:', subUpdateErr)
-              throw subUpdateErr
-            }
-
-            // Catat activity log audit
-            const user = (await supabase.auth.getUser()).data.user
-            await supabase.from('activity_logs').insert({
-              gym_id: GYM_ID,
-              admin_id: user?.id || null,
-              action_type: 'delete_pt_session_and_refund',
-              table_name: 'pt_progress_logs',
-              record_id: logId,
-              details: {
-                member_id: log.member_id,
-                pt_session_id: log.pt_session_id,
-                subscription_id: targetSubscriptionId,
-                refunded_sessions: 1,
-                new_remaining: newRemaining,
-                total_allowed: totalAllowed,
-              },
-            })
+          if (findSubErr) console.warn('Gagal mencari subscription PT member:', findSubErr)
+          if (subData?.id) {
+            targetSubscriptionId = subData.id
           }
         }
+
+        if (targetSubscriptionId && log?.member_id) {
+          await rollbackQuota(targetSubscriptionId, logId, log.member_id, false, log.pt_session_id)
+        }
       }
 
-      // 5. Hapus catatan pt_progress_logs
+      // 4. Hapus catatan pt_progress_logs
       const { error: delLogErr } = await supabase
         .from('pt_progress_logs')
         .delete()
