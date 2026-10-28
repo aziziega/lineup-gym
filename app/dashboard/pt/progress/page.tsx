@@ -313,7 +313,10 @@ function ProgressTrackingContent() {
   const handleConfirmDeleteWorkout = async () => {
     if (!workoutToDelete) return
     try {
-      await deleteWorkoutLog.mutateAsync(workoutToDelete.id)
+      await deleteWorkoutLog.mutateAsync({
+        logId: workoutToDelete.id,
+        memberId: workoutToDelete.member_id || selectedMemberId,
+      })
       toast.success('Catatan latihan berhasil dihapus & kuota sesi dikembalikan (+1)!')
       setWorkoutToDelete(null)
     } catch {
