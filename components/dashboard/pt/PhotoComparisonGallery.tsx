@@ -46,12 +46,11 @@ export function PhotoComparisonGallery({ metrics }: PhotoComparisonGalleryProps)
     (m) => m.photo_front_url || m.photo_side_url || m.photo_back_url
   )
 
-  // Cari Day 1 dan Day Terakhir (atau pertama & terakhir yang ada foto)
+  // Cari Day 1 dan Day Terakhir (khusus phase day_final, tanpa fallback keliru ke foto progress berkala)
   const day1Record =
     recordsWithPhotos.find((m) => m.phase === 'day_1') || recordsWithPhotos[0]
   const dayFinalRecord =
-    recordsWithPhotos.find((m) => m.phase === 'day_final') ||
-    (recordsWithPhotos.length > 1 ? recordsWithPhotos[recordsWithPhotos.length - 1] : null)
+    recordsWithPhotos.find((m) => m.phase === 'day_final') || null
 
   const getPhotoUrl = (metric: MemberBodyMetric | null | undefined, angle: 'front' | 'side' | 'back') => {
     if (!metric) return null
@@ -282,7 +281,7 @@ export function PhotoComparisonGallery({ metrics }: PhotoComparisonGalleryProps)
                         month: 'short',
                         year: 'numeric',
                       })
-                    : 'Belum Selesai'}
+                    : 'Belum Dicatat'}
                   {dayFinalRecord?.weight_kg && ` · ${dayFinalRecord.weight_kg} kg`}
                 </span>
               </div>

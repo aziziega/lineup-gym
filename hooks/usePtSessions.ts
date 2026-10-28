@@ -219,14 +219,65 @@ export function usePtActiveMembers() {
     queryKey: ['pt-active-members'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('active_subscriptions_view')
-        .select('member_id, full_name, phone, pt_membership_name, pt_subscription_id, pt_remaining_sessions, pt_total_sessions, pt_status')
-        .eq('gym_id', GYM_ID)
-        .gt('pt_remaining_sessions', 0)
-        .not('pt_subscription_id', 'is', null)
+        .from('subscriptions')
+        .select(`
+          id,
+          remaining_sessions,
+          total_sessions_override,
+          status,
+          start_date,
+          end_date,
+          created_at,
+          members!inner (
+            id,
+            gym_id,
+            full_name,
+            phone
+          ),
+          memberships!inner (
+            name,
+            category,
+            total_sessions
+          )
+        `)
+        .eq('members.gym_id', GYM_ID)
+        .eq('memberships.category', 'pt')
+        .gt('remaining_sessions', 0)
+        .order('created_at', { ascending: false })
 
-      if (error) throw error
-      return data || []
+      if (error) {
+        // Fallback ke view jika query relasi subscriptions gagal
+        const { data: viewData, error: viewError } = await supabase
+          .from('active_subscriptions_view')
+          .select('member_id, full_name, phone, pt_membership_name, pt_subscription_id, pt_start_date, pt_end_date, pt_remaining_sessions, pt_total_sessions, pt_status')
+          .eq('gym_id', GYM_ID)
+          .gt('pt_remaining_sessions', 0)
+          .not('pt_subscription_id', 'is', null)
+
+        if (viewError) throw viewError
+        return viewData || []
+      }
+
+      const memberMap = new Map<string, any>()
+      ;(data || []).forEach((sub: any) => {
+        const m = sub.members
+        if (m && !memberMap.has(m.id)) {
+          memberMap.set(m.id, {
+            member_id: m.id,
+            full_name: m.full_name,
+            phone: m.phone,
+            pt_membership_name: sub.memberships?.name,
+            pt_subscription_id: sub.id,
+            pt_start_date: sub.start_date,
+            pt_end_date: sub.end_date,
+            pt_remaining_sessions: sub.remaining_sessions,
+            pt_total_sessions: sub.total_sessions_override ?? sub.memberships?.total_sessions,
+            pt_status: sub.remaining_sessions > 0 ? 'active' : sub.status,
+          })
+        }
+      })
+
+      return Array.from(memberMap.values())
     },
     refetchInterval: 10000, // Auto-refresh tiap 10 detik agar member baru langsung muncul
   })
@@ -238,13 +289,62 @@ export function useAllPtMembers() {
     queryKey: ['all-pt-members'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('active_subscriptions_view')
-        .select('member_id, full_name, phone, pt_membership_name, pt_subscription_id, pt_remaining_sessions, pt_total_sessions, pt_status')
-        .eq('gym_id', GYM_ID)
-        .not('pt_subscription_id', 'is', null)
+        .from('subscriptions')
+        .select(`
+          id,
+          remaining_sessions,
+          total_sessions_override,
+          status,
+          start_date,
+          end_date,
+          created_at,
+          members!inner (
+            id,
+            gym_id,
+            full_name,
+            phone
+          ),
+          memberships!inner (
+            name,
+            category,
+            total_sessions
+          )
+        `)
+        .eq('members.gym_id', GYM_ID)
+        .eq('memberships.category', 'pt')
+        .order('created_at', { ascending: false })
 
-      if (error) throw error
-      return data || []
+      if (error) {
+        const { data: viewData, error: viewError } = await supabase
+          .from('active_subscriptions_view')
+          .select('member_id, full_name, phone, pt_membership_name, pt_subscription_id, pt_start_date, pt_end_date, pt_remaining_sessions, pt_total_sessions, pt_status')
+          .eq('gym_id', GYM_ID)
+          .not('pt_subscription_id', 'is', null)
+
+        if (viewError) throw viewError
+        return viewData || []
+      }
+
+      const memberMap = new Map<string, any>()
+      ;(data || []).forEach((sub: any) => {
+        const m = sub.members
+        if (m && !memberMap.has(m.id)) {
+          memberMap.set(m.id, {
+            member_id: m.id,
+            full_name: m.full_name,
+            phone: m.phone,
+            pt_membership_name: sub.memberships?.name,
+            pt_subscription_id: sub.id,
+            pt_start_date: sub.start_date,
+            pt_end_date: sub.end_date,
+            pt_remaining_sessions: sub.remaining_sessions,
+            pt_total_sessions: sub.total_sessions_override ?? sub.memberships?.total_sessions,
+            pt_status: sub.remaining_sessions > 0 ? 'active' : sub.status,
+          })
+        }
+      })
+
+      return Array.from(memberMap.values())
     },
     refetchInterval: 10000,
   })
@@ -294,5 +394,82 @@ export function usePendingPtSessions(beforeDate: string) {
       })) as PtSession[]
     },
     refetchInterval: 15000,
+  })
+}
+
+export interface PtSubscriptionCycle {
+  id: string
+  cycle_number: number
+  is_active: boolean
+  start_date: string
+  end_date: string
+  created_at: string
+  next_cycle_created_at?: string | null
+  remaining_sessions: number
+  total_sessions: number
+  membership_name: string
+  label: string
+}
+
+// Ambil riwayat siklus paket PT untuk member (termasuk paket aktif dan paket-paket terdahulu)
+export function usePtMemberCycles(memberId?: string) {
+  return useQuery({
+    queryKey: ['pt-member-cycles', memberId],
+    queryFn: async () => {
+      if (!memberId) return []
+
+      const { data: subs, error } = await supabase
+        .from('subscriptions')
+        .select(`
+          id,
+          start_date,
+          end_date,
+          remaining_sessions,
+          total_sessions_override,
+          status,
+          created_at,
+          memberships!inner (name, total_sessions)
+        `)
+        .eq('member_id', memberId)
+        .eq('memberships.category', 'pt')
+        .order('created_at', { ascending: true })
+
+      if (error) throw error
+
+      const total = (subs || []).length
+      if (total === 0) return []
+
+      const cycles: PtSubscriptionCycle[] = (subs || []).map((s: any, idx: number) => {
+        const cycleNum = idx + 1
+        const isLatest = idx === total - 1
+        const isActive = isLatest && s.status === 'active' && (s.remaining_sessions || 0) > 0
+        const totalSessions = s.total_sessions_override || s.memberships?.total_sessions || 0
+        const remSessions = s.remaining_sessions ?? 0
+        const dateFormatted = new Date(s.start_date || s.created_at).toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+        const nextSub = subs[idx + 1]
+
+        return {
+          id: s.id,
+          cycle_number: cycleNum,
+          is_active: isActive,
+          start_date: s.start_date,
+          end_date: s.end_date,
+          created_at: s.created_at,
+          next_cycle_created_at: nextSub ? nextSub.created_at : null,
+          remaining_sessions: remSessions,
+          total_sessions: totalSessions,
+          membership_name: s.memberships?.name || 'Personal Trainer',
+          label: `Siklus ${cycleNum} (${isActive ? 'Aktif' : 'Selesai'} · ${remSessions}/${totalSessions} Sesi - ${dateFormatted})`,
+        }
+      }).reverse() // Urutkan terbaru di paling atas untuk dropdown
+
+      return cycles
+    },
+    enabled: !!memberId,
+    refetchInterval: 10000,
   })
 }

@@ -57,13 +57,14 @@ interface PtProgressEmptyDashboardProps {
   isLoading?: boolean
 }
 
-type PtStatusFilter = 'all' | 'active' | 'expiring_soon' | 'critical'
+type PtStatusFilter = 'all' | 'active' | 'expiring_soon' | 'critical' | 'expired'
 
 const FILTER_OPTIONS: { value: PtStatusFilter; label: string }[] = [
   { value: 'all', label: 'Semua' },
   { value: 'active', label: 'Aktif' },
   { value: 'expiring_soon', label: 'Segera (3-4)' },
   { value: 'critical', label: 'Kritis (1-2)' },
+  { value: 'expired', label: 'Sesi Habis (0)' },
 ]
 
 const getMemberStatus = (remaining: number): 'active' | 'expiring_soon' | 'critical' | 'expired' => {
@@ -98,11 +99,13 @@ export default function PtProgressEmptyDashboard({
 
   // Hitung jumlah member per kategori status
   const statusCounts = useMemo(() => {
-    const counts = { all: (ptMembers || []).length, active: 0, expiring_soon: 0, critical: 0 }
+    const counts = { all: (ptMembers || []).length, active: 0, expiring_soon: 0, critical: 0, expired: 0 }
     for (const m of ptMembers || []) {
       const remaining = Number(m.pt_remaining_sessions) || 0
       if (remaining > 0) {
         counts.active += 1
+      } else {
+        counts.expired += 1
       }
       const st = getMemberStatus(remaining)
       if (st === 'expiring_soon' || st === 'critical') {
@@ -674,6 +677,7 @@ export default function PtProgressEmptyDashboard({
                   <Skeleton className="h-5 w-20 rounded" />
                   <Skeleton className="h-5 w-28 rounded" />
                   <Skeleton className="h-5 w-24 rounded" />
+                  <Skeleton className="h-5 w-24 rounded" />
                 </>
               ) : (
                 <>
@@ -701,6 +705,24 @@ export default function PtProgressEmptyDashboard({
                   >
                     <AlertTriangle className="h-3 w-3" />
                     <span>{statusCounts.critical} Kritis (≤ 2 Sesi)</span>
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    onClick={() => {
+                      setStatusFilter(statusFilter === 'expired' ? 'all' : 'expired')
+                      setPage(1)
+                    }}
+                    className={`text-[11px] font-semibold gap-1 cursor-pointer transition-all ${
+                      statusCounts.expired > 0
+                        ? statusFilter === 'expired'
+                          ? 'border-rose-500 bg-rose-500/25 text-rose-300 ring-1 ring-rose-500/50'
+                          : 'border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
+                        : 'border-border/60 bg-muted/20 text-muted-foreground'
+                    }`}
+                    title="Klik untuk filter member sesi habis"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>{statusCounts.expired} Sesi Habis (0)</span>
                   </Badge>
                 </>
               )}

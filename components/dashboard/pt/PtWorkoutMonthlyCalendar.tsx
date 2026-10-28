@@ -10,6 +10,7 @@ import {
   Dumbbell,
   Sparkles,
   Plus,
+  CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -355,12 +356,15 @@ export default function PtWorkoutMonthlyCalendar({
                     {/* Mobile: Colorful Dots */}
                     <div className="flex sm:hidden items-center justify-center gap-1 flex-wrap">
                       {cell.workouts.map((w, wIdx) => {
-                        const style = CATEGORY_STYLES[w.category] || CATEGORY_STYLES.Lainnya
+                        const isAttendance = (w as any).is_attendance_only || (w.exercises || []).length === 0
+                        const dotColor = isAttendance
+                          ? 'bg-emerald-400'
+                          : (CATEGORY_STYLES[w.category] || CATEGORY_STYLES.Lainnya).dot
                         return (
                           <span
                             key={wIdx}
-                            className={`h-2 w-2 rounded-full ${style.dot} shadow-xs`}
-                            title={w.category}
+                            className={`h-2 w-2 rounded-full ${dotColor} shadow-xs`}
+                            title={isAttendance ? 'Sesi Selesai (Absensi)' : w.category}
                           />
                         )
                       })}
@@ -369,13 +373,25 @@ export default function PtWorkoutMonthlyCalendar({
                     {/* Desktop: Mini Category Tags */}
                     <div className="hidden sm:flex flex-col gap-1 w-full overflow-hidden">
                       {cell.workouts.slice(0, 2).map((w, wIdx) => {
-                        const style = CATEGORY_STYLES[w.category] || CATEGORY_STYLES.Lainnya
+                        const isAttendance = (w as any).is_attendance_only || (w.exercises || []).length === 0
+                        const style = isAttendance
+                          ? {
+                              border: 'border-emerald-500/40',
+                              text: 'text-emerald-400',
+                              bg: 'bg-emerald-500/10',
+                            }
+                          : CATEGORY_STYLES[w.category] || CATEGORY_STYLES.Lainnya
                         return (
                           <div
                             key={wIdx}
                             className={`truncate rounded px-1.5 py-0.5 text-[10px] font-semibold border ${style.border} ${style.bg} ${style.text}`}
+                            title={
+                              isAttendance
+                                ? 'Sesi Selesai via Absensi Jadwal'
+                                : `${w.category} Day (${w.exercises.length} Gerakan Lengkap)`
+                            }
                           >
-                            {w.category}
+                            {isAttendance ? '✓ Absensi Saja' : `${w.category} · ${w.exercises.length} Gerakan`}
                           </div>
                         )
                       })}
@@ -443,7 +459,15 @@ export default function PtWorkoutMonthlyCalendar({
           ) : (
             <div className="space-y-4">
               {selectedDateWorkouts.map((log) => {
-                const style = CATEGORY_STYLES[log.category] || CATEGORY_STYLES.Lainnya
+                const isAttendance = (log as any).is_attendance_only || (log.exercises || []).length === 0
+                const style = isAttendance
+                  ? {
+                      border: 'border-emerald-500/40',
+                      text: 'text-emerald-400',
+                      bg: 'bg-emerald-500/10',
+                    }
+                  : CATEGORY_STYLES[log.category] || CATEGORY_STYLES.Lainnya
+
                 const logTime = new Date(log.created_at).toLocaleTimeString('id-ID', {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -452,15 +476,36 @@ export default function PtWorkoutMonthlyCalendar({
                 return (
                   <div
                     key={log.id}
-                    className="rounded-xl border border-border/60 bg-background/50 p-4 transition-all space-y-3"
+                    className={`rounded-xl border ${
+                      isAttendance
+                        ? 'border-emerald-500/30 bg-emerald-500/[0.03]'
+                        : 'border-border/60 bg-background/50'
+                    } p-4 transition-all space-y-3`}
                   >
                     <div className="flex items-center justify-between border-b border-border/30 pb-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className={`rounded-md border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider ${style.border} ${style.bg} ${style.text}`}
-                        >
-                          {log.category} Day
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isAttendance ? (
+                          <>
+                            <span className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Absensi Selesai
+                            </span>
+                            <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                              Absensi Saja
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className={`rounded-md border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider ${style.border} ${style.bg} ${style.text}`}
+                            >
+                              {log.category} Day
+                            </span>
+                            <span className="rounded bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                              Latihan Lengkap ({log.exercises.length} Gerakan)
+                            </span>
+                          </>
+                        )}
                         <span className="text-xs text-muted-foreground font-mono">
                           Pukul {logTime} WIB
                         </span>
@@ -479,61 +524,82 @@ export default function PtWorkoutMonthlyCalendar({
                       )}
                     </div>
 
-                    {/* Daftar Gerakan Latihan (Thumb Friendly Cards) */}
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                        Daftar Gerakan ({log.exercises.length} Gerakan):
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                        {log.exercises.map((ex, exIdx) => {
-                          const isProg =
-                            ex.sets_detail &&
-                            ex.sets_detail.length > 0 &&
-                            ex.sets_detail.some(
-                              (s) =>
-                                s.weight_kg !== ex.sets_detail![0].weight_kg ||
-                                s.reps !== ex.sets_detail![0].reps
-                            )
+                    {isAttendance ? (
+                      <div className="flex items-start gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 mt-0.5">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-foreground text-xs">
+                              Sesi Selesai (Absensi Kehadiran)
+                            </p>
+                            <span className="rounded bg-muted px-1.5 py-0.2 text-[9px] font-medium text-muted-foreground">
+                              Kuota Terpotong
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {log.notes || 'Sesi latihan telah diselesaikan via jadwal absensi PT.'}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Daftar Gerakan Latihan (Hanya tampil pada saat latihan hari itu) */
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          Daftar Gerakan ({log.exercises.length} Gerakan):
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                          {log.exercises.map((ex, exIdx) => {
+                            const isProg =
+                              ex.sets_detail &&
+                              ex.sets_detail.length > 0 &&
+                              ex.sets_detail.some(
+                                (s) =>
+                                  s.weight_kg !== ex.sets_detail![0].weight_kg ||
+                                  s.reps !== ex.sets_detail![0].reps
+                              )
 
-                          return (
-                            <div
-                              key={exIdx}
-                              className="rounded-lg border border-border/50 bg-card p-2.5 text-xs space-y-1.5"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-semibold text-foreground">{ex.name}</span>
-                                {!isProg && (
-                                  <div className="flex items-center gap-1.5 font-medium font-mono">
-                                    <span className="text-muted-foreground">
-                                      {(ex.sets_detail?.length || ex.sets)}×{ex.sets_detail?.[0]?.reps ?? ex.reps}
-                                    </span>
-                                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
-                                      {ex.sets_detail?.[0]?.weight_kg ?? ex.weight_kg}kg
-                                    </span>
+                            return (
+                              <div
+                                key={exIdx}
+                                className="rounded-lg border border-border/50 bg-card p-2.5 text-xs space-y-1.5"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-foreground">{ex.name}</span>
+                                  {!isProg && (
+                                    <div className="flex items-center gap-1.5 font-medium font-mono">
+                                      <span className="text-muted-foreground">
+                                        {(ex.sets_detail?.length || ex.sets)}×{ex.sets_detail?.[0]?.reps ?? ex.reps}
+                                      </span>
+                                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-accent">
+                                        {ex.sets_detail?.[0]?.weight_kg ?? ex.weight_kg}kg
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                {isProg && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {ex.sets_detail!.map((s) => (
+                                      <span
+                                        key={s.set_number}
+                                        className="inline-flex items-center gap-0.5 rounded bg-muted/40 border border-border/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
+                                      >
+                                        <strong className="text-primary font-bold">S{s.set_number}:</strong>{' '}
+                                        {s.reps}×{s.weight_kg}kg
+                                      </span>
+                                    ))}
                                   </div>
                                 )}
                               </div>
-                              {isProg && (
-                                <div className="flex flex-wrap gap-1">
-                                  {ex.sets_detail!.map((s) => (
-                                    <span
-                                      key={s.set_number}
-                                      className="inline-flex items-center gap-0.5 rounded bg-muted/40 border border-border/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
-                                    >
-                                      <strong className="text-primary font-bold">S{s.set_number}:</strong>{' '}
-                                      {s.reps}×{s.weight_kg}kg
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Catatan Coach jika ada */}
-                    {log.notes && (
+                    {/* Catatan Coach jika ada (hanya jika ada exercises atau catatan custom selain default) */}
+                    {!isAttendance && log.notes && (
                       <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                         <span className="font-semibold text-foreground">Catatan Coach: </span>
                         &ldquo;{log.notes}&rdquo;
