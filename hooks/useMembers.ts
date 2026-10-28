@@ -32,6 +32,38 @@ export function useMembersWithSubscription() {
 
       if (!members || members.length === 0) return []
 
+      // Ambil subscription PT aktif terbaru secara langsung dari tabel subscriptions
+      // agar terhindar dari bug tie-breaker view database (end_date 2099-12-31)
+      const { data: ptSubs } = await supabase
+        .from('subscriptions')
+        .select(`
+          id,
+          member_id,
+          start_date,
+          end_date,
+          remaining_sessions,
+          total_sessions_override,
+          status,
+          created_at,
+          memberships!inner (name, category, total_sessions)
+        `)
+        .eq('memberships.category', 'pt')
+        .order('created_at', { ascending: false })
+
+      const latestPtByMember = new Map<string, any>()
+      // Prioritaskan subscription PT yang masih memiliki sisa kuota sesi > 0
+      ;(ptSubs || []).forEach((sub: any) => {
+        if (!latestPtByMember.has(sub.member_id) && sub.remaining_sessions !== null && sub.remaining_sessions > 0) {
+          latestPtByMember.set(sub.member_id, sub)
+        }
+      })
+      // Fallback untuk member yang hanya memiliki subscription PT kedaluwarsa (ambil yang paling baru dibuat)
+      ;(ptSubs || []).forEach((sub: any) => {
+        if (!latestPtByMember.has(sub.member_id)) {
+          latestPtByMember.set(sub.member_id, sub)
+        }
+      })
+
       // Fetch ALL attendance logs with pagination (Supabase caps at 1000 rows per request)
       const PAGE_SIZE = 1000
       let allAttendanceLogs: { member_id: string }[] = []
@@ -65,8 +97,41 @@ export function useMembersWithSubscription() {
       })
 
       const membersWithVisits = members.map((m: any) => {
+        const ptSub = latestPtByMember.get(m.member_id)
+        let ptRem = m.pt_remaining_sessions
+        let ptTot = m.pt_total_sessions
+        let ptName = m.pt_membership_name
+        let ptSubId = m.pt_subscription_id
+        let ptStart = m.pt_start_date
+        let ptEnd = m.pt_end_date
+        let ptStatus = m.pt_status
+        let mainStatus = m.status
+
+        if (ptSub) {
+          ptSubId = ptSub.id
+          ptName = ptSub.memberships?.name ?? ptName
+          ptStart = ptSub.start_date
+          ptEnd = ptSub.end_date
+          ptRem = ptSub.remaining_sessions
+          ptTot = ptSub.total_sessions_override ?? ptSub.memberships?.total_sessions
+          const hasRemaining = ptSub.remaining_sessions !== null && ptSub.remaining_sessions > 0
+          ptStatus = hasRemaining ? 'active' : 'expired'
+          // Jika paket PT aktif, pastikan member berstatus aktif
+          if (hasRemaining && (mainStatus === 'expired' || mainStatus === 'inactive')) {
+            mainStatus = 'active'
+          }
+        }
+
         return {
           ...m,
+          status: mainStatus,
+          pt_subscription_id: ptSubId,
+          pt_membership_name: ptName,
+          pt_start_date: ptStart,
+          pt_end_date: ptEnd,
+          pt_remaining_sessions: ptRem,
+          pt_total_sessions: ptTot,
+          pt_status: ptStatus,
           attendance_count: logsCountByMember[m.member_id] || 0,
           total_attendance_count: logsCountByMember[m.member_id] || 0,
         }

@@ -17,11 +17,12 @@ import {
   Award,
   CheckCircle2,
   Image as ImageIcon,
-  Download,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { PtCycleSelector } from '@/components/dashboard/pt/PtCycleSelector'
 import type { PtProgressLogWithMember } from '@/hooks/usePtProgress'
 import type { MemberBodyMetric } from '@/lib/types'
+import type { PtSubscriptionCycle } from '@/hooks/usePtSessions'
 
 interface ExportProgressPdfModalProps {
   open: boolean
@@ -33,9 +34,15 @@ interface ExportProgressPdfModalProps {
     phone?: string
     pt_membership_name?: string
     pt_remaining_sessions?: number
+    pt_start_date?: string
+    pt_end_date?: string
+    pt_total_sessions?: number
   } | null
   workoutLogs: PtProgressLogWithMember[]
   bodyMetrics: MemberBodyMetric[]
+  currentCycle?: PtSubscriptionCycle | null
+  cycles?: PtSubscriptionCycle[]
+  onSelectCycle?: (cycleId: string) => void
 }
 
 function escapeHtml(str?: string | number | null): string {
@@ -67,71 +74,141 @@ export function ExportProgressPdfModal({
   member,
   workoutLogs,
   bodyMetrics,
+  currentCycle,
+  cycles,
+  onSelectCycle,
 }: ExportProgressPdfModalProps) {
   const [isPrinting, setIsPrinting] = useState(false)
   const [includePhotos, setIncludePhotos] = useState(true)
   const [activePreviewPage, setActivePreviewPage] = useState<'p1' | 'p2'>('p1')
 
+  // 1. Filter sesi latihan berdasarkan siklus yang dipilih (Opsi A + B)
+  const activeCycleWorkouts = useMemo(() => {
+    if (!workoutLogs || workoutLogs.length === 0) return []
+
+    if (currentCycle) {
+      const cycleStart = new Date(currentCycle.created_at).getTime()
+      const cycleEnd = currentCycle.next_cycle_created_at
+        ? new Date(currentCycle.next_cycle_created_at).getTime()
+        : Infinity
+
+      return workoutLogs.filter((w) => {
+        // Jika log memiliki subscription_id yang cocok, prioritaskan
+        if (w.subscription_id) {
+          return w.subscription_id === currentCycle.id
+        }
+        // Fallback rentang waktu created_at
+        const t = new Date(w.created_at).getTime()
+        return t >= cycleStart && t < cycleEnd
+      })
+    }
+
+    // Fallback legacy jika belum ada data cycle: gunakan pt_start_date
+    if (member?.pt_start_date) {
+      const startIso = member.pt_start_date.slice(0, 10)
+      return workoutLogs.filter((w) => {
+        const logDate = w.created_at?.slice(0, 10)
+        return logDate && logDate >= startIso
+      })
+    }
+
+    return workoutLogs
+  }, [workoutLogs, currentCycle, member?.pt_start_date])
+
+  // 2. Filter metrik fisik berdasarkan siklus yang dipilih (Opsi A + B)
+  const activeCycleMetrics = useMemo(() => {
+    if (!bodyMetrics || bodyMetrics.length === 0) return []
+
+    if (currentCycle) {
+      const cycleStart = new Date(currentCycle.created_at).getTime()
+      const cycleEnd = currentCycle.next_cycle_created_at
+        ? new Date(currentCycle.next_cycle_created_at).getTime()
+        : Infinity
+
+      return bodyMetrics.filter((m) => {
+        const t = new Date(m.created_at || m.recorded_at).getTime()
+        return t >= cycleStart && t < cycleEnd
+      })
+    }
+
+    if (member?.pt_start_date) {
+      const startIso = member.pt_start_date.slice(0, 10)
+      return bodyMetrics.filter((m) => {
+        const metricDate = (m.recorded_at || m.created_at)?.slice(0, 10)
+        return metricDate && metricDate >= startIso
+      })
+    }
+
+    return bodyMetrics
+  }, [bodyMetrics, currentCycle, member?.pt_start_date])
+
   // Temukan Baseline Day 1 dan Day Terakhir
   const day1Record = useMemo(() => {
-    return (bodyMetrics || []).find((m) => m.phase === 'day_1') || bodyMetrics?.[0] || null
-  }, [bodyMetrics])
+    return (activeCycleMetrics || []).find((m) => m.phase === 'day_1') || activeCycleMetrics?.[0] || null
+  }, [activeCycleMetrics])
 
   const dayFinalRecord = useMemo(() => {
-    return (bodyMetrics || []).find((m) => m.phase === 'day_final') || null
-  }, [bodyMetrics])
+    return (activeCycleMetrics || []).find((m) => m.phase === 'day_final') || null
+  }, [activeCycleMetrics])
 
   const progressRecords = useMemo(() => {
-    return (bodyMetrics || []).filter((m) => m.phase === 'progress')
-  }, [bodyMetrics])
+    return (activeCycleMetrics || []).filter((m) => m.phase === 'progress')
+  }, [activeCycleMetrics])
+
+  // Member berhak atas mode Kelulusan jika:
+  // 1. Memiliki catatan fisik Day Final, ATAU
+  // 2. Kuota sesi PT-nya sudah habis (sisa 0 sesi)
+  const isRemainingZero = member?.pt_remaining_sessions !== undefined && Number(member.pt_remaining_sessions) <= 0
+  const canSelectGraduation = Boolean(dayFinalRecord) || isRemainingZero
 
   // Mode Laporan: 'graduation' (Day 1 vs Akhir) atau 'milestone' (Day 1 vs Progress Berkala)
   const [userSelectedMode, setUserSelectedMode] = useState<'graduation' | 'milestone'>('milestone')
   const [selectedMetricId, setSelectedMetricId] = useState<string>('')
 
-  // Mode Efektif (Derived): Kelulusan HANYA bisa aktif jika member BENAR-BENAR memiliki catatan Day Final (vuln-0009)
+  // Mode Efektif (Derived): Kelulusan bisa aktif jika user memilih graduation dan canSelectGraduation
   const reportMode: 'graduation' | 'milestone' = useMemo(() => {
-    if (userSelectedMode === 'graduation' && dayFinalRecord) {
+    if (userSelectedMode === 'graduation' && canSelectGraduation) {
       return 'graduation'
     }
     return 'milestone'
-  }, [userSelectedMode, dayFinalRecord])
+  }, [userSelectedMode, canSelectGraduation])
 
   // Sinkronkan default mode dan bersihkan selectedMetricId saat modal dibuka (open) atau saat member berganti
   useEffect(() => {
     if (open) {
       setSelectedMetricId('')
-      if (dayFinalRecord) {
+      if (canSelectGraduation) {
         setUserSelectedMode('graduation')
       } else {
         setUserSelectedMode('milestone')
       }
     }
-  }, [open, member?.member_id, member?.id, member?.full_name, Boolean(dayFinalRecord)])
+  }, [open, member?.member_id, member?.id, member?.full_name, canSelectGraduation])
 
-  // Record target pembanding berdasarkan mode yang dipilih
+  // Record target pembanding berdasarkan mode yang dipilih:
+  // Mode graduation STRICTLY hanya mengambil dayFinalRecord (tanpa fallback ke progress berkala)
   const targetRecord = useMemo(() => {
     if (selectedMetricId) {
-      const found = (bodyMetrics || []).find((m) => m.id === selectedMetricId)
+      const found = (activeCycleMetrics || []).find((m) => m.id === selectedMetricId)
       if (found) return found
     }
     if (reportMode === 'graduation') {
-      return dayFinalRecord || (bodyMetrics && bodyMetrics.length > 1 ? bodyMetrics[bodyMetrics.length - 1] : null)
+      return dayFinalRecord || null
     } else {
       return progressRecords.length > 0
         ? progressRecords[progressRecords.length - 1]
-        : (bodyMetrics && bodyMetrics.length > 1 ? bodyMetrics[bodyMetrics.length - 1] : null)
+        : null
     }
-  }, [selectedMetricId, reportMode, dayFinalRecord, progressRecords, bodyMetrics])
+  }, [selectedMetricId, reportMode, dayFinalRecord, progressRecords])
 
   const hasAnyPhotos = useMemo(() => {
-    return (bodyMetrics || []).some(
+    return (activeCycleMetrics || []).some(
       (m) => m.photo_front_url || m.photo_side_url || m.photo_back_url
     )
-  }, [bodyMetrics])
+  }, [activeCycleMetrics])
 
-  const initialMetric = day1Record || bodyMetrics?.[0]
-  const lastMetric = targetRecord || bodyMetrics?.[bodyMetrics?.length - 1]
+  const initialMetric = day1Record || activeCycleMetrics?.[0] || null
+  const lastMetric = reportMode === 'graduation' ? dayFinalRecord : (targetRecord || null)
   const weightDiff =
     initialMetric?.weight_kg && lastMetric?.weight_kg
       ? Number((lastMetric.weight_kg - initialMetric.weight_kg).toFixed(1))
@@ -149,11 +226,11 @@ export function ExportProgressPdfModal({
   const pdfFileName = `LINEUPGYM_PT_${cleanMemberName || 'MEMBER'}`
 
   const latestTrainerName = useMemo(() => {
-    const logWithTrainer = (workoutLogs || []).find((w) => w.trainer_name && w.trainer_name.trim())
+    const logWithTrainer = (activeCycleWorkouts || []).find((w) => w.trainer_name && w.trainer_name.trim())
     return logWithTrainer?.trainer_name?.trim() || null
-  }, [workoutLogs])
+  }, [activeCycleWorkouts])
 
-  const recentWorkouts = (workoutLogs || []).slice(0, 10)
+  const recentWorkouts = (activeCycleWorkouts || []).slice(0, 10)
   const todayStr = new Date().toLocaleDateString('id-ID', {
     day: 'numeric',
     month: 'long',
@@ -171,6 +248,7 @@ export function ExportProgressPdfModal({
   }
 
   const generateHtmlContent = () => {
+    const logoUrl = typeof window !== 'undefined' ? `${window.location.origin}/logo.jpg` : '/logo.jpg'
     const day1Front = sanitizeImageUrl(day1Record?.photo_front_url)
     const targetFront = sanitizeImageUrl(targetRecord?.photo_front_url)
     const day1Side = sanitizeImageUrl(day1Record?.photo_side_url)
@@ -201,7 +279,7 @@ export function ExportProgressPdfModal({
                 </div>
                 <div class="photo-item">
                   <span class="${targetTagClass}">${targetTagLabel}</span>
-                  ${targetFront ? `<img src="${targetFront}" class="photo-img" />` : '<div class="photo-placeholder">Belum ada foto</div>'}
+                  ${targetFront ? `<img src="${targetFront}" class="photo-img" />` : `<div class="photo-placeholder">Belum ada foto ${targetTagLabel}</div>`}
                   <span class="photo-date">${formatShortDate(targetRecord?.recorded_at)}</span>
                 </div>
               </div>
@@ -220,7 +298,7 @@ export function ExportProgressPdfModal({
                 </div>
                 <div class="photo-item">
                   <span class="${targetTagClass}">${targetTagLabel}</span>
-                  ${targetSide ? `<img src="${targetSide}" class="photo-img" />` : '<div class="photo-placeholder">Belum ada foto</div>'}
+                  ${targetSide ? `<img src="${targetSide}" class="photo-img" />` : `<div class="photo-placeholder">Belum ada foto ${targetTagLabel}</div>`}
                   <span class="photo-date">${formatShortDate(targetRecord?.recorded_at)}</span>
                 </div>
               </div>
@@ -239,7 +317,7 @@ export function ExportProgressPdfModal({
                 </div>
                 <div class="photo-item">
                   <span class="${targetTagClass}">${targetTagLabel}</span>
-                  ${targetBack ? `<img src="${targetBack}" class="photo-img" />` : '<div class="photo-placeholder">Belum ada foto</div>'}
+                  ${targetBack ? `<img src="${targetBack}" class="photo-img" />` : `<div class="photo-placeholder">Belum ada foto ${targetTagLabel}</div>`}
                   <span class="photo-date">${formatShortDate(targetRecord?.recorded_at)}</span>
                 </div>
               </div>
@@ -272,9 +350,9 @@ export function ExportProgressPdfModal({
 
         return `
           <tr>
-            <td style="font-weight: 600;">${label}</td>
-            <td style="text-align: center;">${initVal !== undefined ? `${initVal} ${unit}` : '-'}</td>
-            <td style="text-align: center;">${lastVal !== undefined ? `${lastVal} ${unit}` : '-'}</td>
+            <td style="font-weight: 600;">${escapeHtml(label)}</td>
+            <td style="text-align: center;">${initVal !== undefined ? `${escapeHtml(String(initVal))} ${unit}` : '-'}</td>
+            <td style="text-align: center;">${lastVal !== undefined ? `${escapeHtml(String(lastVal))} ${unit}` : '-'}</td>
             <td style="text-align: center; font-weight: bold; color: ${diff !== null && diff < 0 ? '#059669' : diff !== null && diff > 0 ? '#d97706' : '#555'
           };">
               ${diff !== null ? (diff > 0 ? `+${diff}` : `${diff}`) + ` ${unit}` : '-'}
@@ -294,7 +372,7 @@ export function ExportProgressPdfModal({
           <style>
             @page {
               size: A4 portrait;
-              margin: 10mm 14mm;
+              margin: 0;
             }
             * {
               box-sizing: border-box;
@@ -305,46 +383,72 @@ export function ExportProgressPdfModal({
             body {
               color: #111;
               background: #fff;
-              font-size: 10.5px;
-              line-height: 1.4;
+              font-size: 10px;
+              line-height: 1.35;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
             
             /* HALAMAN 1 & 2 PAGE CONTAINERS */
             .page-container {
               position: relative;
-              min-height: 270mm;
+              box-sizing: border-box;
+              width: 100%;
+              min-height: 297mm;
+              padding: 10mm 14mm 12mm 14mm;
+              background: #fff;
             }
             .page-break {
               page-break-before: always;
               break-before: page;
             }
 
+            /* KOP SURAT RESMI OPSI 1 (SERAGAM) */
             .header {
-              text-align: center;
+              display: flex;
+              align-items: center;
+              gap: 13px;
               border-bottom: 2px solid #111;
               padding-bottom: 8px;
-              margin-bottom: 12px;
+              margin-bottom: 11px;
+            }
+            .header-logo-col {
+              flex-shrink: 0;
+            }
+            .gym-logo {
+              width: 50px;
+              height: 50px;
+              border-radius: 50%;
+              object-fit: cover;
+              border: 1.5px solid #111;
+              display: block;
+            }
+            .header-text-col {
+              flex: 1;
+              min-width: 0;
             }
             .gym-name {
-              font-size: 19px;
+              font-size: 16.5px;
               font-weight: 900;
-              letter-spacing: 1.5px;
+              letter-spacing: 1px;
               color: #000;
               text-transform: uppercase;
+              line-height: 1.1;
             }
             .gym-tagline {
-              font-size: 9.5px;
-              color: #555;
+              font-size: 8px;
+              color: #475569;
               text-transform: uppercase;
-              letter-spacing: 1px;
-              margin-top: 1px;
+              letter-spacing: 0.6px;
+              margin-top: 2px;
+              font-weight: 600;
             }
             .doc-title {
-              font-size: 12.5px;
+              font-size: 10.5px;
               font-weight: 800;
-              margin-top: 6px;
-              text-decoration: underline;
-              letter-spacing: 0.5px;
+              margin-top: 4px;
+              letter-spacing: 0.4px;
+              color: #0f172a;
               text-transform: uppercase;
             }
 
@@ -619,8 +723,17 @@ export function ExportProgressPdfModal({
             }
 
             @media print {
-              body {
+              html, body {
+                width: 210mm;
+                height: 100%;
+                margin: 0;
                 padding: 0;
+                background: #fff;
+              }
+              .page-container {
+                padding: 10mm 14mm;
+                min-height: 297mm;
+                box-sizing: border-box;
               }
             }
           </style>
@@ -629,9 +742,14 @@ export function ExportProgressPdfModal({
           <!-- ================= HALAMAN 1 ================= -->
           <div class="page-container">
             <div class="header">
-              <div class="gym-name">LineUp Gym Prambanan</div>
-              <div class="gym-tagline">Be Strong Be Healthy!</div>
-              <div class="doc-title">Laporan Perkembangan & Evaluasi Personal Trainer</div>
+              <div class="header-logo-col">
+                <img src="${logoUrl}" class="gym-logo" alt="LineUp Gym" />
+              </div>
+              <div class="header-text-col">
+                <div class="gym-name">LineUp Gym Prambanan</div>
+                <div class="gym-tagline">Be Strong Be Healthy! · Prambanan, Klaten · Telp: 0857-0767-8485</div>
+                <div class="doc-title">Laporan Perkembangan &amp; Evaluasi Personal Trainer</div>
+              </div>
             </div>
 
             <div class="grid-2">
@@ -734,6 +852,7 @@ export function ExportProgressPdfModal({
               })
               .join('')
 
+            const isAttendance = (w as any).is_attendance_only || (w.exercises || []).length === 0
             const badgeClass =
               w.category === 'Push'
                 ? 'badge-push'
@@ -742,13 +861,14 @@ export function ExportProgressPdfModal({
                   : w.category === 'Leg'
                     ? 'badge-leg'
                     : 'badge-other'
+            const categoryLabel = isAttendance ? 'Sesi Selesai' : w.category
             return `
                           <tr>
                             <td style="text-align: center;">${i + 1}</td>
                             <td>${d}</td>
-                            <td><span class="badge ${badgeClass}">${escapeHtml(w.category)}</span></td>
+                            <td><span class="badge ${badgeClass}">${escapeHtml(categoryLabel)}</span></td>
                             <td style="font-weight: 600; color: #111;">${escapeHtml(w.trainer_name) || '-'}</td>
-                            <td><div class="ex-grid">${exListHtml || '-'}</div></td>
+                            <td><div class="ex-grid">${exListHtml || '<span style="color:#059669; font-size:9px; font-weight:600;">✓ Sesi Selesai (Absensi Kehadiran)</span>'}</div></td>
                             <td>${w.notes ? '<em>"' + escapeHtml(w.notes) + '"</em>' : '-'}</td>
                           </tr>
                         `
@@ -769,13 +889,18 @@ export function ExportProgressPdfModal({
         ? `
             <div class="page-container page-break">
               <div class="header">
-                <div class="gym-name">LineUp Gym Prambanan</div>
-                <div class="gym-tagline">Be Strong Be Healthy!</div>
-                <div class="doc-title">${
-                  reportMode === 'graduation'
-                    ? 'GALERI TRANSFORMASI FISIK (BEFORE vs AFTER)'
-                    : 'DOKUMENTASI EVALUASI &amp; PROGRESS FISIK'
-                }</div>
+                <div class="header-logo-col">
+                  <img src="${logoUrl}" class="gym-logo" alt="LineUp Gym" />
+                </div>
+                <div class="header-text-col">
+                  <div class="gym-name">LineUp Gym Prambanan</div>
+                  <div class="gym-tagline">Be Strong Be Healthy! · Prambanan, Klaten · Telp: 0857-0767-8485</div>
+                  <div class="doc-title">${
+                    reportMode === 'graduation'
+                      ? 'DOKUMENTASI RESMI TRANSFORMASI FISIK (BEFORE vs AFTER)'
+                      : 'DOKUMENTASI EVALUASI &amp; PROGRESS FISIK'
+                  }</div>
+                </div>
               </div>
 
               <div class="transformation-banner">
@@ -885,40 +1010,23 @@ export function ExportProgressPdfModal({
     setIsPrinting(false)
   }
 
-  const handleDownloadHtml = () => {
-    const html = generateHtmlContent()
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${pdfFileName}.html`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-    toast.success(`Dokumen ${pdfFileName}.html siap diunduh!`)
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-hidden flex flex-col p-0 border-border bg-card text-foreground">
-        <DialogHeader className="p-4 pb-3 border-b border-border/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex flex-col gap-1.5">
+        <DialogHeader className="p-4 pb-3 border-b border-border/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:pr-10">
+          <div className="flex flex-col gap-1">
             <DialogTitle className="font-heading text-lg flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              <span>Laporan Kelulusan & Perkembangan PT</span>
+              <FileText className="h-5 w-5 text-primary shrink-0" />
+              <span>LAPORAN PT</span>
               {member?.pt_remaining_sessions === 0 && (
-                <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px]">
+                <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] shrink-0">
                   Program Selesai
                 </Badge>
               )}
             </DialogTitle>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Target File:</span>
-              <code className="px-1.5 py-0.5 rounded bg-muted/60 text-primary font-mono text-[11px] font-semibold border border-primary/20">
-                {pdfFileName}.pdf
-              </code>
-            </div>
+            <p className="text-xs text-muted-foreground truncate max-w-sm">
+              {member?.full_name} · {member?.pt_membership_name || 'Member PT'}
+            </p>
           </div>
 
           {/* Tab Selector Pratinjau (Hal 1 vs Hal 2) */}
@@ -947,6 +1055,17 @@ export function ExportProgressPdfModal({
           </div>
         </DialogHeader>
 
+        {/* Cycle Selector Bar: Pilih Siklus Paket (Opsi A Smart Switcher) */}
+        {cycles && cycles.length > 1 && (
+          <div className="border-b border-border/40 px-4 py-2 bg-muted/20 text-xs">
+            <PtCycleSelector
+              cycles={cycles}
+              selectedCycleId={currentCycle?.id || ''}
+              onSelectCycle={(cycleId) => onSelectCycle && onSelectCycle(cycleId)}
+            />
+          </div>
+        )}
+
         {/* Mode Selector Bar: Kelulusan vs Evaluasi Berkala (Bagian 1 Opsi A) */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-2 bg-muted/15 text-xs">
           <div className="flex items-center gap-2">
@@ -954,19 +1073,19 @@ export function ExportProgressPdfModal({
             <div className="flex items-center rounded-lg border border-border/60 bg-card p-0.5">
               <button
                 type="button"
-                disabled={!dayFinalRecord}
+                disabled={!canSelectGraduation}
                 onClick={() => {
                   setUserSelectedMode('graduation')
                   setSelectedMetricId('')
                 }}
                 className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
-                  !dayFinalRecord
+                  !canSelectGraduation
                     ? 'opacity-40 cursor-not-allowed text-muted-foreground'
                     : reportMode === 'graduation'
                       ? 'bg-amber-500 text-black shadow-xs'
                       : 'text-muted-foreground hover:text-foreground'
                 }`}
-                title={!dayFinalRecord ? 'Member belum memiliki catatan Day Terakhir / Kelulusan' : undefined}
+                title={!canSelectGraduation ? 'Member belum menyelesaikan kuota sesi PT atau belum memiliki catatan Day Terakhir' : undefined}
               >
                 🏆 Kelulusan (Day 1 vs Akhir)
               </button>
@@ -1011,17 +1130,24 @@ export function ExportProgressPdfModal({
           <div className="mx-auto max-w-xl rounded-xl border border-border/70 bg-background p-6 shadow-md text-foreground space-y-4 text-xs">
             {activePreviewPage === 'p1' ? (
               <>
-                {/* Header Document */}
-                <div className="text-center border-b-2 border-border/60 pb-3 space-y-0.5">
-                  <h2 className="font-heading text-base font-extrabold tracking-wider text-primary">
-                    LINEUP GYM PRAMBANAN
-                  </h2>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Be Strong Be Healthy!
-                  </p>
-                  <p className="text-xs font-bold underline pt-1 text-foreground">
-                    LAPORAN PERKEMBANGAN PERSONAL TRAINER
-                  </p>
+                {/* Header Document (Kop Surat Resmi Opsi 1) */}
+                <div className="flex items-center gap-3 border-b-2 border-border/80 pb-3">
+                  <img
+                    src="/logo.jpg"
+                    alt="Line Up Gym"
+                    className="h-11 w-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h2 className="font-heading text-sm font-extrabold tracking-wider text-primary uppercase leading-tight">
+                      LINEUP GYM PRAMBANAN
+                    </h2>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Be Strong Be Healthy! · Prambanan, Klaten
+                    </p>
+                    <p className="text-[11px] font-bold text-foreground uppercase pt-0.5">
+                      Laporan Perkembangan &amp; Evaluasi Personal Trainer
+                    </p>
+                  </div>
                 </div>
 
                 {/* Info Grid */}
@@ -1135,51 +1261,55 @@ export function ExportProgressPdfModal({
                                 )}
                               </td>
                               <td className="p-2 font-bold text-primary">
-                                {w.category}
+                                {(w as any).is_attendance_only || (w.exercises || []).length === 0 ? 'Sesi Selesai' : w.category}
                               </td>
                               <td className="p-2 font-medium text-foreground whitespace-nowrap">
                                 {w.trainer_name || '-'}
                               </td>
                               <td className="p-2 text-muted-foreground">
-                                <div className="flex flex-col gap-1">
-                                  {(w.exercises || []).map((e, eIdx) => {
-                                    const isProg =
-                                      e.sets_detail &&
-                                      e.sets_detail.length > 0 &&
-                                      e.sets_detail.some(
-                                        (s) =>
-                                          s.weight_kg !== e.sets_detail![0].weight_kg ||
-                                          s.reps !== e.sets_detail![0].reps
-                                      )
+                                {(w.exercises || []).length === 0 ? (
+                                  <span className="text-[10px] text-emerald-400 font-medium">✓ Sesi Selesai (Absensi Kehadiran)</span>
+                                ) : (
+                                  <div className="flex flex-col gap-1">
+                                    {(w.exercises || []).map((e, eIdx) => {
+                                      const isProg =
+                                        e.sets_detail &&
+                                        e.sets_detail.length > 0 &&
+                                        e.sets_detail.some(
+                                          (s) =>
+                                            s.weight_kg !== e.sets_detail![0].weight_kg ||
+                                            s.reps !== e.sets_detail![0].reps
+                                        )
 
-                                    const totalSets = e.sets_detail?.length || e.sets || 1
-                                    const reps = e.sets_detail?.[0]?.reps ?? e.reps
-                                    const weight = e.sets_detail?.[0]?.weight_kg ?? e.weight_kg
-                                    const wtLabel = weight > 0 ? `${weight} kg` : 'Bodyweight'
+                                      const totalSets = e.sets_detail?.length || e.sets || 1
+                                      const reps = e.sets_detail?.[0]?.reps ?? e.reps
+                                      const weight = e.sets_detail?.[0]?.weight_kg ?? e.weight_kg
+                                      const wtLabel = weight > 0 ? `${weight} kg` : 'Bodyweight'
 
-                                    const notation =
-                                      isProg && e.sets_detail
-                                        ? e.sets_detail
-                                            .map((s) => {
-                                              const wt = s.weight_kg > 0 ? `${s.weight_kg} kg` : 'Bodyweight'
-                                              return `${wt} (${s.reps} reps)`
-                                            })
-                                            .join(' → ')
-                                        : `${totalSets} Set × ${reps} reps (${wtLabel})`
+                                      const notation =
+                                        isProg && e.sets_detail
+                                          ? e.sets_detail
+                                              .map((s) => {
+                                                const wt = s.weight_kg > 0 ? `${s.weight_kg} kg` : 'Bodyweight'
+                                                return `${wt} (${s.reps} reps)`
+                                              })
+                                              .join(' → ')
+                                          : `${totalSets} Set × ${reps} reps (${wtLabel})`
 
-                                    return (
-                                      <span
-                                        key={eIdx}
-                                        className="inline-flex flex-wrap items-baseline gap-1 rounded bg-muted/60 border border-border/50 px-2 py-0.5 text-[9px]"
-                                      >
-                                        <strong className="text-foreground">{e.name}:</strong>
-                                        <span className="text-muted-foreground">
-                                          {notation}
+                                      return (
+                                        <span
+                                          key={eIdx}
+                                          className="inline-flex flex-wrap items-baseline gap-1 rounded bg-muted/60 border border-border/50 px-2 py-0.5 text-[9px]"
+                                        >
+                                          <strong className="text-foreground">{e.name}:</strong>
+                                          <span className="text-muted-foreground">
+                                            {notation}
+                                          </span>
                                         </span>
-                                      </span>
-                                    )
-                                  })}
-                                </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           ))
@@ -1199,21 +1329,26 @@ export function ExportProgressPdfModal({
               </>
             ) : (
               <>
-                {/* Halaman 2: Galeri Transformasi / Progress */}
-                <div className="text-center border-b-2 border-border/60 pb-3 space-y-0.5">
-                  <div className="flex items-center justify-center gap-1.5 text-emerald-400">
-                    <Award className="h-4 w-4" />
-                    <span className="font-heading text-sm font-extrabold uppercase">
+                {/* Halaman 2: Galeri Transformasi / Progress (Kop Surat Resmi Opsi 1) */}
+                <div className="flex items-center gap-3 border-b-2 border-border/80 pb-3">
+                  <img
+                    src="/logo.jpg"
+                    alt="Line Up Gym"
+                    className="h-11 w-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h2 className="font-heading text-sm font-extrabold tracking-wider text-primary uppercase leading-tight">
+                      LINEUP GYM PRAMBANAN
+                    </h2>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Be Strong Be Healthy! · Prambanan, Klaten
+                    </p>
+                    <p className="text-[11px] font-bold text-emerald-400 uppercase pt-0.5">
                       {reportMode === 'graduation'
                         ? 'Galeri Transformasi Before vs After'
-                        : 'Dokumentasi Progress Evaluasi Fisik'}
-                    </span>
+                        : `Dokumentasi Progress Evaluasi Fisik · Sisa ${member?.pt_remaining_sessions ?? 0} Sesi`}
+                    </p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    {reportMode === 'graduation'
-                      ? 'Dokumentasi Resmi Kelulusan & Perkembangan Fisik Member'
-                      : `Evaluasi Berkala Progres Member · Sisa ${member?.pt_remaining_sessions ?? 0} Sesi`}
-                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center pt-1">
@@ -1360,17 +1495,6 @@ export function ExportProgressPdfModal({
               className="border-border text-xs"
             >
               Tutup
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleDownloadHtml}
-              className="border-border/80 text-xs gap-1.5 hover:bg-muted"
-              title="Unduh file laporan format HTML offline"
-            >
-              <Download className="h-4 w-4 text-muted-foreground" />
-              <span>Unduh File (.html)</span>
             </Button>
 
             <Button
