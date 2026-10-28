@@ -350,9 +350,9 @@ export function ExportProgressPdfModal({
 
         return `
           <tr>
-            <td style="font-weight: 600;">${label}</td>
-            <td style="text-align: center;">${initVal !== undefined ? `${initVal} ${unit}` : '-'}</td>
-            <td style="text-align: center;">${lastVal !== undefined ? `${lastVal} ${unit}` : '-'}</td>
+            <td style="font-weight: 600;">${escapeHtml(label)}</td>
+            <td style="text-align: center;">${initVal !== undefined ? `${escapeHtml(String(initVal))} ${unit}` : '-'}</td>
+            <td style="text-align: center;">${lastVal !== undefined ? `${escapeHtml(String(lastVal))} ${unit}` : '-'}</td>
             <td style="text-align: center; font-weight: bold; color: ${diff !== null && diff < 0 ? '#059669' : diff !== null && diff > 0 ? '#d97706' : '#555'
           };">
               ${diff !== null ? (diff > 0 ? `+${diff}` : `${diff}`) + ` ${unit}` : '-'}

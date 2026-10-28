@@ -542,33 +542,26 @@ async function rollbackQuota(
 export function useDeletePtProgressLog() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (args: string | { logId: string; memberId?: string }) => {
-      const logId = typeof args === 'string' ? args : args.logId
-      const deleteMemberId = typeof args === 'string' ? undefined : args.memberId
+    mutationFn: async ({ logId, memberId }: { logId: string; memberId: string }) => {
+      if (!memberId) {
+        throw new Error('memberId wajib disertakan untuk menghapus catatan latihan.')
+      }
 
       // Kasus A: Log disintesis dari pt_sessions (attendance only)
       if (logId.startsWith('session-')) {
         const sessionId = logId.replace('session-', '')
 
-        let query = supabase
+        const { data: sessionData, error: sessErr } = await supabase
           .from('pt_sessions')
           .select('id, gym_id, member_id, subscription_id, session_date, is_completed')
           .eq('id', sessionId)
           .eq('gym_id', GYM_ID)
-
-        if (deleteMemberId) {
-          query = query.eq('member_id', deleteMemberId)
-        }
-
-        const { data: sessionData, error: sessErr } = await query.maybeSingle()
+          .eq('member_id', memberId)
+          .maybeSingle()
 
         if (sessErr) throw sessErr
         if (!sessionData) {
           throw new Error('Sesi PT tidak ditemukan atau Anda tidak memiliki akses.')
-        }
-
-        if (deleteMemberId && sessionData.member_id !== deleteMemberId) {
-          throw new Error('Sesi PT bukan milik member yang dipilih!')
         }
 
         // 🔒 Keamanan vuln-0002: Hanya refund kuota jika sesi tersebut SUDAH SELESAI (is_completed === true).
@@ -580,7 +573,7 @@ export function useDeletePtProgressLog() {
           .delete()
           .eq('id', sessionId)
           .eq('gym_id', GYM_ID)
-          .eq('member_id', sessionData.member_id)
+          .eq('member_id', memberId)
 
         if (delSessionErr) throw delSessionErr
 
@@ -589,11 +582,11 @@ export function useDeletePtProgressLog() {
           let targetSubscriptionId = sessionData.subscription_id
 
           // Jika targetSubscriptionId tidak ada, cocokkan subscription aktif sesuai session_date
-          if (!targetSubscriptionId && sessionData.member_id && sessionData.session_date) {
+          if (!targetSubscriptionId && sessionData.session_date) {
             const { data: matchedSub } = await supabase
               .from('subscriptions')
               .select('id, remaining_sessions, status, memberships!inner(category)')
-              .eq('member_id', sessionData.member_id)
+              .eq('member_id', memberId)
               .eq('memberships.category', 'pt')
               .lte('start_date', sessionData.session_date)
               .gte('end_date', sessionData.session_date)
@@ -608,8 +601,8 @@ export function useDeletePtProgressLog() {
             }
           }
 
-          if (targetSubscriptionId && sessionData.member_id) {
-            await rollbackQuota(targetSubscriptionId, sessionId, sessionData.member_id, true, sessionId)
+          if (targetSubscriptionId) {
+            await rollbackQuota(targetSubscriptionId, sessionId, memberId, true, sessionId)
           }
         }
 
@@ -617,42 +610,39 @@ export function useDeletePtProgressLog() {
       }
 
       // Kasus B: Log detail dari pt_progress_logs
-      let logQuery = supabase
+      const { data: log, error: fetchErr } = await supabase
         .from('pt_progress_logs')
         .select('id, member_id, pt_session_id, created_at')
         .eq('id', logId)
         .eq('gym_id', GYM_ID)
-
-      if (deleteMemberId) {
-        logQuery = logQuery.eq('member_id', deleteMemberId)
-      }
-
-      const { data: log, error: fetchErr } = await logQuery.maybeSingle()
+        .eq('member_id', memberId)
+        .maybeSingle()
 
       if (fetchErr) throw fetchErr
       if (!log) {
         throw new Error('Catatan latihan tidak ditemukan atau Anda tidak memiliki akses.')
       }
 
-      if (deleteMemberId && log.member_id !== deleteMemberId) {
-        throw new Error('Catatan latihan bukan milik member yang dipilih!')
-      }
-
       let targetSubscriptionId: string | null = null
+      let wasLinkedSessionCompleted = false
 
-      // 2. Jika ada jadwal pt_session_id terkait, ambil subscription_id sebelum dihapus
+      // 2. Jika ada jadwal pt_session_id terkait, ambil data sesi sebelum dihapus
       if (log.pt_session_id) {
         const { data: sessionData } = await supabase
           .from('pt_sessions')
-          .select('id, gym_id, member_id, subscription_id, session_date')
+          .select('id, gym_id, member_id, subscription_id, session_date, is_completed')
           .eq('id', log.pt_session_id)
           .eq('gym_id', GYM_ID)
-          .eq('member_id', log.member_id)
+          .eq('member_id', memberId)
           .maybeSingle()
 
         if (sessionData?.subscription_id) {
           targetSubscriptionId = sessionData.subscription_id
         }
+
+        // 🔒 Keamanan vuln-0005: Catat status penyelesaian sesi terkait SEBELUM dihapus.
+        // Refund hanya terjadi bila sesi benar-benar menandai penyelesaian (pernah memotong kuota).
+        wasLinkedSessionCompleted = Boolean(sessionData?.is_completed)
 
         // Hapus sesi dari pt_sessions (Opsi A) scoped gym_id & member_id
         const { error: delSessionErr } = await supabase
@@ -660,19 +650,19 @@ export function useDeletePtProgressLog() {
           .delete()
           .eq('id', log.pt_session_id)
           .eq('gym_id', GYM_ID)
-          .eq('member_id', log.member_id)
+          .eq('member_id', memberId)
 
         if (delSessionErr) console.warn('Gagal menghapus pt_sessions terkait:', delSessionErr)
 
-        // 🔒 Keamanan vuln-0002: Jika targetSubscriptionId tidak ada, JANGAN asal credit paket terbaru.
-        // Cocokkan secara presisi dengan subscription yang menaungi tanggal sesi / catatan latihan ini.
-        if (!targetSubscriptionId && log.member_id) {
+        // 🔒 Keamanan vuln-0002 & vuln-0005: Jika targetSubscriptionId tidak ada dan sesi terbukti selesai,
+        // cocokkan secara presisi dengan subscription yang menaungi tanggal sesi / catatan latihan ini.
+        if (!targetSubscriptionId && wasLinkedSessionCompleted) {
           const logDate = sessionData?.session_date || (log.created_at ? log.created_at.slice(0, 10) : null)
           if (logDate) {
             const { data: matchedSub, error: findSubErr } = await supabase
               .from('subscriptions')
               .select('id, remaining_sessions, status, memberships!inner(category)')
-              .eq('member_id', log.member_id)
+              .eq('member_id', memberId)
               .eq('memberships.category', 'pt')
               .lte('start_date', logDate)
               .gte('end_date', logDate)
@@ -690,9 +680,9 @@ export function useDeletePtProgressLog() {
         }
       }
 
-      // 3. Rollback kuota HANYA JIKA targetSubscriptionId terverifikasi sah
-      if (targetSubscriptionId && log.member_id) {
-        await rollbackQuota(targetSubscriptionId, logId, log.member_id, false, log.pt_session_id)
+      // 3. Rollback kuota HANYA JIKA targetSubscriptionId terverifikasi sah DAN sesi terkait berstatus selesai
+      if (targetSubscriptionId && wasLinkedSessionCompleted) {
+        await rollbackQuota(targetSubscriptionId, logId, memberId, false, log.pt_session_id)
       }
 
       // 4. Hapus catatan pt_progress_logs scoped gym_id & member_id
@@ -701,15 +691,14 @@ export function useDeletePtProgressLog() {
         .delete()
         .eq('id', logId)
         .eq('gym_id', GYM_ID)
-        .eq('member_id', log.member_id)
+        .eq('member_id', memberId)
 
       if (delLogErr) throw delLogErr
     },
-    onSuccess: (_, args) => {
-      const deleteMemberId = typeof args === 'string' ? undefined : args?.memberId
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['pt-progress-logs'] })
-      if (deleteMemberId) {
-        queryClient.invalidateQueries({ queryKey: ['pt-progress-logs', deleteMemberId] })
+      if (variables?.memberId) {
+        queryClient.invalidateQueries({ queryKey: ['pt-progress-logs', variables.memberId] })
       }
       queryClient.invalidateQueries({ queryKey: ['pt-sessions'] })
       queryClient.invalidateQueries({ queryKey: ['pt-active-members'] })
