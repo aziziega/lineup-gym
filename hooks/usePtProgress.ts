@@ -164,7 +164,6 @@ export function useCreatePtProgressLog() {
       notes?: string | null
       pt_session_id?: string | null
       trainer_name?: string | null
-      created_at?: string | null
     }) => {
       const user = (await supabase.auth.getUser()).data.user
       const todayStr = new Date().toLocaleDateString('sv-SE')
@@ -177,15 +176,38 @@ export function useCreatePtProgressLog() {
 
       // 1. Jika ada targetSessionId yang dipassing (misal dari jadwal tertentu):
       if (targetSessionId) {
-        const { data: sessCheck } = await supabase
+        // 🔒 Keamanan vuln-0001: Verifikasi ketat sesi harus milik member dan gym yang valid
+        const { data: sessCheck, error: sessCheckErr } = await supabase
           .from('pt_sessions')
-          .select('id, is_completed, subscription_id, session_date, session_time')
+          .select('id, member_id, gym_id, is_completed, subscription_id, session_date, session_time')
           .eq('id', targetSessionId)
+          .eq('member_id', payload.member_id)
+          .eq('gym_id', GYM_ID)
           .maybeSingle()
 
+        if (sessCheckErr) {
+          console.error('Error verifying pt_session:', sessCheckErr)
+          throw new Error('Gagal memverifikasi sesi PT')
+        }
+
+        if (!sessCheck) {
+          throw new Error('Sesi PT tidak ditemukan atau bukan milik member yang dipilih!')
+        }
+
         sessionData = sessCheck
+
         if (sessCheck?.subscription_id) {
-          targetSubscriptionId = sessCheck.subscription_id
+          // 🔒 Pastikan subscription_id dari sesi ini benar-benar milik member ini
+          const { data: subVerify } = await supabase
+            .from('subscriptions')
+            .select('id')
+            .eq('id', sessCheck.subscription_id)
+            .eq('member_id', payload.member_id)
+            .maybeSingle()
+
+          if (subVerify) {
+            targetSubscriptionId = subVerify.id
+          }
         }
 
         if (sessCheck?.is_completed) {
@@ -200,6 +222,8 @@ export function useCreatePtProgressLog() {
               completed_at: new Date().toISOString(),
             })
             .eq('id', targetSessionId)
+            .eq('member_id', payload.member_id)
+            .eq('gym_id', GYM_ID)
         }
       }
 
@@ -297,6 +321,7 @@ export function useCreatePtProgressLog() {
           .from('subscriptions')
           .select('remaining_sessions')
           .eq('id', targetSubscriptionId)
+          .eq('member_id', payload.member_id)
           .single()
 
         if (subFetchErr) throw subFetchErr
@@ -310,6 +335,7 @@ export function useCreatePtProgressLog() {
               ...(newRemaining === 0 ? { status: 'expired' as const } : {}),
             })
             .eq('id', targetSubscriptionId)
+            .eq('member_id', payload.member_id)
 
           if (subUpdateErr) throw subUpdateErr
 
@@ -329,15 +355,16 @@ export function useCreatePtProgressLog() {
         }
       }
 
-      // 6. Tanggal efektif log latihan:
-      // Jika sesi berasal dari jadwal tanggal tertentu (misal 21 atau 22 Oktober),
-      // gunakan session_date tersebut agar tercatat pada hari yang tepat di kalender
-      let effectiveCreatedAt = payload.created_at || null
-      if (!effectiveCreatedAt && sessionData?.session_date) {
+      // 6. Tanggal efektif log latihan (🔒 Keamanan vuln-0003: Cegah manipulasi timestamp klien):
+      // Wajib diturunkan secara resmi dari session_date di database, atau waktu server saat ini untuk walk-in
+      let effectiveCreatedAt: string
+      if (sessionData?.session_date) {
         const timeStr = sessionData.session_time
           ? (sessionData.session_time.length === 5 ? `${sessionData.session_time}:00` : sessionData.session_time)
           : '10:00:00'
         effectiveCreatedAt = `${sessionData.session_date}T${timeStr}`
+      } else {
+        effectiveCreatedAt = new Date().toISOString()
       }
 
       // 7. Simpan catatan latihan ke pt_progress_logs
@@ -349,7 +376,7 @@ export function useCreatePtProgressLog() {
         notes: payload.notes || null,
         pt_session_id: targetSessionId || null,
         recorded_by: user?.id || null,
-        created_at: effectiveCreatedAt || new Date().toISOString(),
+        created_at: effectiveCreatedAt,
       }
 
       if (payload.trainer_name && payload.trainer_name.trim()) {
@@ -401,6 +428,7 @@ async function rollbackQuota(
     .from('subscriptions')
     .select(`
       id,
+      member_id,
       remaining_sessions,
       status,
       total_sessions_override,
@@ -409,6 +437,7 @@ async function rollbackQuota(
       )
     `)
     .eq('id', targetSubscriptionId)
+    .eq('member_id', memberId)
     .single()
 
   if (fetchSubErr) {
@@ -447,6 +476,7 @@ async function rollbackQuota(
           status: newStatus,
         })
         .eq('id', currentSub.id)
+        .eq('member_id', memberId)
 
       if (subUpdateErr) {
         console.error('Gagal mengembalikan kuota sesi:', subUpdateErr)
@@ -485,7 +515,7 @@ export function useDeletePtProgressLog() {
 
         const { data: sessionData, error: sessErr } = await supabase
           .from('pt_sessions')
-          .select('id, gym_id, member_id, subscription_id, is_completed')
+          .select('id, gym_id, member_id, subscription_id, session_date, is_completed')
           .eq('id', sessionId)
           .single()
 
@@ -500,18 +530,24 @@ export function useDeletePtProgressLog() {
 
         if (delSessionErr) throw delSessionErr
 
-        if (!targetSubscriptionId && sessionData?.member_id) {
-          const { data: subData } = await supabase
+        // 🔒 Keamanan vuln-0002: Jika targetSubscriptionId tidak ada, JANGAN asal credit paket terbaru.
+        // Hanya cari subscription yang tanggalnya aktif menaungi session_date sesi ini.
+        if (!targetSubscriptionId && sessionData?.member_id && sessionData?.session_date) {
+          const { data: matchedSub } = await supabase
             .from('subscriptions')
             .select('id, remaining_sessions, status, memberships!inner(category)')
             .eq('member_id', sessionData.member_id)
-            .eq('memberships.category', 'pt')
+            .ilike('membership_name', '%PT%')
+            .lte('start_date', sessionData.session_date)
+            .gte('end_date', sessionData.session_date)
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle()
 
-          if (subData?.id) {
-            targetSubscriptionId = subData.id
+          if (matchedSub?.id) {
+            targetSubscriptionId = matchedSub.id
+          } else {
+            console.warn('Subscription pemilik sesi tidak dapat dipastikan; refund kuota dilewati untuk mencegah inflasi kuota.')
           }
         }
 
@@ -525,7 +561,7 @@ export function useDeletePtProgressLog() {
       // Kasus B: Log detail dari pt_progress_logs
       const { data: log, error: fetchErr } = await supabase
         .from('pt_progress_logs')
-        .select('id, member_id, pt_session_id')
+        .select('id, member_id, pt_session_id, created_at')
         .eq('id', logId)
         .single()
 
@@ -537,7 +573,7 @@ export function useDeletePtProgressLog() {
       if (log?.pt_session_id) {
         const { data: sessionData } = await supabase
           .from('pt_sessions')
-          .select('id, subscription_id')
+          .select('id, subscription_id, session_date')
           .eq('id', log.pt_session_id)
           .maybeSingle()
 
@@ -552,30 +588,36 @@ export function useDeletePtProgressLog() {
           .eq('id', log.pt_session_id)
 
         if (delSessionErr) console.warn('Gagal menghapus pt_sessions terkait:', delSessionErr)
-      }
 
-      // 3. Rollback kuota HANYA JIKA catatan latihan ini terhubung dengan sesi PT (pt_session_id ada).
-      // Catatan mandiri/tanpa sesi (pt_session_id null) tidak pernah memotong kuota sehingga tidak boleh di-refund!
-      if (log?.pt_session_id) {
+        // 🔒 Keamanan vuln-0002: Jika targetSubscriptionId tidak ada, JANGAN asal credit paket terbaru.
+        // Cocokkan secara presisi dengan subscription yang menaungi tanggal sesi / catatan latihan ini.
         if (!targetSubscriptionId && log?.member_id) {
-          const { data: subData, error: findSubErr } = await supabase
-            .from('subscriptions')
-            .select('id, remaining_sessions, status, memberships!inner(category)')
-            .eq('member_id', log.member_id)
-            .eq('memberships.category', 'pt')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
+          const logDate = sessionData?.session_date || (log.created_at ? log.created_at.slice(0, 10) : null)
+          if (logDate) {
+            const { data: matchedSub, error: findSubErr } = await supabase
+              .from('subscriptions')
+              .select('id, remaining_sessions, status, memberships!inner(category)')
+              .eq('member_id', log.member_id)
+              .ilike('membership_name', '%PT%')
+              .lte('start_date', logDate)
+              .gte('end_date', logDate)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
 
-          if (findSubErr) console.warn('Gagal mencari subscription PT member:', findSubErr)
-          if (subData?.id) {
-            targetSubscriptionId = subData.id
+            if (findSubErr) console.warn('Gagal mencari subscription PT member sesuai rentang tanggal:', findSubErr)
+            if (matchedSub?.id) {
+              targetSubscriptionId = matchedSub.id
+            } else {
+              console.warn('Subscription pemilik catatan latihan tidak dapat dipastikan; refund kuota dilewati untuk mencegah inflasi kuota.')
+            }
           }
         }
+      }
 
-        if (targetSubscriptionId && log?.member_id) {
-          await rollbackQuota(targetSubscriptionId, logId, log.member_id, false, log.pt_session_id)
-        }
+      // 3. Rollback kuota HANYA JIKA targetSubscriptionId terverifikasi sah
+      if (targetSubscriptionId && log?.member_id) {
+        await rollbackQuota(targetSubscriptionId, logId, log.member_id, false, log.pt_session_id)
       }
 
       // 4. Hapus catatan pt_progress_logs

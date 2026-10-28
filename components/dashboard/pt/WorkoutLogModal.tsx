@@ -112,7 +112,6 @@ export function WorkoutLogModal({
         exercises: validExercises,
         notes: notes.trim() || null,
         pt_session_id: sessionId || null,
-        created_at: sessionCreatedAt || null,
       })
 
       toast.success(`Daftar gerakan ${category} untuk ${memberName} berhasil disimpan!`)
