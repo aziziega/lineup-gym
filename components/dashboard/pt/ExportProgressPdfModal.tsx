@@ -17,6 +17,7 @@ import {
   Award,
   CheckCircle2,
   Image as ImageIcon,
+  User,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PtCycleSelector } from '@/components/dashboard/pt/PtCycleSelector'
@@ -1013,8 +1014,9 @@ export function ExportProgressPdfModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-hidden flex flex-col p-0 border-border bg-card text-foreground">
-        <DialogHeader className="p-4 pb-3 border-b border-border/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:pr-10">
-          <div className="flex flex-col gap-1">
+        <DialogHeader className="p-4 pb-3 border-b border-border/50 flex flex-col gap-2.5 sm:pr-10">
+          {/* Baris 1: Title Laporan PT & Tab Switcher Halaman 1 / 2 */}
+          <div className="flex items-center justify-between gap-3">
             <DialogTitle className="font-heading text-lg flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary shrink-0" />
               <span>LAPORAN PT</span>
@@ -1024,34 +1026,43 @@ export function ExportProgressPdfModal({
                 </Badge>
               )}
             </DialogTitle>
-            <p className="text-xs text-muted-foreground truncate max-w-sm">
-              {member?.full_name} · {member?.pt_membership_name || 'Member PT'}
-            </p>
+
+            {/* Tab Selector Pratinjau (Ukuran Ringkas & Pas, Tidak Kebesaran) */}
+            <div className="flex items-center gap-0.5 bg-muted/40 p-0.5 rounded-lg border border-border/60">
+              <button
+                type="button"
+                onClick={() => setActivePreviewPage('p1')}
+                className={`text-[11px] px-2 py-0.5 rounded-md font-semibold transition-all ${
+                  activePreviewPage === 'p1'
+                    ? 'bg-primary text-black font-bold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Halaman 1: Metrik
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePreviewPage('p2')}
+                disabled={!includePhotos}
+                className={`text-[11px] px-2 py-0.5 rounded-md font-semibold transition-all ${
+                  activePreviewPage === 'p2'
+                    ? 'bg-primary text-black font-bold'
+                    : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
+                }`}
+              >
+                Halaman 2: Foto
+              </button>
+            </div>
           </div>
 
-          {/* Tab Selector Pratinjau (Hal 1 vs Hal 2) */}
-          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/60 self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setActivePreviewPage('p1')}
-              className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all ${activePreviewPage === 'p1'
-                  ? 'bg-primary text-black font-bold'
-                  : 'text-muted-foreground hover:text-foreground'
-                }`}
-            >
-              Halaman 1: Metrik
-            </button>
-            <button
-              type="button"
-              onClick={() => setActivePreviewPage('p2')}
-              disabled={!includePhotos}
-              className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all ${activePreviewPage === 'p2'
-                  ? 'bg-primary text-black font-bold'
-                  : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
-                }`}
-            >
-              Halaman 2: Foto
-            </button>
+          {/* Baris 2: Section Identitas Member & Paket PT (Opsi 1: Minimalis Bersih) */}
+          <div className="flex items-center gap-1.5 text-xs pt-1.5 border-t border-border/30 overflow-hidden min-w-0">
+            <User className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="font-semibold text-foreground truncate">{member?.full_name}</span>
+            <span className="text-muted-foreground/60 shrink-0">·</span>
+            <span className="text-muted-foreground font-medium uppercase tracking-wide truncate">
+              {member?.pt_membership_name || 'Member PT'}
+            </span>
           </div>
         </DialogHeader>
 
