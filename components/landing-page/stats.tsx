@@ -34,10 +34,10 @@ function Counter({ value, duration = 1.5 }: { value: string; duration?: number }
     const step = (timestamp: number) => {
       if (!startTime) startTime = timestamp
       const progress = Math.min((timestamp - startTime) / (duration * 1000), 1)
-      
+
       // Easing function (easeOutQuad) agar animasi melambat saat mendekati akhir
       const easeProgress = progress * (2 - progress)
-      
+
       const current = Math.floor(easeProgress * (end - start) + start)
       setDisplayValue(`${current}${suffix}`)
 
@@ -64,18 +64,18 @@ export default function Stats() {
 
   const statsData = [
     { value: '50+', label: 'Alat Premium & Modern' },
-    { value: '500+', label: 'Member Terdaftar' },
+    { value: '600+', label: 'Member Terdaftar' },
     { value: '06.00-21.00 WIB', label: 'Jam Operasional' },
   ]
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="mt-16 grid grid-cols-3 gap-4"
     >
       {statsData.map((s, index) => (
-        <motion.div 
-          key={s.label} 
+        <motion.div
+          key={s.label}
           initial={{ opacity: 0, y: 20 }}
           animate={isContainerInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.6, delay: index * 0.15, ease: "easeOut" }}
